@@ -9,7 +9,7 @@ DEFINES += -D_GNU_SOURCE
 
 ANSI_CFLAGS   =
 
-CFLAGS   = -g -O2 -std=gnu99 -Wno-format -fPIC -fsanitize=address -fsanitize=leak
+CFLAGS   = -g -O2 -std=gnu99 -Wno-format -fPIC -fsanitize=address
 SHARED_CFLAGS = -fPIC
 SHARED_LFLAGS = -shared -L$(LIKWID_LIBDIR)
 DYNAMIC_TARGET_LIB = libloop_adapt.so
@@ -29,7 +29,7 @@ $(DYNAMIC_TARGET_LIB): $(OBJ)
 examples:
 	make -C example all
 
-install: $(DYNAMIC_TARGET_LIB) usermetric.h
+install: $(DYNAMIC_TARGET_LIB)
 	$(Q)install -m 755 $(DYNAMIC_TARGET_LIB) $(PREFIX)/lib/$(DYNAMIC_TARGET_LIB)
 	$(Q)install -m 644 loop_adapt.h $(PREFIX)/include/loop_adapt.h
 

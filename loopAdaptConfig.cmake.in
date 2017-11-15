@@ -1,0 +1,27 @@
+set(loopAdapt_INCLUDE_DIRS @CMAKE_INSTALL_PREFIX@/include/loopAdapt @HWLOC_INCLUDE_DIR@ @LIKWID_INCLUDE_DIR@)
+
+if (@BUILD_SHARED_LIBS@ STREQUAL "ON")
+    set(loopAdapt_LIBRARIES @CMAKE_INSTALL_PREFIX@/lib/loopAdapt/libloopAdapt.so)
+else()
+    set(loopAdapt_LIBRARIES @CMAKE_INSTALL_PREFIX@/lib/loopAdapt/libloopAdapt.a)
+endif()
+set(loopAdapt_LIBDIR @CMAKE_INSTALL_PREFIX@/lib)
+
+set(loopAdapt_C_FLAGS "${loopAdapt_C_FLAGS}")
+set(loopAdapt_CXX_FLAGS "${loopAdapt_CXX_FLAGS}")
+
+set(loopAdapt_CC @CC@)
+set(loopAdapt_CXX @CXX@)
+
+set(loopAdapt_VERSION @loopAdapt_VERSION@)
+
+# set default paths for libraries
+set(HWLOC_LIBRARIES @HWLOC_LIBRARIES@ CACHE STRING "hwloc libraries (required by @CMAKE_PROJECT_NAME@)")
+set(LIKWID_LIBRARIES @LIKWID_LIBRARIES@ CACHE STRING "likwid libraries (required by @CMAKE_PROJECT_NAME@)")
+
+set(loopAdapt_LIBRARIES ${loopAdapt_LIBRARIES} ${HWLOC_LIBRARIES} ${LIKWID_LIBRARIES})
+
+if (@loopAdapt_HAVE_OpenMP@)
+    set(loopAdapt_C_FLAGS "${loopAdapt_C_FLAGS} @OpenMP_C_FLAGS@")
+    set(loopAdapt_CXX_FLAGS "${loopAdapt_CXX_FLAGS} @OpenMP_CXX_FLAGS@")
+endif()

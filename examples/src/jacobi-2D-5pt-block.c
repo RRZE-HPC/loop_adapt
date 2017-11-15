@@ -74,7 +74,7 @@ int main()
 }
 
         int ctr = 0;
-        
+
         struct timeval tym;
         gettimeofday(&tym,NULL);
         double wcs=tym.tv_sec+(tym.tv_usec*1e-6);

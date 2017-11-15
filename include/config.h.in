@@ -1,0 +1,10 @@
+#ifndef loopAdapt_CONFIG_H
+#define loopAdapt_CONFIG_H
+
+#define loopAdapt_VERBOSITY ${loopAdapt_VERBOSITY}
+#define loopAdapt_PRINT_RANK ${loopAdapt_PRINT_RANK}
+
+#cmakedefine loopAdapt_HAVE_MPI
+#cmakedefine loopAdapt_HAVE_OpenMP
+
+#endif
