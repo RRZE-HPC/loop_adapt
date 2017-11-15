@@ -1,6 +1,6 @@
 ### How to build LOOP\_ADAPT? ###
 
-* git clone https://github.com/RRZE-HPC/loop\_adapt.git
+* git clone https://github.com/RRZE-HPC/loop_adapt.git
 * cd loop\_adapt && mkdir build && cd build
 * CC=$(C\_COMPILER) CXX=$(CXX\_COMPILER) cmake ..
 * Configure the library using ccmake . (if needed)
