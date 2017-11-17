@@ -22,16 +22,13 @@ set (SOURCES
     src/loop_adapt.c
     src/loop_adapt_eval.c
     src/loop_adapt_eval_blocksize.c
+    src/loop_adapt_eval_dvfs.c
     src/loop_adapt_helper.c
+    src/loop_adapt_calc.c
     )
 
 set (HEADERS
-    include/ghash.h
     include/loop_adapt.h
-    include/loop_adapt_eval.h
-    include/loop_adapt_eval_blocksize.h
-    include/loop_adapt_helper.h
-    include/loop_adapt_types.h
     )
 
 set(USE_LIKWID ON CACHE BOOL "Switch LIKWID ON or OFF")
@@ -180,7 +177,8 @@ configure_file (
 
 configure_file(${PROJECT_SOURCE_DIR}/loopAdaptConfig.cmake.in ${PROJECT_BINARY_DIR}/loopAdaptConfig.cmake @ONLY)
 
-include_directories(${PROJECT_SOURCE_DIR}/include)
+include_directories(${PROJECT_SOURCE_DIR}/include
+                   ${PROJECT_SOURCE_DIR}/include/lua)
 add_library(loopAdapt ${SOURCES})
 
 include_directories(SYSTEM "${HWLOC_INCLUDE_DIR}")

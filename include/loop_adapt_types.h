@@ -4,21 +4,26 @@
 #include <likwid.h>
 #include <hwloc.h>
 
+#include <loop_adapt.h>
+
 #define LOOP_ADAPT_MAX_POLICY_PARAMS 5
 #define LOOP_ADAPT_MAX_POLICY_METRICS 30
 
-typedef enum {
-    LOOP_ADAPT_SCOPE_NONE = -1,
-    LOOP_ADAPT_SCOPE_MACHINE = HWLOC_OBJ_MACHINE,
-    LOOP_ADAPT_SCOPE_NUMA = HWLOC_OBJ_NUMANODE,
-    LOOP_ADAPT_SCOPE_SOCKET = HWLOC_OBJ_PACKAGE,
-    LOOP_ADAPT_SCOPE_THREAD = HWLOC_OBJ_PU,
-    LOOP_ADAPT_SCOPE_MAX,
-} AdaptScope;
+//typedef enum {
+//    LOOP_ADAPT_SCOPE_NONE = -1,
+//    LOOP_ADAPT_SCOPE_MACHINE = HWLOC_OBJ_MACHINE,
+//    LOOP_ADAPT_SCOPE_NUMA = HWLOC_OBJ_NUMANODE,
+//    LOOP_ADAPT_SCOPE_SOCKET = HWLOC_OBJ_PACKAGE,
+//    LOOP_ADAPT_SCOPE_THREAD = HWLOC_OBJ_PU,
+//    LOOP_ADAPT_SCOPE_MAX,
+//} AdaptScope;
+
 
 typedef struct {
     char* name;
     char* desc;
+    char* def_min;
+    char* def_max;
 } PolicyParameter;
 
 typedef enum {
@@ -51,6 +56,7 @@ typedef struct {
     int likwid_gid;
     char* name;
     char* desc;
+    int done;
     int optimal_profile;
     AdaptScope scope;
     void (*loop_adapt_eval)(hwloc_topology_t tree, hwloc_obj_t obj);
@@ -61,17 +67,19 @@ typedef struct {
     double tolerance;
     int num_parameters;
     PolicyParameter parameters[LOOP_ADAPT_MAX_POLICY_PARAMS];
+    char* eval;
     int num_metrics;
     PolicyMetric metrics[LOOP_ADAPT_MAX_POLICY_METRICS];
     int metric_idx[LOOP_ADAPT_MAX_POLICY_METRICS];
+    
+    
 } Policy;
 
 typedef Policy* Policy_t;
 
 typedef struct {
     char* filename;
-    int start_linenumber;
-    int end_linenumber;
+    int linenumber;
     int num_profiles;
     int num_policies;
     LoopRunStatus status;
@@ -81,28 +89,27 @@ typedef struct {
 
 typedef Treedata* Treedata_t;
 
-typedef enum {
-    NODEPARAMETER_INT = 0,
-    NODEPARAMETER_DOUBLE,
-} Nodeparametertype;
-
 typedef struct {
     char* name;
     char* desc;
     Nodeparametertype type;
+    union {
+        int ibest;
+        double dbest;
+    } best;
     int inter;
     union {
         int icur;
         double dcur;
-    };
+    } cur;
     union {
         int imin;
         double dmin;
-    };
+    } min;
     union {
         int imax;
         double dmax;
-    };
+    } max;
     void (*pre)(char* fmt, ...);
     void (*post)(char* fmt, ...);
 } Nodeparameter;

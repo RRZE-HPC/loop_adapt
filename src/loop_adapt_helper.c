@@ -3,39 +3,83 @@
 #include <pthread.h>
 #include <loop_adapt_types.h>
 #include <loop_adapt_helper.h>
+#include <loop_adapt_calc.h>
 
-double loop_adapt_round(double val)
+double get_param_def_min(hwloc_topology_t tree, char* name)
 {
-    int tmp = 0;
-    if (val > 10000)
+    int found = 0;
+    double min = 0;
+    Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
+    for (int i= 0; i < tdata->num_policies; i++)
     {
-        tmp = (int) val/1000;
-        return (double) tmp * 1000;
+        for (int j = 0; j < tdata->policies[i]->num_parameters; j++)
+        {
+            if (strncmp(name, tdata->policies[i]->parameters[j].name, strlen(name)) == 0)
+            {
+                min = calculate(tdata->policies[i]->parameters[j].def_min);
+                found = 1;
+                break;
+            }
+        }
+        if (found)
+            break;
     }
-    else if (val > 1000)
-    {
-        tmp = (int) val/100;
-        return (double) tmp * 100;
-    }
-    else if (val > 100)
-    {
-        tmp = (int) val/10;
-        return (double) tmp * 10;
-    }
-    else if (val > 10)
-    {
-        tmp = (int) val;
-        return (double) tmp;
-    }
-    else
-    {
-        tmp = (int) val;
-        return (double) tmp;
-    }
-    return val;
+    return min;
 }
 
-int set_param_min(char* param, Nodevalues_t vals)
+double get_param_def_max(hwloc_topology_t tree, char* name)
+{
+    int found = 0;
+    double max = 0;
+    Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
+    for (int i= 0; i < tdata->num_policies; i++)
+    {
+        for (int j = 0; j < tdata->policies[i]->num_parameters; j++)
+        {
+            if (strncmp(name, tdata->policies[i]->parameters[j].name, strlen(name)) == 0)
+            {
+                max = calculate(tdata->policies[i]->parameters[j].def_max);
+                found = 1;
+                break;
+            }
+        }
+        if (found)
+            break;
+    }
+    return max;
+}
+
+
+void update_best(Policy_t p, hwloc_obj_t baseobj, hwloc_obj_t setobj)
+{
+    Nodevalues_t basev = (Nodevalues_t)baseobj->userdata;
+    Nodevalues_t setv = (Nodevalues_t)setobj->userdata;
+    for (int i = 0; i < p->num_parameters; i++)
+    {
+        for (int j = 0; j < setv->num_parameters; j++)
+        {
+            if (strncmp(p->parameters[i].name,
+                        setv->parameters[j]->name,
+                        strlen(p->parameters[i].name)) == 0)
+            {
+                printf("Setting best for param %s to ", setv->parameters[j]->name);
+                if (setv->parameters[j]->type == NODEPARAMETER_INT)
+                {
+                    printf("%d", basev->parameters[j]->cur.icur);
+                    setv->parameters[j]->best.ibest = basev->parameters[j]->cur.icur;
+                }
+                else if (setv->parameters[j]->type == NODEPARAMETER_DOUBLE)
+                {
+                    printf("%f", basev->parameters[j]->cur.dcur);
+                    setv->parameters[j]->best.dbest = basev->parameters[j]->cur.dcur;
+                }
+                printf(" in node %d type %s\n", setobj->os_index, loop_adapt_type_name(setobj->type));
+            }
+        }
+    }
+}
+
+void set_param_min(char* param, Nodevalues_t vals)
 {
     for (int j = 0; j < vals->num_parameters; j++)
     {
@@ -43,18 +87,18 @@ int set_param_min(char* param, Nodevalues_t vals)
         {
             if (vals->parameters[j]->type == NODEPARAMETER_INT)
             {
-                vals->parameters[j]->icur = vals->parameters[j]->imin;
+                vals->parameters[j]->cur.icur = vals->parameters[j]->min.imin;
             }
             else if (vals->parameters[j]->type == NODEPARAMETER_DOUBLE)
             {
-                vals->parameters[j]->dcur = vals->parameters[j]->dmin;
+                vals->parameters[j]->cur.dcur = vals->parameters[j]->min.dmin;
             }
             break;
         }
     }
 }
 
-int set_param_max(char* param, Nodevalues_t vals)
+void set_param_max(char* param, Nodevalues_t vals)
 {
     for (int j = 0; j < vals->num_parameters; j++)
     {
@@ -62,18 +106,18 @@ int set_param_max(char* param, Nodevalues_t vals)
         {
             if (vals->parameters[j]->type == NODEPARAMETER_INT)
             {
-                vals->parameters[j]->icur = vals->parameters[j]->imax;
+                vals->parameters[j]->cur.icur = vals->parameters[j]->max.imax;
             }
             else if (vals->parameters[j]->type == NODEPARAMETER_DOUBLE)
             {
-                vals->parameters[j]->dcur = vals->parameters[j]->dmax;
+                vals->parameters[j]->cur.dcur = vals->parameters[j]->max.dmax;
             }
             break;
         }
     }
 }
 
-int set_param_step(char* param, Nodevalues_t vals, int step)
+void set_param_step(char* param, Nodevalues_t vals, int step)
 {
     for (int j = 0; j < vals->num_parameters; j++)
     {
@@ -81,18 +125,17 @@ int set_param_step(char* param, Nodevalues_t vals, int step)
         {
             if (vals->parameters[j]->type == NODEPARAMETER_INT)
             {
-                int min = vals->parameters[j]->imin;
-                int max = vals->parameters[j]->imax;
+                int min = vals->parameters[j]->min.imin;
+                int max = vals->parameters[j]->max.imax;
                 int s = (max-min) / vals->parameters[j]->inter;
-                vals->parameters[j]->icur = min + (step * s);
+                vals->parameters[j]->cur.icur = min + (step * s);
             }
             else if (vals->parameters[j]->type == NODEPARAMETER_DOUBLE)
             {
-                vals->parameters[j]->dcur = vals->parameters[j]->dmin;
-                double min = vals->parameters[j]->dmin;
-                double max = vals->parameters[j]->imax;
+                double min = vals->parameters[j]->min.dmin;
+                double max = vals->parameters[j]->max.imax;
                 double s = (max-min) / vals->parameters[j]->inter;
-                vals->parameters[j]->dcur = min + (step * s);
+                vals->parameters[j]->cur.dcur = min + (step * s);
             }
             break;
         }
@@ -102,7 +145,7 @@ int set_param_step(char* param, Nodevalues_t vals, int step)
 int allocate_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type, int num_profiles, int num_values)
 {
     int len = hwloc_get_nbobjs_by_type(tree, type);
-    Treedata *tdata = (Treedata *)hwloc_topology_get_userdata(tree);
+    //Treedata *tdata = (Treedata *)hwloc_topology_get_userdata(tree);
     for (int i = 0; i < len; i++)
     {
         // Get the object
@@ -156,10 +199,9 @@ void free_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type)
     return;
 }
 
-int populate_tree(hwloc_topology_t tree, Policy_t pol, int num_profiles)
+int populate_tree(hwloc_topology_t tree, int num_profiles)
 {
     int max_num_values = LOOP_ADAPT_MAX_POLICY_METRICS;
-    printf("populate_tree\n");
     int ret = allocate_nodevalues(tree, LOOP_ADAPT_SCOPE_THREAD, num_profiles, max_num_values);
     if (ret)
         return ret;
@@ -183,16 +225,33 @@ void tidy_tree(hwloc_topology_t tree)
     free_nodevalues(tree, LOOP_ADAPT_SCOPE_MACHINE);
 }
 
+AdaptScope getLoopAdaptType(hwloc_obj_type_t t)
+{
+    return (AdaptScope)t;
+}
 
 void _update_tree(hwloc_obj_t base, hwloc_obj_t obj, int profile)
 {
-    Nodevalues *bvals = (Nodevalues *)base->userdata;
-    Nodevalues *ovals = (Nodevalues *)obj->userdata;
+    Nodevalues_t bvals = (Nodevalues_t)base->userdata;
+    Nodevalues_t ovals = (Nodevalues_t)obj->userdata;
     pthread_mutex_lock(&ovals->lock);
+
     for (int m = 0; m < bvals->num_values; m++)
     {
         ovals->profiles[profile][m] += bvals->profiles[profile][m];
+        if (ovals->runtimes[profile].start.int64 < bvals->runtimes[profile].start.int64)
+        {
+            bvals->runtimes[profile].start.int64 = ovals->runtimes[profile].start.int64;
+        }
+        if (ovals->runtimes[profile].stop.int64 > bvals->runtimes[profile].stop.int64)
+        {
+            bvals->runtimes[profile].stop.int64 = ovals->runtimes[profile].stop.int64;
+        }
     }
+    ovals->cur_profile = bvals->cur_profile;
+    ovals->num_values = bvals->num_values;
+    ovals->num_profiles = bvals->num_profiles;
+    
     pthread_mutex_unlock(&ovals->lock);
 }
 
@@ -204,9 +263,10 @@ void update_tree(hwloc_obj_t obj, int profile)
     {
         while (walker)
         {
-            if (walker->type == LOOP_ADAPT_SCOPE_MACHINE ||
-                walker->type == LOOP_ADAPT_SCOPE_NUMA ||
-                walker->type == LOOP_ADAPT_SCOPE_SOCKET)
+            AdaptScope t = getLoopAdaptType(walker->type);
+            if (t == LOOP_ADAPT_SCOPE_MACHINE ||
+                t == LOOP_ADAPT_SCOPE_NUMA ||
+                t == LOOP_ADAPT_SCOPE_SOCKET)
             {
                 _update_tree(obj, walker, profile);
             }

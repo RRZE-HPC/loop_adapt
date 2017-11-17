@@ -1,15 +1,34 @@
 #include <stdarg.h>
+#include <loop_adapt.h>
 #include <loop_adapt_eval_blocksize.h>
+#include <loop_adapt_calc.h>
 
-
+#include <hwloc.h>
 
 
 int loop_adapt_eval_blocksize_init(int num_cpus, int* cpulist, int num_profiles)
 {
     topology_init();
-    affinity_init();
+    //affinity_init();
     timer_init();
     perfmon_init(num_cpus, cpulist);
+    int npros = num_profiles;
+    npros++;
+    
+    CpuTopology_t cputopo = get_cpuTopology();
+    for (int i = 0; i < cputopo->numCacheLevels; i++)
+    {
+        char level[20];
+        snprintf(level, 19, "L%d_CACHESIZE", cputopo->cacheLevels[i].level);
+        char linesize[20];
+        snprintf(linesize, 19, "L%d_LINESIZE", cputopo->cacheLevels[i].level);
+        for (int c=0; c < num_cpus; c++)
+        {
+            add_def(level, cputopo->cacheLevels[i].size, cpulist[c]);
+            add_def(linesize, cputopo->cacheLevels[i].lineSize, cpulist[c]);
+        }
+    }
+    
     int gid = perfmon_addEventSet(POL_BLOCKSIZE.likwid_group);
     if (gid >= 0)
     {
@@ -69,7 +88,6 @@ int loop_adapt_eval_blocksize_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t 
             vals->profiles[vals->cur_profile][m] = perfmon_getLastMetric(p->likwid_gid, m, obj->logical_index);
             //printf("%d Metric %s : %f\n", m, perfmon_getMetricName(p->likwid_gid, m), vals->profiles[vals->cur_profile][m]);
         }
-        vals->cur_profile++;
     }
     return ret;
 }
@@ -78,103 +96,62 @@ int loop_adapt_eval_blocksize_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t 
 
 void loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
 {
-    Nodevalues *v = (Nodevalues*)obj->userdata;
+    Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
+    Nodevalues_t v = (Nodevalues_t)obj->userdata;
     int cur_profile = v->cur_profile - 1;
-    int last_profile = cur_profile - 1;
+    Policy_t p = tdata->cur_policy;
+    int opt_profile = p->optimal_profile;
     double *cur_values = v->profiles[cur_profile];
-    double cur_runtime = timer_print(&v->runtimes[cur_profile]);
-    double *last_values = v->profiles[last_profile];
-    double last_runtime = timer_print(&v->runtimes[last_profile]);
-    
-    if (cur_profile == 1)
+    double *opt_values = v->profiles[opt_profile];
+    unsigned int (*tcount_func)() = NULL;
+
+    // Evaluate the condition whether this profile is better than the old
+    // optimal one
+    // evaluate() returns 1 if better, 0 if not
+
+    int eval = evaluate(p, opt_values, cur_values);
+
+    if (eval)
     {
-        for (int i = 0; i < POL_BLOCKSIZE.num_parameters; i++)
+        p->optimal_profile = cur_profile;
+        // we search through all parameters and set the best setting to the
+        // current setting. After the policy is completely evaluated, the
+        // best setting is returned by GET_[INT/DBL]_PARAMETER
+        update_best(p, obj, obj);
+
+        // Check the current thread count whether the setting of this object
+        // should be propagated to the other ones
+        loop_adapt_get_tcount_func(&tcount_func);
+        if (tcount_func && tcount_func() == 1)
         {
-            set_param_max(POL_BLOCKSIZE.parameters[i].name, v);
+            int len = hwloc_get_nbobjs_by_type(tree, (hwloc_obj_type_t)p->scope);
+            for (int k = 0; k < len; k++)
+            {
+                //printf("K %d\n", k);
+                hwloc_obj_t new = hwloc_get_obj_by_type(tree, (hwloc_obj_type_t)p->scope, k);
+                if (new == obj)
+                {
+                    //printf("Skip %d\n", k);
+                    continue;
+                }
+                update_best(p, obj, new);
+            }
         }
     }
-    else
+    
+    // If we are in the scope of the policy (at which level should changes be
+    // done) the parameters are adjusted.
+    if (getLoopAdaptType(obj->type) == p->scope)
     {
         for (int i = 0; i < POL_BLOCKSIZE.num_parameters; i++)
         {
             set_param_step(POL_BLOCKSIZE.parameters[i].name, v, cur_profile-1);
         }
     }
-    
-/*    int match = 0;*/
-/*    for (int m = 0; m < POL_BLOCKSIZE.num_metrics; m++)*/
-/*    {*/
-/*        int idx = POL_BLOCKSIZE.metric_idx[m];*/
-/*        switch (POL_BLOCKSIZE.metrics[m].compare)*/
-/*        {*/
-/*            case LESS_THAN:*/
-/*                if (cur_values[idx] < last_values[idx])*/
-/*                    match++;*/
-/*                break;*/
-/*            case LESS_EQUAL_THEN:*/
-/*                if (cur_values[idx] <= last_values[idx])*/
-/*                    match++;*/
-/*                break;*/
-/*            case GREATER_THAN:*/
-/*                if (cur_values[idx] > last_values[idx])*/
-/*                    match++;*/
-/*                break;*/
-/*            case GREATER_EQUAL_THEN:*/
-/*                if (cur_values[idx] >= last_values[idx])*/
-/*                    match++;*/
-/*                break;*/
-/*        }*/
-/*    }*/
-/*    PolicyMetricDestination dest = NONE;*/
-/*    if (match > POL_BLOCKSIZE.num_metrics/2)*/
-/*    {*/
-/*        dest = POL_BLOCKSIZE.metrics[0].destination;*/
-/*    }*/
-/*    else*/
-/*    {*/
-/*        if (POL_BLOCKSIZE.metrics[0].destination == UP)*/
-/*            POL_BLOCKSIZE.metrics[0].destination = DOWN;*/
-/*    }*/
-/*    if (dest == UP)*/
-/*    {*/
-/*        // get parameter blksize from obj and increase*/
-/*        printf("Increase\n");*/
-/*        for (int i = 0; i < POL_BLOCKSIZE.num_parameters; i++)*/
-/*        {*/
-/*            for (int j = 0; j < v->num_parameters; j++)*/
-/*            {*/
-/*                if (strcmp(v->parameters[j]->name, POL_BLOCKSIZE.parameters[i].name) == 0)*/
-/*                {*/
-/*                    int* ptr = (int*)v->parameters[j]->ptr;*/
-/*                    *ptr += v->parameters[j]->stepsize;*/
-/*                    printf("New blksize %d\n", *ptr);*/
-/*                    break;*/
-/*                }*/
-/*            }*/
-/*        }*/
-/*    }*/
-/*    else if (dest == DOWN)*/
-/*    {*/
-/*        printf("Decrease\n");*/
-/*        // get parameter blksize from obj and decrease*/
-/*        for (int i = 0; i < POL_BLOCKSIZE.num_parameters; i++)*/
-/*        {*/
-/*            for (int j = 0; j < v->num_parameters; j++)*/
-/*            {*/
-/*                if (strcmp(v->parameters[j]->name, POL_BLOCKSIZE.parameters[i].name) == 0)*/
-/*                {*/
-/*                    int* ptr = (int*)v->parameters[j]->ptr;*/
-/*                    *ptr -= v->parameters[j]->stepsize;*/
-/*                    printf("New blksize %d\n", *ptr);*/
-/*                    break;*/
-/*                }*/
-/*            }*/
-/*        }*/
-/*    }*/
-/*    else if (dest == NONE)*/
-/*    {*/
-/*        printf("Keep setting\n");*/
-/*    }*/
+
+    // Walk up the tree to see whether adjustments are required.
+    // Currently this does not wait until all subnodes have updated the
+    // values.
     hwloc_obj_t walker = obj->parent;
     while (walker)
     {
@@ -182,7 +159,7 @@ void loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
             walker->type == HWLOC_OBJ_NUMANODE ||
             walker->type == HWLOC_OBJ_MACHINE)
         {
-            v = (Nodevalues*)walker->userdata;
+            loop_adapt_eval_blocksize(tree, walker);
             walker = walker->parent;
         }
         else
@@ -195,5 +172,7 @@ void loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
 
 void loop_adapt_eval_blocksize_close()
 {
+    perfmon_stopCounters();
+    perfmon_finalize();
     return;
 }

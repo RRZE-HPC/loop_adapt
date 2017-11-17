@@ -12,7 +12,9 @@
 #include <likwid.h>
 
 #include <loop_adapt.h>
+#include <loop_adapt_eval.h>
 #include <loop_adapt_helper.h>
+#include <loop_adapt_calc.h>
 
 
 static int loop_adapt_active = 1;
@@ -26,8 +28,11 @@ static int *cpulist = NULL;
 /*static int default_num_profiles = 5;*/
 /*static int runtime_num_profiles = 0;*/
 
-static int default_max_num_values = 30;
+/*static int default_max_num_values = 30;*/
 static int max_num_values = 0;
+
+unsigned int (*tcount_func)() = NULL;
+unsigned int (*tid_func)() = NULL;
 
 //static char* likwid_group = NULL;
 //static int likwid_gid = -1;
@@ -81,6 +86,23 @@ __attribute__((constructor)) void loop_adapt_init (void)
 /*    }*/
 }
 
+void loop_adapt_register_tcount_func(unsigned int (*handle)())
+{
+    tcount_func = handle;
+}
+void loop_adapt_register_tid_func(unsigned int (*handle)())
+{
+    tid_func = handle;
+}
+
+void loop_adapt_get_tcount_func(unsigned int (**handle)())
+{
+    *handle = tcount_func;
+}
+void loop_adapt_get_tid_func(unsigned int (**handle)())
+{
+    *handle = tid_func;
+}
 
 
 void loop_adapt_register(char* string)
@@ -104,7 +126,7 @@ void loop_adapt_register(char* string)
         err = hwloc_topology_dup(&dup_tree, topotree);
         if (err)
         {
-            fprintf(stderr, "Cannot duplicate topology tree\n", string);
+            fprintf(stderr, "Cannot duplicate topology tree %s\n", string);
             free(tdata);
             return;
         }
@@ -161,7 +183,7 @@ void loop_adapt_register_policy( char* string, char* polname, int num_profiles)
         hwloc_topology_t tree = g_hash_table_lookup(global_hash, (gpointer) string);
         if (tree)
         {
-            printf("Add policy %s to tree of loop region %s with %d profiles\n", p->name, string, num_profiles);
+            //printf("Add policy %s to tree of loop region %s with %d profiles\n", p->name, string, num_profiles);
             loop_adapt_add_policy(tree, p, num_cpus, cpulist, num_profiles);
         }
     }
@@ -220,7 +242,7 @@ int loop_adapt_list_policy()
 
 void loop_adapt_register_int_param( char* string,
                                     AdaptScope scope,
-                                    int objidx,
+                                    int cpu,
                                     char* name,
                                     char* desc,
                                     int cur,
@@ -229,12 +251,21 @@ void loop_adapt_register_int_param( char* string,
 {
     hwloc_topology_t tree = g_hash_table_lookup(global_hash, (gpointer) string);
     int len = hwloc_get_nbobjs_by_type(tree, scope);
-    if (objidx >= 0)
+    if (cpu >= 0 && cpu < len)
     {
+        int objidx = cpus_to_objidx[cpu];
         hwloc_obj_t obj = hwloc_get_obj_by_type(tree, scope, objidx);
         if (obj)
         {
             //printf("Adding parameter %s to object %d of type %s Min %d Max %d\n", name, objidx, hwloc_obj_type_string(scope), min, max);
+            if (min == 0)
+            {
+                min = (int)get_param_def_min(tree, name);
+            }
+            if (max == 0)
+            {
+                max = (int)get_param_def_max(tree, name);
+            }
             loop_adapt_add_int_parameter(obj, name, desc, cur, min, max, NULL, NULL);
         }
     }
@@ -242,12 +273,14 @@ void loop_adapt_register_int_param( char* string,
 
 
 
-int loop_adapt_get_int_param( char* string, AdaptScope scope, int objidx, char* name)
+int loop_adapt_get_int_param( char* string, AdaptScope scope, int cpu, char* name)
 {
     hwloc_topology_t tree = g_hash_table_lookup(global_hash, (gpointer) string);
     int len = hwloc_get_nbobjs_by_type(tree, scope);
-    if (objidx >= 0)
+    if (cpu >= 0 && cpu < len)
     {
+        int objidx = cpus_to_objidx[cpu];
+        //printf("Objidx %d\n", objidx);
         hwloc_obj_t obj = hwloc_get_obj_by_type(tree, scope, objidx);
         while (obj)
         {
@@ -259,7 +292,10 @@ int loop_adapt_get_int_param( char* string, AdaptScope scope, int objidx, char* 
                     if (strncmp(name, v->parameters[i]->name, strlen(name)) == 0 &&
                         v->parameters[i]->type == NODEPARAMETER_INT)
                     {
-                        return v->parameters[i]->icur;
+                        if (v->parameters[i]->best.ibest < 0 || v->cur_profile < v->num_profiles)
+                            return v->parameters[i]->cur.icur;
+                        else
+                            return v->parameters[i]->best.ibest;
                     }
                 }
             }
@@ -271,7 +307,7 @@ int loop_adapt_get_int_param( char* string, AdaptScope scope, int objidx, char* 
 
 void loop_adapt_register_double_param( char* string,
                                        AdaptScope scope,
-                                       int objidx,
+                                       int cpu,
                                        char* name,
                                        char* desc,
                                        double cur,
@@ -280,12 +316,21 @@ void loop_adapt_register_double_param( char* string,
 {
     hwloc_topology_t tree = g_hash_table_lookup(global_hash, (gpointer) string);
     int len = hwloc_get_nbobjs_by_type(tree, scope);
-    if (objidx >= 0)
+    int objidx = cpus_to_objidx[cpu];
+    if (objidx >= 0 && objidx < len)
     {
         hwloc_obj_t obj = hwloc_get_obj_by_type(tree, scope, objidx);
         if (obj)
         {
             //printf("Adding parameter %s to object %d of type %s Min %d Max %d\n", name, objidx, hwloc_obj_type_string(scope), min, max);
+            if (min == 0)
+            {
+                min = get_param_def_min(tree, name);
+            }
+            if (max == 0)
+            {
+                max = get_param_def_max(tree, name);
+            }
             loop_adapt_add_double_parameter(obj, name, desc, cur, min, max, NULL, NULL);
         }
     }
@@ -295,7 +340,7 @@ double loop_adapt_get_double_param( char* string, AdaptScope scope, int objidx, 
 {
     hwloc_topology_t tree = g_hash_table_lookup(global_hash, (gpointer) string);
     int len = hwloc_get_nbobjs_by_type(tree, scope);
-    if (objidx >= 0)
+    if (objidx >= 0 && objidx < len)
     {
         hwloc_obj_t obj = hwloc_get_obj_by_type(tree, scope, objidx);
         while (obj)
@@ -308,7 +353,10 @@ double loop_adapt_get_double_param( char* string, AdaptScope scope, int objidx, 
                     if (strncmp(name, v->parameters[i]->name, strlen(name)) == 0 &&
                         v->parameters[i]->type == NODEPARAMETER_DOUBLE)
                     {
-                        return v->parameters[i]->dcur;
+                        if (v->parameters[i]->best.dbest < 0 || v->cur_profile < v->num_profiles)
+                            return v->parameters[i]->cur.dcur;
+                        else
+                            return v->parameters[i]->best.dbest;
                     }
                 }
             }
@@ -344,31 +392,69 @@ int loop_adapt_begin(char* string, char* filename, int linenumber)
             Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
             if (tdata->status == LOOP_STOPPED)
             {
-                int cpuid = omp_get_thread_num();
-                likwid_pinThread(cpuid);
-                int objidx = cpus_to_objidx[cpuid];
-                int ret = 0;
-                Nodevalues_t v = NULL;
-                hwloc_obj_t obj = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
-
-                v = (Nodevalues_t)obj->userdata;
-                if (v->cur_profile < v->num_profiles)
+                int cpuid = 0;
+                if (tid_func)
+                    cpuid = tid_func();
+#ifdef _OPENMP
+                else
+                    cpuid = omp_get_thread_num();
+#endif
+                //likwid_pinThread(cpuid);
+                if (tcount_func && tcount_func() > 1)
                 {
-                    //printf("LOOP START CPU %d/%d PROFILE %d/%d\n", cpuid, objidx, v->cur_profile, tdata->num_profiles);
-                    if (v->cur_profile == 0)
-                    {
-                        ret = asprintf(&tdata->filename, "%s", filename);
-                        tdata->start_linenumber = linenumber;
-                    }
-                    
+                    int objidx = cpus_to_objidx[cpuid];
+                    Nodevalues_t v = NULL;
+                    hwloc_obj_t obj = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
 
-                    if (v->cur_profile > 1)
+                    v = (Nodevalues_t)obj->userdata;
+                    if (v->cur_profile < v->num_profiles)
                     {
-                        loop_adapt_exec_policies(tree, obj);
+                        //printf("LOOP START CPU %d/%d PROFILE %d/%d\n", cpuid, objidx, v->cur_profile, tdata->num_profiles);
+                        if (v->cur_profile == 0)
+                        {
+                            int ret = asprintf(&tdata->filename, "%s", filename);
+                            ret++;
+                            tdata->linenumber = linenumber;
+                        }
+                        
+
+                        if (v->cur_profile > 1)
+                        {
+                            loop_adapt_exec_policies(tree, obj);
+                        }
+                        loop_adapt_begin_policies(cpuid, tree, obj); 
                     }
-                    loop_adapt_begin_policies(cpuid, tree, obj); 
+                    tdata->status = LOOP_STARTED;
                 }
-                tdata->status = LOOP_STARTED;
+                else if (tcount_func && tcount_func() == 1)
+                {
+                    for (int c = 0; c < num_cpus; c++)
+                    {
+                        int objidx = cpus_to_objidx[cpulist[c]];
+                        Nodevalues_t v = NULL;
+                        hwloc_obj_t obj = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
+
+                        v = (Nodevalues_t)obj->userdata;
+                        if (v->cur_profile < v->num_profiles)
+                        {
+                            //printf("LOOP START CPU %d/%d PROFILE %d/%d\n", cpuid, objidx, v->cur_profile, tdata->num_profiles);
+                            if (v->cur_profile == 0)
+                            {
+                                int ret = asprintf(&tdata->filename, "%s", filename);
+                                ret++;
+                                tdata->linenumber = linenumber;
+                            }
+                            
+
+                            if (v->cur_profile > 1)
+                            {
+                                loop_adapt_exec_policies(tree, obj);
+                            }
+                            loop_adapt_begin_policies(cpuid, tree, obj); 
+                        }
+                    }
+                    tdata->status = LOOP_STARTED;
+                }
             }
         }
         else
@@ -381,7 +467,7 @@ int loop_adapt_begin(char* string, char* filename, int linenumber)
 
 
 
-int loop_adapt_end(char* string, char* filename, int linenumber)
+int loop_adapt_end(char* string)
 {
     if (loop_adapt_active)
     {
@@ -391,21 +477,64 @@ int loop_adapt_end(char* string, char* filename, int linenumber)
             Treedata *tdata = (Treedata *)hwloc_topology_get_userdata(tree);
             if (tdata->status == LOOP_STARTED)
             {
-                int cpuid = sched_getcpu();
+                int cpuid = 0;
+                if (tid_func)
+                    cpuid = tid_func();
+#ifdef _OPENMP
+                else
+                    cpuid = omp_get_thread_num();
+#endif
+
                 int objidx = cpus_to_objidx[cpuid];
-                int ret = 0;
+
                 hwloc_obj_t obj = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
                 Nodevalues *v = (Nodevalues *)obj->userdata;
                 if (v != NULL && v->cur_profile < v->num_profiles)
                 {
-                    if (v->cur_profile == 0)
-                    {
-                        tdata->end_linenumber = linenumber;
-                    }
                     loop_adapt_end_policies(cpuid, tree, obj);
                     if (v->cur_profile > 0)
                         update_tree(obj, v->cur_profile-1);
                     v->cur_profile++;
+                }
+
+                if (tcount_func && tcount_func() == 1)
+                {
+                    for (int c = 0; c < num_cpus; c++)
+                    {
+                        objidx = cpus_to_objidx[cpulist[c]];
+
+                        hwloc_obj_t new = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
+                        if (obj == new)
+                            continue;
+                        Nodevalues *newv = (Nodevalues *)new->userdata;
+                        if (newv != NULL && newv->cur_profile < newv->num_profiles)
+                        {
+                            loop_adapt_end_policies(cpuid, tree, new);
+                            if (newv->cur_profile > 0)
+                                update_tree(new, newv->cur_profile-1);
+                            newv->cur_profile++;
+                        }
+                    }
+                }
+                if (v->cur_profile == v->num_profiles)
+                {
+                    printf("Set optimal parameters\n");
+                    tdata->cur_policy->done = 1;
+                    tdata->cur_policy->loop_adapt_eval_close();
+                    tdata->cur_policy = NULL;
+                    for (int i=0; i < tdata->num_policies; i++)
+                    {
+                        if (!tdata->policies[i]->done)
+                        {
+                            printf("Switch to policy %s\n", tdata->policies[i]->name);
+                            tdata->cur_policy = tdata->policies[i];
+                        }
+                    }
+                    if (!tdata->cur_policy)
+                    {
+                        printf("Disable loop_adapt\n");
+                        loop_adapt_active = 0;
+                    }
                 }
                 tdata->status = LOOP_STOPPED;
             }
@@ -424,7 +553,7 @@ void loop_adapt_print(char *string, int profile_num)
     if (tree)
     {
         Treedata *tdata = (Treedata *)hwloc_topology_get_userdata(tree);
-        printf("Loop in file %s line %d to %d\n", tdata->filename, tdata->start_linenumber, tdata->end_linenumber);
+        printf("Loop in file %s line %d to %d\n", tdata->filename, tdata->linenumber, tdata->linenumber);
         printf("Taking %d profiles totally\n", tdata->num_profiles);
         printf("Printing results for profile %d\n", profile_num);
         printf("\n");
@@ -454,7 +583,6 @@ void loop_adapt_print(char *string, int profile_num)
 
 __attribute__((destructor)) void loop_adapt_finalize (void)
 {
-    printf("Destructor\n");
     if (loop_adapt_active)
     {
         perfmon_stopCounters();
@@ -470,9 +598,7 @@ __attribute__((destructor)) void loop_adapt_finalize (void)
     while(g_hash_table_iter_next(&iter, &gkey, &gvalue))
     {
         key = (char*)gkey;
-        printf("Cleaning tree for loop %s\n", key);
         tree = (hwloc_topology_t)gvalue;
-        printf("Tree %p\n", tree);
 /*        free_nodevalues(tree, HWLOC_OBJ_PU);*/
 /*        free_nodevalues(tree, HWLOC_OBJ_PACKAGE);*/
 /*        free_nodevalues(tree, HWLOC_OBJ_NUMANODE);*/

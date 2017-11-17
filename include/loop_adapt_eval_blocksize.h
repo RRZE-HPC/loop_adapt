@@ -5,29 +5,26 @@
 #include <loop_adapt_eval.h>
 #include <loop_adapt_helper.h>
 
-int loop_adapt_eval_blocksize_init(int num_cpus, int* cpulist, int num_profiles);
-int loop_adapt_eval_blocksize_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj);
-void loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj);
-int loop_adapt_eval_blocksize_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj);
-void loop_adapt_eval_blocksize_close();
+
+POL_FUNCS(blocksize)
 
 Policy POL_BLOCKSIZE = {
     .likwid_group = "CACHES",
     .name = "Loop Blocksize",
     .desc = "This policy tries to adapt the blocksize of a loop to improve locality in the caches.",
-    .loop_adapt_eval = loop_adapt_eval_blocksize,
-    .loop_adapt_eval_init = loop_adapt_eval_blocksize_init,
-    .loop_adapt_eval_begin = loop_adapt_eval_blocksize_begin,
-    .loop_adapt_eval_end = loop_adapt_eval_blocksize_end,
-    .loop_adapt_eval_close = loop_adapt_eval_blocksize_close,
+    STR_POL_FUNCS(blocksize)
     .scope = LOOP_ADAPT_SCOPE_THREAD,
     
     .num_parameters = 1,
-    .parameters = { {"blksize", "Variable that needs to be incremented"} },
+    .parameters = { {"blksize",
+                     "Variable that needs to be incremented",
+                     "L1_SIZE/SIZEOF_DOUBLE",
+                     "L3_SIZE/SIZEOF_DOUBLE"} },
     .num_metrics = 2,
-    .metrics = {{ "l1l2", "L2 to L1 load bandwidth [MBytes/s]"},
-                { "l2l3", "L3 to L2 load bandwidth [MBytes/s]"},
-               }
+    .metrics = {{ "time", "Runtime (RDTSC) [s]"},
+                { "l2l3", "L2 to/from L3 data volume [GBytes]"},
+               },
+    .eval = "l2l3_opt > l2l3_cur "
 };
 
 

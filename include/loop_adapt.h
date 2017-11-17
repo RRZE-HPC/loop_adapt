@@ -1,24 +1,58 @@
 #ifndef LOOP_ADAPT_H
 #define LOOP_ADAPT_H
 
-#include <loop_adapt_types.h>
-#include <loop_adapt_eval.h>
+#include <hwloc.h>
+
+//#include <loop_adapt_types.h>
+//#include <loop_adapt_eval.h>
+
+typedef enum {
+    LOOP_ADAPT_SCOPE_NONE = -1,
+    LOOP_ADAPT_SCOPE_MACHINE = HWLOC_OBJ_MACHINE,
+    LOOP_ADAPT_SCOPE_NUMA = HWLOC_OBJ_NUMANODE,
+    LOOP_ADAPT_SCOPE_SOCKET = HWLOC_OBJ_PACKAGE,
+    LOOP_ADAPT_SCOPE_THREAD = HWLOC_OBJ_PU,
+    LOOP_ADAPT_SCOPE_MAX,
+} AdaptScope;
+
+static char* loop_adapt_type_name(AdaptScope scope)
+{
+    switch(scope)
+    {
+        case LOOP_ADAPT_SCOPE_MACHINE:
+            return "Machine";
+        case LOOP_ADAPT_SCOPE_NUMA:
+            return "NUMA node";
+        case LOOP_ADAPT_SCOPE_SOCKET:
+            return "Socket";
+        case LOOP_ADAPT_SCOPE_THREAD:
+            return "Thread";
+        default:
+            return "Invalid type";
+    }
+    return "Invalid type";
+}
+
+typedef enum {
+    NODEPARAMETER_INT = 0,
+    NODEPARAMETER_DOUBLE,
+} Nodeparametertype;
 
 #define REGISTER_LOOP(s) loop_adapt_register(s);
 #define REGISTER_POLICY(s, p, num_profiles) loop_adapt_register_policy((s), (p), (num_profiles));
-#define REGISTER_PARAMETER(s, scope, name, objidx, type, cur, min, max) \
+#define REGISTER_PARAMETER(s, scope, name, cpu, type, cur, min, max) \
     if (type == NODEPARAMETER_INT) \
-        loop_adapt_register_int_param((s), (scope), (objidx), (name), NULL, (cur), (min), (max)); \
+        loop_adapt_register_int_param((s), (scope), (cpu), (name), NULL, (cur), (min), (max)); \
     else if (type == NODEPARAMETER_DOUBLE) \
-        loop_adapt_register_double_param((s), (scope), (objidx), (name), NULL, (cur), (min), (max));
+        loop_adapt_register_double_param((s), (scope), (cpu), (name), NULL, (cur), (min), (max));
 
-#define GET_INT_PARAMETER(s, name, objidx) \
-    loop_adapt_get_int_param((s), LOOP_ADAPT_SCOPE_THREAD, (objidx), (name));
-#define GET_DBL_PARAMETER(s, name, objidx) \
-    loop_adapt_get_double_param((s), LOOP_ADAPT_SCOPE_THREAD, (objidx), (name));
+#define GET_INT_PARAMETER(s, name, cpu) \
+    loop_adapt_get_int_param((s), LOOP_ADAPT_SCOPE_THREAD, (cpu), (name));
+#define GET_DBL_PARAMETER(s, name, cpu) \
+    loop_adapt_get_double_param((s), LOOP_ADAPT_SCOPE_THREAD, (cpu), (name));
 
 #define LOOP_BEGIN(s) loop_adapt_begin((s), __FILE__, __LINE__)
-#define LOOP_END(s) loop_adapt_end((s), __FILE__, __LINE__)
+#define LOOP_END(s) loop_adapt_end((s))
 
 
 #define LA_FOR(name, start, cond, inc) \
@@ -37,9 +71,13 @@ void loop_adapt_register(char* string);
 // This function is called before a loop body executes
 int loop_adapt_begin(char* string, char* filename, int linenumber);
 // This function is called after the execution of a loop body
-int loop_adapt_end(char* string, char* filename, int linenumber);
+int loop_adapt_end(char* string);
 void loop_adapt_print(char *string, int profile_num);
 
+void loop_adapt_register_tcount_func(unsigned int (*handle)());
+void loop_adapt_get_tcount_func(unsigned int (**handle)());
+void loop_adapt_register_tid_func(unsigned int (*handle)());
+void loop_adapt_get_tid_func(unsigned int (**handle)());
 
 // Register a policy for a loop. Multiple policies can be registered for a loop
 // and they are processed in order
@@ -49,22 +87,22 @@ void loop_adapt_register_policy( char* string, char* polname, int num_profiles);
 // policies.
 void loop_adapt_register_int_param( char* string,
                                     AdaptScope scope,
-                                    int objidx,
+                                    int cpu,
                                     char* name,
                                     char* desc,
                                     int cur,
                                     int min,
                                     int max);
-int loop_adapt_get_int_param( char* string, AdaptScope scope, int objidx, char* name);
+int loop_adapt_get_int_param( char* string, AdaptScope scope, int cpu, char* name);
 void loop_adapt_register_double_param( char* string,
                                        AdaptScope scope,
-                                       int objidx,
+                                       int cpu,
                                        char* name,
                                        char* desc,
                                        double cur,
                                        double min,
                                        double max);
-double loop_adapt_get_double_param( char* string, AdaptScope scope, int objidx, char* name);
+double loop_adapt_get_double_param( char* string, AdaptScope scope, int cpu, char* name);
 
 int loop_adapt_list_policy();
 #endif

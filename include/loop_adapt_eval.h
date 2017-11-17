@@ -4,7 +4,19 @@
 #include <hwloc.h>
 #include <loop_adapt_types.h>
 
+#define POL_FUNCS(NAME)  \
+    int loop_adapt_eval_ ## NAME##_init(int num_cpus, int* cpulist, int num_profiles); \
+    int loop_adapt_eval_ ## NAME##_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj); \
+    void loop_adapt_eval_ ## NAME (hwloc_topology_t tree, hwloc_obj_t obj); \
+    int loop_adapt_eval_ ## NAME##_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj); \
+    void loop_adapt_eval_ ## NAME##_close(); \
 
+#define STR_POL_FUNCS(NAME) \
+    .loop_adapt_eval = loop_adapt_eval_## NAME, \
+    .loop_adapt_eval_init = loop_adapt_eval_## NAME##_init, \
+    .loop_adapt_eval_begin = loop_adapt_eval_##NAME##_begin, \
+    .loop_adapt_eval_end = loop_adapt_eval_## NAME##_end, \
+    .loop_adapt_eval_close = loop_adapt_eval_## NAME##_close, \
 
 int loop_adapt_add_policy(hwloc_topology_t tree, Policy *p, int num_cpus, int *cpulist, int num_profiles);
 int loop_adapt_begin_policies(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj);
