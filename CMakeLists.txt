@@ -22,7 +22,7 @@ set (SOURCES
     src/loop_adapt.c
     src/loop_adapt_eval.c
     src/loop_adapt_eval_blocksize.c
-    src/loop_adapt_eval_dvfs.c
+    #    src/loop_adapt_eval_dvfs.c
     src/loop_adapt_helper.c
     src/loop_adapt_calc.c
     )
