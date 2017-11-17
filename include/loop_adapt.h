@@ -6,6 +6,8 @@
 //#include <loop_adapt_types.h>
 //#include <loop_adapt_eval.h>
 
+static int loop_adapt_debug = 2;
+
 typedef enum {
     LOOP_ADAPT_SCOPE_NONE = -1,
     LOOP_ADAPT_SCOPE_MACHINE = HWLOC_OBJ_MACHINE,

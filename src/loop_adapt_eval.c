@@ -24,34 +24,32 @@ int loop_adapt_add_policy(hwloc_topology_t tree, Policy *p, int num_cpus, int *c
             goto loop_adapt_add_policy_out;
         }
         tdata->policies = tmp;
+        int polidx = tdata->num_policies;
         tdata->policies[tdata->num_policies] = p;
         tdata->num_policies++;
         if (tdata->cur_policy == NULL)
         {
             tdata->cur_policy = p;
-            int gid = p->loop_adapt_eval_init(num_cpus, cpulist, num_profiles);
-            p->likwid_gid = gid;
-            ret = populate_tree(tree, num_profiles);
+            tdata->cur_policy_id = polidx;
+            fprintf(stderr, "Starting with policy %s (%d)\n", p->name, polidx);
         }
+        ret = populate_tree(tree, polidx, num_profiles);
+        update_cur_policy_in_tree(tree, polidx);
+        p->loop_adapt_eval_init(num_cpus, cpulist, num_profiles);
     }
 loop_adapt_add_policy_out:
     return ret;
 }
 
-static int _parameter_exists(hwloc_obj_t obj, char* name)
+static inline int _parameter_exists(Nodevalues_t vals, char* name)
 {
-    Nodevalues_t nv = (Nodevalues_t)obj->userdata;
-    for (int i = 0; i < nv->num_parameters; i++)
-    {
-        if (strncmp(name, nv->parameters[i]->name, strlen(name)) == 0)
-        {
-            return 1;
-        }
-    }
+    Nodeparameter_t np = g_hash_table_lookup(vals->param_hash, (gpointer) name);
+    if (np)
+        return 1;
     return 0;
 }
 
-static Nodeparameter_t _parameter_malloc(char* name, char* desc)
+static inline Nodeparameter_t _parameter_malloc(char* name, char* desc)
 {
     int ret = 0;
     Nodeparameter_t np = NULL;
@@ -79,34 +77,23 @@ int loop_adapt_add_int_parameter(hwloc_obj_t obj, char* name, char* desc, int cu
     {
         return -EINVAL;
     }
-    if (_parameter_exists(obj, name))
-        return 1;
-    
-
-    np = _parameter_malloc(name, desc);
-    //printf("Adding parameter %s for obj %s idx %d\n", name, hwloc_obj_type_string(obj->type), obj->os_index);
     nv = (Nodevalues_t)obj->userdata;
-    
-    np->type = NODEPARAMETER_INT;
-    np->pre = pre;
-    np->post = post;
-    np->best.ibest = -1;
-    np->min.imin = min;
-    np->max.imax = max;
-    np->cur.icur = cur;
-    np->inter = nv->num_profiles-2;
-    
-    tmp = realloc(nv->parameters, (nv->num_parameters+1)*sizeof(Nodevalues_t));
-    if (!tmp)
+    if (_parameter_exists(nv, name))
+        return 1;
+    np = _parameter_malloc(name, desc);
+    if (np)
     {
-        fprintf(stderr, "Cannot append parameter\n");
-        free(nv->parameters);
-        nv->num_parameters = 0;
-        return -ENOMEM;
+        np->type = NODEPARAMETER_INT;
+        np->pre = pre;
+        np->post = post;
+        np->best.ibest = -1;
+        np->min.imin = min;
+        np->max.imax = max;
+        np->cur.icur = cur;
+        np->inter = nv->num_profiles[nv->cur_policy]-2;
+        // Add the parameter to the parameter hash table of the node
+        g_hash_table_insert(nv->param_hash, (gpointer) g_strdup(name), (gpointer) np);
     }
-    nv->parameters = tmp;
-    nv->parameters[nv->num_parameters] = np;
-    nv->num_parameters++;
     return 0;
 }
 
@@ -120,34 +107,23 @@ int loop_adapt_add_double_parameter(hwloc_obj_t obj, char* name, char* desc, dou
     {
         return -EINVAL;
     }
-    if (_parameter_exists(obj, name))
-        return 1;
-    
-
-    np = _parameter_malloc(name, desc);
-    //printf("Adding parameter %s for obj %s idx %d\n", name, hwloc_obj_type_string(obj->type), obj->os_index);
     nv = (Nodevalues_t)obj->userdata;
-    
-    np->type = NODEPARAMETER_DOUBLE;
-    np->pre = pre;
-    np->post = post;
-    np->best.dbest = -1.0;
-    np->min.dmin = min;
-    np->max.dmax = max;
-    np->cur.dcur = cur;
-    np->inter = nv->num_profiles-2;
-    
-    tmp = realloc(nv->parameters, (nv->num_parameters+1)*sizeof(Nodevalues_t));
-    if (!tmp)
+    if (_parameter_exists(nv, name))
+        return 1;
+    np = _parameter_malloc(name, desc);
+    if (np)
     {
-        fprintf(stderr, "Cannot append parameter\n");
-        free(nv->parameters);
-        nv->num_parameters = 0;
-        return -ENOMEM;
+        np->type = NODEPARAMETER_DOUBLE;
+        np->pre = pre;
+        np->post = post;
+        np->best.dbest = -1.0;
+        np->min.dmin = min;
+        np->max.dmax = max;
+        np->cur.dcur = cur;
+        np->inter = nv->num_profiles[nv->cur_policy]-2;
+        // Add the parameter to the parameter hash table of the node
+        g_hash_table_insert(nv->param_hash, (gpointer) g_strdup(name), (gpointer) np);
     }
-    nv->parameters = tmp;
-    nv->parameters[nv->num_parameters] = np;
-    nv->num_parameters++;
     return 0;
 }
 
@@ -189,7 +165,6 @@ int loop_adapt_exec_policies(hwloc_topology_t tree, hwloc_obj_t obj)
         Policy_t cur_p = tdata->cur_policy;
         if (cur_p)
         {
-            //printf("Executing policy %s\n", cur_p->name);
             cur_p->loop_adapt_eval(tree, obj);
         }
         for (int i = 0; i < tdata->num_policies; i++)

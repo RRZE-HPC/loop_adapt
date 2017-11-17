@@ -10,6 +10,7 @@
 #include <lualib.h>
 
 #include <loop_adapt_types.h>
+#include <loop_adapt_helper.h>
 #include <loop_adapt_calc.h>
 
 char* in_func_str = "require('math')\nfunction SUM(...);local s = 0;for k,v in pairs({...}) do;s = s + v;end;return s;end\nfunction ARGS(...) return #arg end;function AVG(...) return SUM(...)/ARGS(...) end;MEAN = AVG\nfunction MIN(...) return math.min(...) end\nfunction MAX(...) return math.max(...) end\nfunction MEDIAN(...);local x = {...};local l = ARGS(...);table.sort(x);return x[math.floor(l/2)];end\nfunction PERCENTILE(perc, ...);local x = {...};local xlen = #x;table.sort(x);local idx = math.ceil((perc/100.0)*xlen);return x[idx];end\nfunction IFELSE(cond, valid, invalid);if cond then;return valid;else;return invalid;end;end";
@@ -21,20 +22,20 @@ int num_states = 0;
 char** defines = NULL;
 int* num_defines = NULL;
 
-static inline void *realloc_buffer(void *ptrmem, size_t size) {
-    void *ptr = realloc(ptrmem, size);
-    if (!ptr)  {
-        fprintf(stderr, "realloc(%p, %lu): errno=%d\n", ptrmem, size, errno);
-        free (ptrmem);
-    }
-    if (!ptrmem)
-    {
-        memset(ptr, 0, size);
-    }
-    return ptr;
-}
+/*static inline void *realloc_buffer(void *ptrmem, size_t size) {*/
+/*    void *ptr = realloc(ptrmem, size);*/
+/*    if (!ptr)  {*/
+/*        fprintf(stderr, "realloc(%p, %lu): errno=%d\n", ptrmem, size, errno);*/
+/*        free (ptrmem);*/
+/*    }*/
+/*    if (!ptrmem)*/
+/*    {*/
+/*        memset(ptr, 0, size);*/
+/*    }*/
+/*    return ptr;*/
+/*}*/
 
-int add_var(char* name, char* suffix, double value, char** varstr)
+int la_calc_add_var(char* name, char* suffix, double value, char** varstr)
 {
     int slen = 0;
     int ret = 0;
@@ -50,7 +51,7 @@ int add_var(char* name, char* suffix, double value, char** varstr)
     return 0;
 }
 
-int add_def(char* name, double value, int cpu)
+int la_calc_add_def(char* name, double value, int cpu)
 {
     int slen = 0;
     int ret = 0;
@@ -67,7 +68,7 @@ int add_def(char* name, double value, int cpu)
     return 0;
 }
 
-int add_lua_func(char* func)
+int la_calc_add_lua_func(char* func)
 {
     int slen = strlen(in_user_funcs);
     in_user_funcs = realloc_buffer(in_user_funcs, slen + strlen(func)+10);
@@ -77,7 +78,7 @@ int add_lua_func(char* func)
     return 0;
 }
 
-int evaluate(Policy_t p, double *opt_values, double *cur_values)
+int la_calc_evaluate(Policy_t p, PolicyParameter_t param, double *opt_values, double *cur_values)
 {
     int cpu = sched_getcpu();
     char* out = NULL;
@@ -95,8 +96,8 @@ int evaluate(Policy_t p, double *opt_values, double *cur_values)
     for (int i = 0; i < p->num_metrics; i++)
     {
         int idx = p->metric_idx[i];
-        add_var(p->metrics[i].var, "opt", opt_values[idx], &vars);
-        add_var(p->metrics[i].var, "cur", cur_values[idx], &vars);
+        la_calc_add_var(p->metrics[i].var, "opt", opt_values[idx], &vars);
+        la_calc_add_var(p->metrics[i].var, "cur", cur_values[idx], &vars);
         //printf("Metric %d : %f\n", idx,cur_values[idx] );
     }
     
@@ -104,7 +105,7 @@ int evaluate(Policy_t p, double *opt_values, double *cur_values)
     int ret = asprintf(&t, "%s\n%s\n%s\n%s\nreturn tostring(%s)", in_func_str,
                             (in_user_funcs ? in_user_funcs : ""),
                             (defines[cpu] ? defines[cpu] : ""),
-                            vars, p->eval);
+                            vars, param->eval);
     //printf("%s\n",t);
     ret = luaL_dostring (L, t);
     if (!ret)
@@ -117,7 +118,7 @@ int evaluate(Policy_t p, double *opt_values, double *cur_values)
     return out_int;
 }
 
-double calculate(char* f)
+double la_calc_calculate(char* f)
 {
     int cpu = sched_getcpu();
     char* out = NULL;
@@ -135,7 +136,7 @@ double calculate(char* f)
     int ret = asprintf(&t, "%s\n%s\n%s\nreturn tostring(%s)", in_func_str,
                             (in_user_funcs ? in_user_funcs : ""),
                             (defines[cpu] ? defines[cpu] : ""), f);
-    printf("%s\n",t);
+    //printf("%s\n", t);
     ret = luaL_dostring (L, t);
     if (!ret)
     {
@@ -170,11 +171,11 @@ void __attribute__((constructor (103))) init_loop_adapt_calc(void)
     }
     for (int c = 0; c < cpus; c++)
     {
-        add_def("SIZEOF_DOUBLE", (double)sizeof(double), c);
-        add_def("SIZEOF_INT", (double)sizeof(int), c);
-        add_def("SIZEOF_FLOAT", (double)sizeof(float), c);
-        add_def("TRUE", 1.0, c);
-        add_def("FALSE", 0.0, c);
+        la_calc_add_def("SIZEOF_DOUBLE", (double)sizeof(double), c);
+        la_calc_add_def("SIZEOF_INT", (double)sizeof(int), c);
+        la_calc_add_def("SIZEOF_FLOAT", (double)sizeof(float), c);
+        la_calc_add_def("TRUE", 1.0, c);
+        la_calc_add_def("FALSE", 0.0, c);
     }
 }
 
