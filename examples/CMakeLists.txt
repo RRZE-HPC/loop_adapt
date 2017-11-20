@@ -24,5 +24,6 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -Wno-write-strings -std=c++11")
 endif()
 
-add_executable(LA_example src/jacobi_with_blocking.cpp src/Array.cpp)
+add_executable(LA_example_thread_scope src/jacobi_with_blocking_thread_scope.cpp src/Array.cpp)
+add_executable(LA_example_mc_scope src/jacobi_with_blocking_mc_scope.cpp src/Array.cpp)
 add_executable(LA_example_old src/jacobi-2D-5pt-block.c)
