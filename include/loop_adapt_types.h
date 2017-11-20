@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include <likwid.h>
 #include <hwloc.h>
+#include <ghash.h>
 
 #include <loop_adapt.h>
 
@@ -24,7 +25,10 @@ typedef struct {
     char* desc;
     char* def_min;
     char* def_max;
+    char* eval;
 } PolicyParameter;
+
+typedef PolicyParameter* PolicyParameter_t;
 
 typedef enum {
     LESS_THAN,
@@ -71,11 +75,10 @@ typedef struct {
     int num_metrics;
     PolicyMetric metrics[LOOP_ADAPT_MAX_POLICY_METRICS];
     int metric_idx[LOOP_ADAPT_MAX_POLICY_METRICS];
-    
-    
 } Policy;
 
 typedef Policy* Policy_t;
+
 
 typedef struct {
     char* filename;
@@ -83,6 +86,7 @@ typedef struct {
     int num_profiles;
     int num_policies;
     LoopRunStatus status;
+    int cur_policy_id;
     Policy_t cur_policy;
     Policy_t *policies;
 } Treedata;
@@ -117,22 +121,52 @@ typedef struct {
 typedef Nodeparameter* Nodeparameter_t;
 
 typedef struct {
+    int cur_policy;
+    int num_policies;
     int cur_profile;
-    int num_profiles;
-    int num_values;
+    // One entry per policy
+    int* num_profiles;
+    int* num_values;
     pthread_mutex_t lock;
     pthread_cond_t cond;
-    TimerData *runtimes;
-    /* two dimensional array, first dim is the profileID and second dim are the
-     * values of the profile.
+    /* two dimensional array, first dim is the policyID and second dim
+     * is the profileID.
      */
-    double **profiles;
-    int num_parameters;
-    Nodeparameter_t *parameters;
+    TimerData **runtimes;
+    /* three dimensional array, first dim is the policyID, second profileID and
+     * third dim are the values of the profile.
+     */
+    double ***profiles;
+//    int num_parameters;
+//    Nodeparameter_t *parameters;
+    GHashTable* param_hash;
 } Nodevalues;
 
 typedef Nodevalues* Nodevalues_t;
 
+
+//typedef struct {
+//    char* name;
+//    char* desc;
+//    Nodeparametertype type;
+//    union {
+//        int ibest;
+//        double dbest;
+//    } best;
+//} PolicyResultParameter;
+
+//typedef PolicyResultParameter* PolicyResultParameter_t;
+
+//typedef struct {
+//    char* name;
+//    char* desc;
+//    int num_values;
+//    double* values;
+//    int num_parameters;
+//    PolicyResultParameter_t parameters;
+//} PolicyResult;
+
+//typedef PolicyResult* PolicyResult_t;
 
 
 #endif
