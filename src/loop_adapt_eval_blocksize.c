@@ -123,7 +123,7 @@ int loop_adapt_eval_blocksize_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_
                 likwid_configured = 1;
             }
         }
-        if (likwid_configured && likwid_gid < 0 && !likwid_started)
+        if (likwid_configured && likwid_gid >= 0 && !likwid_started)
         {
             if (loop_adapt_debug == 2)
                 fprintf(stderr, "DEBUG: Setup LIKWID counters with group ID %d\n", likwid_gid);
@@ -146,7 +146,7 @@ int loop_adapt_eval_blocksize_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_
         if (likwid_started)
         {
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Reading LIKWID counters on CPU %d\n",cpuid);
+                fprintf(stderr, "DEBUG: Reading LIKWID counters on CPU %d in eval_begin\n",cpuid);
             ret = perfmon_readCountersCpu(cpuid);
         }
     }
@@ -164,7 +164,7 @@ int loop_adapt_eval_blocksize_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t 
         if (likwid_started)
         {
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Reading LIKWID counters on CPU %d\n",cpuid);
+                fprintf(stderr, "DEBUG: Reading LIKWID counters on CPU %d in eval_end\n", cpuid);
             ret = perfmon_readCountersCpu(cpuid);
             timer_stop(t);
             Policy_t p = tdata->cur_policy;
@@ -187,7 +187,7 @@ void loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
     Nodevalues_t v = (Nodevalues_t)obj->userdata;
     int cur_profile = v->cur_profile - 1;
     Policy_t p = tdata->cur_policy;
-    int opt_profile = p->optimal_profile;
+    int opt_profile = v->opt_profiles[v->cur_policy];
     double *cur_values = v->profiles[v->cur_policy][cur_profile];
     double *opt_values = v->profiles[v->cur_policy][opt_profile];
     unsigned int (*tcount_func)() = NULL;
@@ -201,14 +201,15 @@ void loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
         {
             PolicyParameter_t pp = &p->parameters[i];
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Evaluate param %s for %s with idx %d\n", pp->name, loop_adapt_type_name((AdaptScope)obj->type), obj->logical_index);
+                fprintf(stderr, "DEBUG: Evaluate param %s for %s with idx %d (opt:%d, cur:%d)\n", pp->name, loop_adapt_type_name((AdaptScope)obj->type), obj->logical_index, opt_profile, cur_profile);
             int eval = la_calc_evaluate(p, pp, opt_values, cur_values);
 
             if (eval)
             {
-                p->optimal_profile = cur_profile;
+                //p->optimal_profile = cur_profile;
+                v->opt_profiles[v->cur_policy] = cur_profile;
                 if (loop_adapt_debug == 2)
-                    fprintf(stderr, "DEBUG: New optimal profile %d\n", p->optimal_profile);
+                    fprintf(stderr, "DEBUG: New optimal profile %d\n", cur_profile);
                 // we search through all parameters and set the best setting to the
                 // current setting. After the policy is completely evaluated, the
                 // best setting is returned by GET_[INT/DBL]_PARAMETER
@@ -218,7 +219,7 @@ void loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
                 // should be propagated to the other ones.
                 // Often the LA_LOOP macros are used in serial regions and therefore
                 // the best parameter is set for all other objects of the scope.
-                loop_adapt_get_tcount_func(&tcount_func);
+                /*loop_adapt_get_tcount_func(&tcount_func);
                 if (tcount_func && tcount_func() == 1)
                 {
                     if (loop_adapt_debug == 2)
@@ -233,7 +234,7 @@ void loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
                         }
                         update_best(pp, obj, new);
                     }
-                }
+                }*/
             }
             loop_adapt_eval_blocksize_next_param_step(pp->name, v, cur_profile-1);
         }

@@ -82,9 +82,6 @@ void update_best(PolicyParameter_t pp, hwloc_obj_t baseobj, hwloc_obj_t setobj)
 {
     Nodevalues_t basev = (Nodevalues_t)baseobj->userdata;
     Nodevalues_t setv = (Nodevalues_t)setobj->userdata;
-    
-/*    for (int i = 0; i < p->num_parameters; i++)*/
-/*    {*/
 
     char* pname = pp->name;
     Nodeparameter_t setp = g_hash_table_lookup(setv->param_hash, (gpointer) pname);
@@ -106,7 +103,6 @@ void update_best(PolicyParameter_t pp, hwloc_obj_t baseobj, hwloc_obj_t setobj)
         if (loop_adapt_debug)
             printf(" in node %d type %s\n", setobj->os_index, loop_adapt_type_name(setobj->type));
     }
-/*    }*/
 }
 
 void set_param_step(char* param, Nodevalues_t vals, int step)
@@ -153,6 +149,7 @@ int allocate_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type, int polidx
             v->num_values = realloc_buffer(v->num_values, MIN(1, polidx+1)*sizeof(int));
             if (loop_adapt_debug == 2)
                 fprintf(stderr, "DEBUG: Number of policies %d\n", polidx+1);
+            v->opt_profiles = (int*)realloc_buffer(v->opt_profiles, MIN(1, polidx+1)*sizeof(int));
             v->num_policies = polidx+1;
         }
         v->profiles[polidx] = malloc(num_profiles*sizeof(double*));
@@ -199,6 +196,7 @@ void free_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type)
         pthread_mutex_destroy(&v->lock);
         pthread_cond_destroy(&v->cond);
         g_hash_table_destroy(v->param_hash);
+        free(v->opt_profiles);
         free(v->profiles);
         free(v->runtimes);
 /*        free(v->parameters);*/

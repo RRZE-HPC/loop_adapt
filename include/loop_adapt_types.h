@@ -137,6 +137,7 @@ typedef struct {
      * third dim are the values of the profile.
      */
     double ***profiles;
+    int* opt_profiles;
 //    int num_parameters;
 //    Nodeparameter_t *parameters;
     GHashTable* param_hash;

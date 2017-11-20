@@ -14,6 +14,7 @@ static int* dvfs_cpus = NULL;
 
 static char* avail_freqs = NULL;
 static int num_freqs = 0;
+
 static double* freqs = NULL;
 
 static void loop_adapt_eval_dvfs_next_param_step(char* param, Nodevalues_t vals, int step, int cpu)
@@ -34,15 +35,15 @@ static void loop_adapt_eval_dvfs_next_param_step(char* param, Nodevalues_t vals,
             if (loop_adapt_debug)
                 printf("Setting core frequency to %lu MHz\n", f);
         }
-/*        else if (strncmp(param, "ufreq", 5) == 0)*/
-/*        {*/
-/*            CpuTopology_t cputopo = get_cpuTopology();*/
-/*            uint64_t f = (uint64_t)(np->cur.dcur*1000000);*/
-/*            freq_setUncoreFreqMin(cputopo->threadPool[cpu].packageId, f);*/
-/*            freq_setUncoreFreqMax(cputopo->threadPool[cpu].packageId, f);*/
-/*            if (loop_adapt_debug)*/
-/*                printf("Setting uncore frequency to %lu MHz\n", f);*/
-/*        }*/
+        else if (strncmp(param, "ufreq", 5) == 0)
+        {
+            CpuTopology_t cputopo = get_cpuTopology();
+            uint64_t f = (uint64_t)(np->cur.dcur*1000000);
+            freq_setUncoreFreqMin(cputopo->threadPool[cpu].packageId, f);
+            freq_setUncoreFreqMax(cputopo->threadPool[cpu].packageId, f);
+            if (loop_adapt_debug)
+                printf("Setting uncore frequency to %lu MHz\n", f);
+        }
     }
 }
 
@@ -127,7 +128,7 @@ void loop_adapt_eval_dvfs(hwloc_topology_t tree, hwloc_obj_t obj)
     Nodevalues_t v = (Nodevalues_t)obj->userdata;
     int cur_profile = v->cur_profile - 1;
     Policy_t p = tdata->cur_policy;
-    int opt_profile = p->optimal_profile;
+    int opt_profile = v->opt_profiles[v->cur_policy];
     double *cur_values = v->profiles[v->cur_policy][cur_profile];
     double *opt_values = v->profiles[v->cur_policy][opt_profile];
     unsigned int (*tcount_func)() = NULL;
@@ -142,7 +143,10 @@ void loop_adapt_eval_dvfs(hwloc_topology_t tree, hwloc_obj_t obj)
 
         if (eval)
         {
-            p->optimal_profile = cur_profile;
+            //p->optimal_profile = cur_profile;
+            v->opt_profiles[v->cur_policy] = cur_profile;
+            if (loop_adapt_debug == 2)
+                fprintf(stderr, "DEBUG: Evaluate param %s for %s with idx %d (opt:%d, cur:%d)\n", pp->name, loop_adapt_type_name((AdaptScope)obj->type), obj->logical_index, opt_profile, cur_profile);
             // we search through all parameters and set the best setting to the
             // current setting. After the policy is completely evaluated, the
             // best setting is returned by GET_[INT/DBL]_PARAMETER

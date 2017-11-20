@@ -10,7 +10,7 @@ extern "C"
 
 //#include <loop_adapt_types.h>
 //#include <loop_adapt_eval.h>
-static int loop_adapt_debug = 2;
+static int loop_adapt_debug = 0;
 
 typedef enum {
     LOOP_ADAPT_SCOPE_NONE = -1,
@@ -80,10 +80,10 @@ int loop_adapt_begin(char* string, char* filename, int linenumber);
 int loop_adapt_end(char* string);
 void loop_adapt_print(char *string, int profile_num);
 
-void loop_adapt_register_tcount_func(unsigned int (*handle)());
-void loop_adapt_get_tcount_func(unsigned int (**handle)());
-void loop_adapt_register_tid_func(unsigned int (*handle)());
-void loop_adapt_get_tid_func(unsigned int (**handle)());
+void loop_adapt_register_tcount_func(int (*handle)());
+void loop_adapt_get_tcount_func(int (**handle)());
+void loop_adapt_register_tid_func(int (*handle)());
+void loop_adapt_get_tid_func(int (**handle)());
 
 // Register a policy for a loop. Multiple policies can be registered for a loop
 // and they are processed in order

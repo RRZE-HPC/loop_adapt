@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <omp.h>
 #include <dlfcn.h>
+#include <sched.h>
 
 #include <hwloc.h>
 #include <ghash.h>
@@ -31,8 +32,10 @@ static int *cpulist = NULL;
 /*static int default_max_num_values = 30;*/
 static int max_num_values = 0;
 
-unsigned int (*tcount_func)() = NULL;
-unsigned int (*tid_func)() = NULL;
+int (*tcount_func)() = NULL;
+int (*tid_func)() = NULL;
+
+cpu_set_t loop_adapt_cpuset;
 
 //static char* likwid_group = NULL;
 //static int likwid_gid = -1;
@@ -67,6 +70,8 @@ __attribute__((constructor)) void loop_adapt_init (void)
         cpulist[i] = obj->os_index;
     }
     setenv("LIKWID_FORCE", "1", 1);
+    CPU_ZERO(&loop_adapt_cpuset);
+    ret = sched_getaffinity(0, sizeof(loop_adapt_cpuset), &loop_adapt_cpuset);
 
 /*    if (getenv("LOOP_ADAPT_NUM_PROFILES") == NULL)*/
 /*    {*/
@@ -86,20 +91,20 @@ __attribute__((constructor)) void loop_adapt_init (void)
 /*    }*/
 }
 
-void loop_adapt_register_tcount_func(unsigned int (*handle)())
+void loop_adapt_register_tcount_func(int (*handle)())
 {
     tcount_func = handle;
 }
-void loop_adapt_register_tid_func(unsigned int (*handle)())
+void loop_adapt_register_tid_func(int (*handle)())
 {
     tid_func = handle;
 }
 
-void loop_adapt_get_tcount_func(unsigned int (**handle)())
+void loop_adapt_get_tcount_func(int (**handle)())
 {
     *handle = tcount_func;
 }
-void loop_adapt_get_tid_func(unsigned int (**handle)())
+void loop_adapt_get_tid_func(int (**handle)())
 {
     *handle = tid_func;
 }
@@ -227,6 +232,8 @@ void loop_adapt_register_int_param( char* string,
                     if (loop_adapt_debug)
                         fprintf(stderr, "DEBUG: Calculating maximum for %s: %d\n", name, max);
                 }
+                if (loop_adapt_debug)
+                    fprintf(stderr, "DEBUG: Parameter %s: %d/%d/%d\n", name, min, cur, max);
                 loop_adapt_add_int_parameter(obj, name, desc, cur, min, max, NULL, NULL);
             }
         }
@@ -246,13 +253,13 @@ int loop_adapt_get_int_param( char* string, AdaptScope scope, int cpu, char* nam
         {
             objidx = cpus_to_objidx[cpu];
             if (loop_adapt_debug)
-                fprintf(stderr, "DEBUG: Get param %s for CPU %d (Idx %d)\n",name, cpu, objidx);
+                fprintf(stderr, "DEBUG: Get param %s for CPU %d (Idx %d):",name, cpu, objidx);
         }
         else
         {
             objidx = get_objidx_above_cpuidx(tree, scope, cpus_to_objidx[cpu]);
             if (loop_adapt_debug)
-                fprintf(stderr, "DEBUG: Get param %s for %s above CPU %d (Idx %d)\n",name, loop_adapt_type_name(scope), cpu, objidx);
+                fprintf(stderr, "DEBUG: Get param %s for %s above CPU %d (Idx %d):",name, loop_adapt_type_name(scope), cpu, objidx);
         }
         hwloc_obj_t obj = hwloc_get_obj_by_type(tree, scope, objidx);
         Nodevalues_t v = (Nodevalues_t)obj->userdata;
@@ -262,9 +269,15 @@ int loop_adapt_get_int_param( char* string, AdaptScope scope, int cpu, char* nam
             if (np)
             {
                 if (np->best.ibest < 0 || v->cur_profile < v->num_profiles[v->cur_policy])
+                {
+                    fprintf(stderr, " %d\n", np->cur.icur);
                     return np->cur.icur;
+                }
                 else
+                {
+                    fprintf(stderr, " %d\n", np->best.ibest);
                     return np->best.ibest;
+                }
             }
         }
     }
@@ -386,14 +399,12 @@ int loop_adapt_begin(char* string, char* filename, int linenumber)
                     v = (Nodevalues_t)obj->userdata;
                     if (v->cur_profile < v->num_profiles[v->cur_policy])
                     {
-                        //printf("LOOP START CPU %d/%d PROFILE %d/%d\n", cpuid, objidx, v->cur_profile, tdata->num_profiles);
                         if (v->cur_profile == 0)
                         {
                             int ret = asprintf(&tdata->filename, "%s", filename);
                             ret++;
                             tdata->linenumber = linenumber;
                         }
-                        
 
                         if (v->cur_profile > 1)
                         {
@@ -401,37 +412,39 @@ int loop_adapt_begin(char* string, char* filename, int linenumber)
                         }
                         loop_adapt_begin_policies(cpuid, tree, obj); 
                     }
-                    tdata->status = LOOP_STARTED;
                 }
                 else if (tcount_func && tcount_func() == 1)
                 {
                     for (int c = 0; c < num_cpus; c++)
                     {
-                        int objidx = cpus_to_objidx[cpulist[c]];
-                        Nodevalues_t v = NULL;
-                        hwloc_obj_t obj = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
-
-                        v = (Nodevalues_t)obj->userdata;
-                        if (v->cur_profile < v->num_profiles[v->cur_policy])
+                        if (CPU_ISSET(cpulist[c], &loop_adapt_cpuset))
                         {
-                            //printf("LOOP START CPU %d/%d PROFILE %d/%d\n", cpuid, objidx, v->cur_profile, tdata->num_profiles);
-                            if (v->cur_profile == 0)
-                            {
-                                int ret = asprintf(&tdata->filename, "%s", filename);
-                                ret++;
-                                tdata->linenumber = linenumber;
-                            }
-                            
+                            int objidx = cpus_to_objidx[cpulist[c]];
+                            Nodevalues_t v = NULL;
+                            hwloc_obj_t obj = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
 
-                            if (v->cur_profile > 1)
+                            v = (Nodevalues_t)obj->userdata;
+                            if (v->cur_profile < v->num_profiles[v->cur_policy])
                             {
-                                loop_adapt_exec_policies(tree, obj);
+                                //printf("LOOP START CPU %d/%d PROFILE %d/%d\n", cpuid, objidx, v->cur_profile, tdata->num_profiles);
+                                if (v->cur_profile == 0)
+                                {
+                                    int ret = asprintf(&tdata->filename, "%s", filename);
+                                    ret++;
+                                    tdata->linenumber = linenumber;
+                                }
+                                
+
+                                if (v->cur_profile > 1)
+                                {
+                                    loop_adapt_exec_policies(tree, obj);
+                                }
+                                loop_adapt_begin_policies(cpuid, tree, obj); 
                             }
-                            loop_adapt_begin_policies(cpuid, tree, obj); 
                         }
                     }
-                    tdata->status = LOOP_STARTED;
                 }
+                tdata->status = LOOP_STARTED;
             }
         }
         else
@@ -480,18 +493,21 @@ int loop_adapt_end(char* string)
                 {
                     for (int c = 0; c < num_cpus; c++)
                     {
-                        objidx = cpus_to_objidx[cpulist[c]];
-
-                        hwloc_obj_t new = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
-                        if (obj == new)
-                            continue;
-                        Nodevalues *newv = (Nodevalues *)new->userdata;
-                        if (newv != NULL && newv->cur_profile < newv->num_profiles[newv->cur_policy])
+                        if (CPU_ISSET(cpulist[c], &loop_adapt_cpuset))
                         {
-                            loop_adapt_end_policies(cpuid, tree, new);
-                            if (newv->cur_profile > 0)
-                                update_tree(new, newv->cur_profile-1);
-                            newv->cur_profile++;
+                            objidx = cpus_to_objidx[cpulist[c]];
+        
+                            hwloc_obj_t new = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
+                            if (obj == new)
+                                continue;
+                            Nodevalues *newv = (Nodevalues *)new->userdata;
+                            if (newv != NULL && newv->cur_profile < newv->num_profiles[newv->cur_policy])
+                            {
+                                loop_adapt_end_policies(cpulist[c], tree, new);
+                                if (newv->cur_profile > 0)
+                                    update_tree(new, newv->cur_profile-1);
+                                newv->cur_profile++;
+                            }
                         }
                     }
                 }

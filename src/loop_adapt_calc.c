@@ -9,6 +9,7 @@
 #include <lauxlib.h>
 #include <lualib.h>
 
+#include <loop_adapt.h>
 #include <loop_adapt_types.h>
 #include <loop_adapt_helper.h>
 #include <loop_adapt_calc.h>
@@ -98,7 +99,11 @@ int la_calc_evaluate(Policy_t p, PolicyParameter_t param, double *opt_values, do
         int idx = p->metric_idx[i];
         la_calc_add_var(p->metrics[i].var, "opt", opt_values[idx], &vars);
         la_calc_add_var(p->metrics[i].var, "cur", cur_values[idx], &vars);
-        //printf("Metric %d : %f\n", idx,cur_values[idx] );
+        if (loop_adapt_debug == 2)
+        {
+            printf("Cur Metric %d : %f\n", idx,cur_values[idx] );
+            printf("Opt Metric %d : %f\n", idx,opt_values[idx] );
+        }
     }
     
     char* t = NULL;
