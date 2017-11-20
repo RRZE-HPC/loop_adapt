@@ -28,13 +28,16 @@ void kernel(Array* phi_new, Array* phi,  double centre_coeff, double dx_coeff, d
 {
     int xSize = phi->xSize;
     int ySize = phi->ySize;
-
+#pragma omp parallel private(blockSize)
+{
+    blockSize = GET_INT_PARAMETER("SWEEP", "blksize", omp_get_thread_num());
+    printf("EXAMPLE Thread %d BlockSize %d\n", omp_get_thread_num(), blockSize);
     int nBlocks = (int) (ySize/((double)blockSize));
 
     for(int bs=0; bs<(nBlocks+1); ++bs)
     {
 
-#pragma omp parallel for schedule(runtime)
+#pragma omp for schedule(runtime)
         for(int i=1;i<xSize-1;++i)
         {
 #pragma simd
@@ -45,6 +48,7 @@ void kernel(Array* phi_new, Array* phi,  double centre_coeff, double dx_coeff, d
             }
         }
     }
+}
 }
 
 int main(const int argc, char* const argv[])
@@ -115,13 +119,13 @@ int main(const int argc, char* const argv[])
         printf("L2 error = %f\n",error);
     }
 
-
+    loop_adapt_register_tcount_func(omp_get_num_threads);
     REGISTER_LOOP("SWEEP");
     REGISTER_POLICY("SWEEP", "POL_BLOCKSIZE", NUM_PROFILES);
 
 #pragma omp parallel
     {
-        REGISTER_PARAMETER("SWEEP", LOOP_ADAPT_SCOPE_THREAD, "blksize", omp_get_thread_num(), NODEPARAMETER_INT, blockSize, (cacheSize/(3.0*8*1.5)), (cacheSize/(3.0*8*2.5)));
+        REGISTER_PARAMETER("SWEEP", LOOP_ADAPT_SCOPE_THREAD, "blksize", omp_get_thread_num(), NODEPARAMETER_INT, blockSize, (cacheSize/(3.0*8*2.5)), (cacheSize/(3.0*8*1.5)));
     }
 
     printf("\n%5s\t%5s\t%10s\t%10s\t%10s\t\t%10s\n","Iter","Thread", "xSize", "ySize", "BlockSize", "MLUPS");
@@ -137,7 +141,7 @@ int main(const int argc, char* const argv[])
         double wcs=tym.tv_sec+(tym.tv_usec*1e-6);
         double wce=wcs;
 
-        blockSize = GET_INT_PARAMETER("SWEEP", "blksize", omp_get_thread_num());
+        
         kernel(phi_new, phi, centre_coeff, x_coeff, y_coeff, blockSize);
         //swap arrays
         double* temp = phi_new->val;

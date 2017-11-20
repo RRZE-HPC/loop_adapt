@@ -25,3 +25,4 @@ else()
 endif()
 
 add_executable(LA_example src/jacobi_with_blocking.cpp src/Array.cpp)
+add_executable(LA_example_old src/jacobi-2D-5pt-block.c)
