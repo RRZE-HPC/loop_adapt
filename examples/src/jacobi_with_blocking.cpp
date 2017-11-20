@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include "Array.h"
 #include <math.h>
+#include <loop_adapt.h>
+
+#define NUM_PROFILES 6
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
@@ -21,10 +24,13 @@ double solFn(int i, int j, double dx, double dy)
 }
 
 
-void kernel(Array* phi_new, Array* phi,  double centre_coeff, double dx_coeff, double dy_coeff, int nBlocks, int blockSize)
+void kernel(Array* phi_new, Array* phi,  double centre_coeff, double dx_coeff, double dy_coeff, int blockSize)
 {
     int xSize = phi->xSize;
     int ySize = phi->ySize;
+
+    int nBlocks = (int) (ySize/((double)blockSize));
+
     for(int bs=0; bs<(nBlocks+1); ++bs)
     {
 
@@ -85,8 +91,6 @@ int main(const int argc, char* const argv[])
         blockSize = cacheSize/(3.0*8*sf);
     }
 
-    int nBlocks = (int) (ySize/((double)blockSize));
-
     Array *phi = new Array(xSize, ySize);
     Array *phi_new = new Array(xSize, ySize);
 
@@ -103,7 +107,7 @@ int main(const int argc, char* const argv[])
 #ifdef WRITE_FILE
         phi->writeToFile("init.txt");
 #endif
-        kernel(phi_new, phi, centre_coeff, x_coeff, y_coeff, nBlocks, blockSize);
+        kernel(phi_new, phi, centre_coeff, x_coeff, y_coeff, blockSize);
         double error = phi_new->l2Error(std::bind(uFn,std::placeholders::_1, std::placeholders::_2, dx, dy));
 #ifdef WRITE_FILE
         phi_new->writeToFile("soln.txt");
@@ -112,27 +116,41 @@ int main(const int argc, char* const argv[])
     }
 
 
-    struct timeval tym;
-    gettimeofday(&tym,NULL);
-    double wcs=tym.tv_sec+(tym.tv_usec*1e-6);
-    double wce=wcs;
+    REGISTER_LOOP("SWEEP");
+    REGISTER_POLICY("SWEEP", "POL_BLOCKSIZE", NUM_PROFILES);
 
-    for(int iter=1;iter<=niter;++iter)
+#pragma omp parallel
     {
-        kernel(phi_new, phi, centre_coeff, x_coeff, y_coeff, nBlocks, blockSize);
+        REGISTER_PARAMETER("SWEEP", LOOP_ADAPT_SCOPE_THREAD, "blksize", omp_get_thread_num(), NODEPARAMETER_INT, blockSize, (cacheSize/(3.0*8*1.5)), (cacheSize/(3.0*8*2.5)));
+    }
+
+    printf("\n%5s\t%5s\t%10s\t%10s\t%10s\t\t%10s\n","Iter","Thread", "xSize", "ySize", "BlockSize", "MLUPS");
+
+
+    // for(int iter=1;iter<=niter;++iter)
+    int iter;
+
+    LA_FOR("SWEEP", iter=1, iter<=niter, ++iter)
+    {
+        struct timeval tym;
+        gettimeofday(&tym,NULL);
+        double wcs=tym.tv_sec+(tym.tv_usec*1e-6);
+        double wce=wcs;
+
+        blockSize = GET_INT_PARAMETER("SWEEP", "blksize", omp_get_thread_num());
+        kernel(phi_new, phi, centre_coeff, x_coeff, y_coeff, blockSize);
         //swap arrays
         double* temp = phi_new->val;
         phi_new->val = phi->val;
         phi->val = temp;
+
+        gettimeofday(&tym,NULL);
+        wce=tym.tv_sec+(tym.tv_usec*1e-6);
+        double mlups = (((double)xSize)*((double)ySize)*1*1.0e-6)/(wce-wcs);
+
+        printf("%5d\t%5d\t%10d\t%10d\t%10d\t\t%8.2f\n",iter,thread_num, xSize, ySize, blockSize, mlups);
+
     }
-
-    gettimeofday(&tym,NULL);
-    wce=tym.tv_sec+(tym.tv_usec*1e-6);
-    double mlups = (((double)xSize)*((double)ySize)*niter*1.0e-6)/(wce-wcs);
-
-    printf("\n%5s\t%10s\t%10s\t%10s\t\t%10s\n","Thread", "xSize", "ySize", "BlockSize", "MLUPS");
-
-    printf("%4d\t%10d\t%10d\t%10d\t\t%8.2f\n",thread_num, xSize, ySize, blockSize, mlups);
 
     delete phi;
     delete phi_new;

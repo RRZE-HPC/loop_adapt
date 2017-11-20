@@ -3,9 +3,13 @@
 
 #include <hwloc.h>
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 //#include <loop_adapt_types.h>
 //#include <loop_adapt_eval.h>
-
 typedef enum {
     LOOP_ADAPT_SCOPE_NONE = -1,
     LOOP_ADAPT_SCOPE_MACHINE = HWLOC_OBJ_MACHINE,
@@ -105,4 +109,9 @@ void loop_adapt_register_double_param( char* string,
 double loop_adapt_get_double_param( char* string, AdaptScope scope, int cpu, char* name);
 
 int loop_adapt_list_policy();
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif
