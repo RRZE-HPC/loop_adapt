@@ -7,8 +7,8 @@ else()
 endif()
 set(loopAdapt_LIBDIR @CMAKE_INSTALL_PREFIX@/lib)
 
-set(loopAdapt_C_FLAGS "${loopAdapt_C_FLAGS}")
-set(loopAdapt_CXX_FLAGS "${loopAdapt_CXX_FLAGS}")
+set(loopAdapt_C_FLAGS "@DEBUG_C_FLAGS@")
+set(loopAdapt_CXX_FLAGS "@DEBUG_CXX_FLAGS@")
 
 set(loopAdapt_CC @CC@)
 set(loopAdapt_CXX @CXX@)
