@@ -82,11 +82,10 @@ void update_best(PolicyParameter_t pp, hwloc_obj_t baseobj, hwloc_obj_t setobj)
 {
     Nodevalues_t basev = (Nodevalues_t)baseobj->userdata;
     Nodevalues_t setv = (Nodevalues_t)setobj->userdata;
-
     char* pname = pp->name;
     Nodeparameter_t setp = g_hash_table_lookup(setv->param_hash, (gpointer) pname);
     Nodeparameter_t basep = g_hash_table_lookup(basev->param_hash, (gpointer) pname);
-    if (setp && basep)
+    if (setp != NULL && basep != NULL )
     {
         if (loop_adapt_debug)
             printf("Setting best for param %s to ", pname);
@@ -127,7 +126,9 @@ void set_param_step(char* param, Nodevalues_t vals, int step)
     }
 }
 
-int allocate_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type, int polidx, int num_profiles, int num_values)
+
+int
+allocate_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type, int polidx, int num_profiles, int profile_iterations, int num_values)
 {
     int len = hwloc_get_nbobjs_by_type(tree, type);
     //Treedata *tdata = (Treedata *)hwloc_topology_get_userdata(tree);
@@ -143,37 +144,62 @@ int allocate_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type, int polidx
         {
             if (loop_adapt_debug == 2)
                 fprintf(stderr, "DEBUG: Enlarge arrays of node %d\n", i);
-            v->profiles = (double***)realloc_buffer(v->profiles, MIN(1, polidx+1)*sizeof(double**));
-            v->num_profiles = (int*)realloc_buffer(v->num_profiles, MIN(1, polidx+1)*sizeof(int));
-            v->runtimes = (TimerData**)realloc_buffer(v->runtimes,  MIN(1, polidx+1)*sizeof(TimerData*));
-            v->num_values = realloc_buffer(v->num_values, MIN(1, polidx+1)*sizeof(int));
+            v->opt_profiles = (int*)realloc_buffer(v->opt_profiles, MAX(1, polidx+1)*sizeof(int));
+            v->num_profiles = (int*)realloc_buffer(v->num_profiles, MAX(1, polidx+1)*sizeof(int));
+            v->num_values = realloc_buffer(v->num_values, MAX(1, polidx+1)*sizeof(int));
+            v->profile_iters = (int*)realloc_buffer(v->profile_iters, MAX(1, polidx+1)*sizeof(int));
+            v->cur_profile_iters = (int*)realloc_buffer(v->cur_profile_iters, MAX(1, polidx+1)*sizeof(int));
+
+            v->runtimes = (TimerData**)realloc_buffer(v->runtimes,  MAX(1, polidx+1)*sizeof(TimerData*));
+
+            // Allocate space for metrics
+            v->profiles = (double***)realloc_buffer(v->profiles, MAX(1, polidx+1)*sizeof(double**));
+            v->profiles[polidx] = malloc(num_profiles*sizeof(double*));
+            for (int j = 0; j < num_profiles; j++)
+            {
+                v->profiles[polidx][j] = malloc(num_values * sizeof(double));
+                memset(v->profiles[polidx][j], 0, num_values * sizeof(double));
+            }
             if (loop_adapt_debug == 2)
                 fprintf(stderr, "DEBUG: Number of policies %d\n", polidx+1);
-            v->opt_profiles = (int*)realloc_buffer(v->opt_profiles, MIN(1, polidx+1)*sizeof(int));
             v->num_policies = polidx+1;
         }
-        v->profiles[polidx] = malloc(num_profiles*sizeof(double*));
+
         v->runtimes[polidx] = malloc((num_profiles)*sizeof(TimerData));
         v->num_profiles[polidx] = num_profiles;
         v->num_values[polidx] = num_values;
+        v->opt_profiles[polidx] = 0;
+        v->profile_iters[polidx] = profile_iterations;
+        v->cur_profile_iters[polidx] = 0;
         v->cur_policy = 0;
         v->cur_profile = 0;
-        //v->num_parameters = 0;
         v->param_hash = g_hash_table_new(g_str_hash, g_str_equal);
         pthread_mutex_init(&v->lock, NULL);
         pthread_cond_init(&v->cond, NULL);
-        // Allocate space for metrics
-        for (int j = 0; j < v->num_profiles[polidx]; j++)
-        {
-            
-            v->profiles[polidx][j] = malloc(v->num_values[polidx] * sizeof(double));
-            memset(v->profiles[polidx][j], 0, v->num_values[polidx] * sizeof(double));
-        }
+
         // save the profile struct in the object
         obj->userdata = (void*)v;
     }
     return 0;
 }
+
+
+
+void free_hashData(gpointer key, gpointer value, gpointer user_data)
+{
+    Nodeparameter_t np = (Nodeparameter_t)value;
+    if (np->name)
+    {
+        free(np->name);
+    }
+    if (np->desc)
+    {
+        free(np->desc);
+    }
+    memset(np, 0, sizeof(Nodeparameter));
+    free(np);
+}
+
 
 void free_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type)
 {
@@ -185,21 +211,23 @@ void free_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type)
         for (int j = 0; j < v->num_policies; j++)
         {
             for (int k = 0; k < v->num_profiles[j]; k++)
-                free(v->profiles[j][k]);
+            {
+                if (v->profiles[j][k])
+                    free(v->profiles[j][k]);
+            }
             free(v->profiles[j]);
             free(v->runtimes[j]);
         }
-/*        for (int j = 0; j < v->num_parameters; j++)*/
-/*        {*/
-/*            free(v->parameters[j]);*/
-/*        }*/
+
         pthread_mutex_destroy(&v->lock);
         pthread_cond_destroy(&v->cond);
+        g_hash_table_foreach(v->param_hash, free_hashData, NULL);
         g_hash_table_destroy(v->param_hash);
+        free(v->profile_iters);
+        free(v->cur_profile_iters);
         free(v->opt_profiles);
         free(v->profiles);
         free(v->runtimes);
-/*        free(v->parameters);*/
         free(v->num_profiles);
         free(v->num_values);
         free(v);
@@ -208,19 +236,19 @@ void free_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type)
     return;
 }
 
-int populate_tree(hwloc_topology_t tree, int polidx, int num_profiles)
+int populate_tree(hwloc_topology_t tree, int polidx, int num_profiles, int profile_iterations)
 {
     int max_num_values = LOOP_ADAPT_MAX_POLICY_METRICS;
-    int ret = allocate_nodevalues(tree, LOOP_ADAPT_SCOPE_THREAD, polidx, num_profiles, max_num_values);
+    int ret = allocate_nodevalues(tree, LOOP_ADAPT_SCOPE_THREAD, polidx, num_profiles, profile_iterations, max_num_values);
     if (ret)
         return ret;
-    ret = allocate_nodevalues(tree, LOOP_ADAPT_SCOPE_SOCKET, polidx, num_profiles, max_num_values);
+    ret = allocate_nodevalues(tree, LOOP_ADAPT_SCOPE_SOCKET, polidx, num_profiles, profile_iterations, max_num_values);
     if (ret)
         return ret;
-    ret = allocate_nodevalues(tree, LOOP_ADAPT_SCOPE_NUMA, polidx, num_profiles, max_num_values);
+    ret = allocate_nodevalues(tree, LOOP_ADAPT_SCOPE_NUMA, polidx, num_profiles, profile_iterations, max_num_values);
     if (ret)
         return ret;
-    ret = allocate_nodevalues(tree, LOOP_ADAPT_SCOPE_MACHINE, polidx, num_profiles, max_num_values);
+    ret = allocate_nodevalues(tree, LOOP_ADAPT_SCOPE_MACHINE, polidx, num_profiles, profile_iterations, max_num_values);
     if (ret)
         return ret;
     return 0;
@@ -258,8 +286,10 @@ void _update_tree(hwloc_obj_t base, hwloc_obj_t obj, int profile)
         }
     }
     ovals->cur_profile = bvals->cur_profile;
-    ovals->num_values = bvals->num_values;
-    ovals->num_profiles = bvals->num_profiles;
+    //ovals->num_values = bvals->num_values;
+    memcpy(ovals->num_values, bvals->num_values, bvals->num_policies*sizeof(int));
+    memcpy(ovals->num_profiles, bvals->num_profiles, bvals->num_policies*sizeof(int));
+    //ovals->num_profiles = bvals->num_profiles;
     
     pthread_mutex_unlock(&ovals->lock);
 }

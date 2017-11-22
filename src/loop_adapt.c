@@ -180,7 +180,7 @@ static Policy_t loop_adapt_read_policy( char* polname)
     return p;
 }
 
-void loop_adapt_register_policy( char* string, char* polname, int num_profiles)
+void loop_adapt_register_policy( char* string, char* polname, int num_profiles, int iters_per_profile)
 {
     Policy_t p = loop_adapt_read_policy(polname);
     if (p)
@@ -188,8 +188,9 @@ void loop_adapt_register_policy( char* string, char* polname, int num_profiles)
         hwloc_topology_t tree = g_hash_table_lookup(global_hash, (gpointer) string);
         if (tree)
         {
-            printf("Add policy %s to tree of loop region %s with %d profiles\n", p->name, string, num_profiles);
-            loop_adapt_add_policy(tree, p, num_cpus, cpulist, num_profiles);
+            printf("Add policy %s to tree of loop region %s with %d profiles and %d iterations per profile\n", p->name, string, num_profiles, iters_per_profile);
+            // We register num_profiles+1 because one profile is used as base for the further evaluation
+            loop_adapt_add_policy(tree, p, num_cpus, cpulist, num_profiles+1, iters_per_profile);
         }
     }
 }
@@ -232,7 +233,7 @@ void loop_adapt_register_int_param( char* string,
                     if (loop_adapt_debug)
                         fprintf(stderr, "DEBUG: Calculating maximum for %s: %d\n", name, max);
                 }
-                if (loop_adapt_debug)
+                //if (loop_adapt_debug)
                     fprintf(stderr, "DEBUG: Parameter %s: %d/%d/%d\n", name, min, cur, max);
                 loop_adapt_add_int_parameter(obj, name, desc, cur, min, max, NULL, NULL);
             }
@@ -270,12 +271,14 @@ int loop_adapt_get_int_param( char* string, AdaptScope scope, int cpu, char* nam
             {
                 if (np->best.ibest < 0 || v->cur_profile < v->num_profiles[v->cur_policy])
                 {
-                    fprintf(stderr, " %d\n", np->cur.icur);
+                    if (loop_adapt_debug)
+                        fprintf(stderr, " %d\n", np->cur.icur);
                     return np->cur.icur;
                 }
                 else
                 {
-                    fprintf(stderr, " %d\n", np->best.ibest);
+                    if (loop_adapt_debug)
+                        fprintf(stderr, " %d\n", np->best.ibest);
                     return np->best.ibest;
                 }
             }
@@ -374,6 +377,8 @@ int loop_adapt_begin(char* string, char* filename, int linenumber)
 
     if (loop_adapt_active)
     {
+        hwloc_obj_t obj = NULL, new = NULL;
+        Nodevalues_t v = NULL, newv = NULL;
         hwloc_topology_t tree = g_hash_table_lookup(global_hash, (gpointer) string);
         if (tree)
         {
@@ -383,63 +388,91 @@ int loop_adapt_begin(char* string, char* filename, int linenumber)
                 if (loop_adapt_debug)
                     fprintf(stderr, "DEBUG: Starting loop %s\n", string);
                 int cpuid = 0;
+                int objidx = 0;
                 if (tid_func)
                     cpuid = tid_func();
-#ifdef _OPENMP
                 else
-                    cpuid = omp_get_thread_num();
-#endif
-                //likwid_pinThread(cpuid);
+                    cpuid = sched_getcpu();
+
+                // This is the case when we are already in a parallel region
                 if (tcount_func && tcount_func() > 1)
                 {
-                    int objidx = cpus_to_objidx[cpuid];
-                    Nodevalues_t v = NULL;
-                    hwloc_obj_t obj = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
-
+                    objidx = cpus_to_objidx[cpuid];
+                    obj = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
                     v = (Nodevalues_t)obj->userdata;
-                    if (v->cur_profile < v->num_profiles[v->cur_policy])
+                    //printf("Begin Cur iters %d eval iters %d\n", v->cur_profile_iters[v->cur_policy], v->profile_iters[v->cur_policy]);
+                    if (v != NULL &&
+                        v->cur_profile_iters[v->cur_policy] == 0 &&
+                        v->cur_profile < v->num_profiles[v->cur_policy])
                     {
                         if (v->cur_profile == 0)
                         {
-                            int ret = asprintf(&tdata->filename, "%s", filename);
+                            int ret = 0;
+                            if (!tdata->filename)
+                                ret = asprintf(&tdata->filename, "%s", filename);
                             ret++;
                             tdata->linenumber = linenumber;
                         }
 
                         if (v->cur_profile > 1)
                         {
+                            //printf("single loop_adapt_exec_policies %d\n", cpuid);
                             loop_adapt_exec_policies(tree, obj);
                         }
-                        loop_adapt_begin_policies(cpuid, tree, obj); 
+                        //printf("Call single loop_adapt_begin_policies %d\n", cpuid);
+                        loop_adapt_begin_policies(cpuid, tree, obj);
                     }
                 }
+                // This is the case when we are in a serial region but threading is generally activated
                 else if (tcount_func && tcount_func() == 1)
                 {
                     for (int c = 0; c < num_cpus; c++)
                     {
                         if (CPU_ISSET(cpulist[c], &loop_adapt_cpuset))
                         {
-                            int objidx = cpus_to_objidx[cpulist[c]];
-                            Nodevalues_t v = NULL;
-                            hwloc_obj_t obj = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
+                            objidx = cpus_to_objidx[cpulist[c]];
+                            new = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
 
-                            v = (Nodevalues_t)obj->userdata;
-                            if (v->cur_profile < v->num_profiles[v->cur_policy])
+                            newv = (Nodevalues_t)new->userdata;
+                            //printf("Begin CPU %d Cur iters %d eval iters %d\n", cpulist[c], v->cur_profile_iters[v->cur_policy], v->profile_iters[v->cur_policy]);
+                            if (newv != NULL &&
+                                newv->cur_profile_iters[newv->cur_policy] == 0 && 
+                                newv->cur_profile < newv->num_profiles[newv->cur_policy])
                             {
                                 //printf("LOOP START CPU %d/%d PROFILE %d/%d\n", cpuid, objidx, v->cur_profile, tdata->num_profiles);
-                                if (v->cur_profile == 0)
+                                if (newv->cur_profile == 0)
                                 {
-                                    int ret = asprintf(&tdata->filename, "%s", filename);
+                                    int ret = 0;
+                                    if (!tdata->filename)
+                                        ret = asprintf(&tdata->filename, "%s", filename);
                                     ret++;
                                     tdata->linenumber = linenumber;
                                 }
                                 
 
-                                if (v->cur_profile > 1)
+                                if (newv->cur_profile > 1)
                                 {
-                                    loop_adapt_exec_policies(tree, obj);
+                                    //printf("multi loop_adapt_exec_policies %d\n", cpulist[c]);
+                                    loop_adapt_exec_policies(tree, new);
                                 }
-                                loop_adapt_begin_policies(cpuid, tree, obj); 
+                                
+                                //v->cur_profile_iters[v->cur_policy] = 0;
+                            }
+                        }
+                    }
+                    for (int c = 0; c < num_cpus; c++)
+                    {
+                        if (CPU_ISSET(cpulist[c], &loop_adapt_cpuset))
+                        {
+                            objidx = cpus_to_objidx[cpulist[c]];
+                            new = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
+                            newv = (Nodevalues_t)new->userdata;
+                            if (newv != NULL &&
+                                newv->cur_profile_iters[newv->cur_policy] == 0 && 
+                                newv->cur_profile < newv->num_profiles[newv->cur_policy])
+                            {
+                                //printf("Call multi loop_adapt_begin_policies %d\n", cpulist[c]);
+                                loop_adapt_begin_policies(cpulist[c], tree, new);
                             }
                         }
                     }
@@ -461,6 +494,8 @@ int loop_adapt_end(char* string)
 {
     if (loop_adapt_active)
     {
+        hwloc_obj_t obj = NULL, new = NULL;
+        Nodevalues_t v = NULL, newv = NULL;
         hwloc_topology_t tree = g_hash_table_lookup(global_hash, (gpointer) string);
         if (tree)
         {
@@ -470,43 +505,64 @@ int loop_adapt_end(char* string)
                 if (loop_adapt_debug)
                     fprintf(stderr, "DEBUG: Ending loop %s\n", string);
                 int cpuid = 0;
+                int objidx = 0;
                 if (tid_func)
                     cpuid = tid_func();
-#ifdef _OPENMP
                 else
-                    cpuid = omp_get_thread_num();
-#endif
-
-                int objidx = cpus_to_objidx[cpuid];
-
-                hwloc_obj_t obj = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
-                Nodevalues *v = (Nodevalues *)obj->userdata;
-                if (v != NULL && v->cur_profile < v->num_profiles[v->cur_policy])
+                    cpuid = sched_getcpu();
+                // This is the case when we are already in a parallel region
+                if (tcount_func && tcount_func() > 1)
                 {
-                    loop_adapt_end_policies(cpuid, tree, obj);
-                    if (v->cur_profile > 0)
-                        update_tree(obj, v->cur_profile-1);
-                    v->cur_profile++;
+                    objidx = cpus_to_objidx[cpuid];
+
+                    obj = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
+                    v = (Nodevalues_t)obj->userdata;
+                    //printf("End Cur iters %d eval iters %d\n", v->cur_profile_iters[v->cur_policy], v->profile_iters[v->cur_policy]);
+                    if (v != NULL &&
+                        v->cur_profile_iters[v->cur_policy] == v->profile_iters[v->cur_policy]-1 &&
+                        v->cur_profile < v->num_profiles[v->cur_policy])
+                    {
+                        //printf("Call single loop_adapt_end_policies %d\n", cpuid);
+                        loop_adapt_end_policies(cpuid, tree, obj);
+                        if (v->cur_profile > 0)
+                            update_tree(obj, v->cur_profile-1);
+                        v->cur_profile++;
+                        v->cur_profile_iters[v->cur_policy] = 0;
+                    }
+                    else if (v != NULL)
+                    {
+                        v->cur_profile_iters[v->cur_policy]++;
+                    }
                 }
-
-                if (tcount_func && tcount_func() == 1)
+                // This is the case when we are in a serial region but threading is generally activated
+                else if (tcount_func && tcount_func() == 1)
                 {
+                    objidx = cpus_to_objidx[cpuid];
+                    obj = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
+                    v = (Nodevalues_t)obj->userdata;
                     for (int c = 0; c < num_cpus; c++)
                     {
                         if (CPU_ISSET(cpulist[c], &loop_adapt_cpuset))
                         {
                             objidx = cpus_to_objidx[cpulist[c]];
         
-                            hwloc_obj_t new = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
-                            if (obj == new)
-                                continue;
-                            Nodevalues *newv = (Nodevalues *)new->userdata;
-                            if (newv != NULL && newv->cur_profile < newv->num_profiles[newv->cur_policy])
+                            new = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
+                            newv = (Nodevalues_t)new->userdata;
+                            //printf("End CPU %d Cur iters %d eval iters %d\n", cpulist[c], v->cur_profile_iters[v->cur_policy], v->profile_iters[v->cur_policy]);
+                            if (newv != NULL &&
+                                newv->cur_profile_iters[newv->cur_policy] == newv->profile_iters[newv->cur_policy]-1 &&
+                                newv->cur_profile < newv->num_profiles[newv->cur_policy])
                             {
+                                //printf("Call multi loop_adapt_end_policies %d\n", cpulist[c]);
                                 loop_adapt_end_policies(cpulist[c], tree, new);
                                 if (newv->cur_profile > 0)
                                     update_tree(new, newv->cur_profile-1);
                                 newv->cur_profile++;
+                                newv->cur_profile_iters[newv->cur_policy] = 0;
+                            }
+                            else if (newv != NULL)
+                            {
+                                newv->cur_profile_iters[newv->cur_policy]++;
                             }
                         }
                     }
@@ -560,10 +616,6 @@ __attribute__((destructor)) void loop_adapt_finalize (void)
     {
         key = (char*)gkey;
         tree = (hwloc_topology_t)gvalue;
-/*        free_nodevalues(tree, HWLOC_OBJ_PU);*/
-/*        free_nodevalues(tree, HWLOC_OBJ_PACKAGE);*/
-/*        free_nodevalues(tree, HWLOC_OBJ_NUMANODE);*/
-/*        free_nodevalues(tree, HWLOC_OBJ_MACHINE);*/
 
         tidy_tree(tree);
 

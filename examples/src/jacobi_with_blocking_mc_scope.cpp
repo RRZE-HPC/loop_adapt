@@ -118,7 +118,7 @@ int main(const int argc, char* const argv[])
 
     loop_adapt_register_tcount_func(omp_get_num_threads);
     REGISTER_LOOP("SWEEP");
-    REGISTER_POLICY("SWEEP", "POL_BLOCKSIZE", NUM_PROFILES);
+    REGISTER_POLICY("SWEEP", "POL_BLOCKSIZE", NUM_PROFILES, 1);
 
 #pragma omp parallel
     {

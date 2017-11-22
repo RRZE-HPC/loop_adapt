@@ -202,6 +202,7 @@ void loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
             PolicyParameter_t pp = &p->parameters[i];
             if (loop_adapt_debug == 2)
                 fprintf(stderr, "DEBUG: Evaluate param %s for %s with idx %d (opt:%d, cur:%d)\n", pp->name, loop_adapt_type_name((AdaptScope)obj->type), obj->logical_index, opt_profile, cur_profile);
+
             int eval = la_calc_evaluate(p, pp, opt_values, cur_values);
 
             if (eval)
@@ -214,27 +215,6 @@ void loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
                 // current setting. After the policy is completely evaluated, the
                 // best setting is returned by GET_[INT/DBL]_PARAMETER
                 update_best(pp, obj, obj);
-
-                // Check the current thread count whether the setting of this object
-                // should be propagated to the other ones.
-                // Often the LA_LOOP macros are used in serial regions and therefore
-                // the best parameter is set for all other objects of the scope.
-                /*loop_adapt_get_tcount_func(&tcount_func);
-                if (tcount_func && tcount_func() == 1)
-                {
-                    if (loop_adapt_debug == 2)
-                        fprintf(stderr, "DEBUG: Updating parameter for all\n");
-                    int len = hwloc_get_nbobjs_by_type(tree, (hwloc_obj_type_t)p->scope);
-                    for (int k = 0; k < len; k++)
-                    {
-                        hwloc_obj_t new = hwloc_get_obj_by_type(tree, (hwloc_obj_type_t)p->scope, k);
-                        if (new == obj)
-                        {
-                            continue;
-                        }
-                        update_best(pp, obj, new);
-                    }
-                }*/
             }
             loop_adapt_eval_blocksize_next_param_step(pp->name, v, cur_profile-1);
         }

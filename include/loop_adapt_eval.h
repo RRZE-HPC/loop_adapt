@@ -18,7 +18,7 @@
     .loop_adapt_eval_end = loop_adapt_eval_## NAME##_end, \
     .loop_adapt_eval_close = loop_adapt_eval_## NAME##_close, \
 
-int loop_adapt_add_policy(hwloc_topology_t tree, Policy *p, int num_cpus, int *cpulist, int num_profiles);
+int loop_adapt_add_policy(hwloc_topology_t tree, Policy *p, int num_cpus, int *cpulist, int num_profiles, int iters_per_profile);
 int loop_adapt_begin_policies(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj);
 int loop_adapt_end_policies(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj);
 int loop_adapt_exec_policies(hwloc_topology_t tree, hwloc_obj_t obj);

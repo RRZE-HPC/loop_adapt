@@ -44,7 +44,7 @@ int main()
     //int ablock[NUM_THREADS] = {blockSize};
     loop_adapt_register_tcount_func(omp_get_num_threads);
     REGISTER_LOOP("SWEEP");
-    REGISTER_POLICY("SWEEP", "POL_BLOCKSIZE", NUM_PROFILES);
+    REGISTER_POLICY("SWEEP", "POL_BLOCKSIZE", NUM_PROFILES, 1);
     //REGISTER_POLICY("SWEEP", "POL_DVFS", NUM_PROFILES);
 
 

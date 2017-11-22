@@ -41,9 +41,10 @@ void kernel(Array* phi_new, Array* phi,  double centre_coeff, double dx_coeff, d
 #pragma omp parallel private(blockSize)
     {
         int tid = omp_get_thread_num();
+        int cpu = sched_getcpu();
 
-        blockSize = GET_INT_PARAMETER("SWEEP", "blksize", omp_get_thread_num());
-        printf("EXAMPLE Thread %d BlockSize %d\n", omp_get_thread_num(), blockSize);
+        blockSize = GET_INT_PARAMETER("SWEEP", "blksize", cpu);
+        printf("Thread %d CPU %d Blocksize %d\n", tid, cpu, blockSize);
         int nBlocks = (int) (ySize/((double)blockSize));
 
         for(int bs=0; bs<(nBlocks+1); ++bs)
@@ -118,11 +119,12 @@ int main(const int argc, char* const argv[])
     phi->fill(std::bind(uFn,std::placeholders::_1, std::placeholders::_2, dx, dy));
 
     loop_adapt_register_tcount_func(omp_get_num_threads);
+    loop_adapt_register_tid_func(sched_getcpu);
     REGISTER_LOOP("SWEEP");
-    REGISTER_POLICY("SWEEP", "POL_BLOCKSIZE", NUM_PROFILES);
+    REGISTER_POLICY("SWEEP", "POL_BLOCKSIZE", NUM_PROFILES, 2);
 #pragma omp parallel
     {
-        REGISTER_PARAMETER("SWEEP", LOOP_ADAPT_SCOPE_THREAD, "blksize", omp_get_thread_num(), NODEPARAMETER_INT, blockSize, (cacheSize/(3.0*8*2.5)), (cacheSize/(3.0*8*1.5)));
+        REGISTER_PARAMETER("SWEEP", LOOP_ADAPT_SCOPE_THREAD, "blksize", sched_getcpu(), NODEPARAMETER_INT, blockSize, (cacheSize/(3.0*8*2.5)), (cacheSize/(3.0*8*1.5)));
     }
 
 
@@ -162,7 +164,7 @@ int main(const int argc, char* const argv[])
         gettimeofday(&tym,NULL);
         wce=tym.tv_sec+(tym.tv_usec*1e-6);
         double mlups = (((double)xSize)*((double)ySize)*1*1.0e-6)/(wce-wcs);
-
+        GET_INT_PARAMETER("SWEEP", "blksize", 0)
         printf("%5d\t%5d\t%10d\t%10d\t%10d\t\t%8.2f\n",iter,thread_num, xSize, ySize, blockSize, mlups);
 
     }

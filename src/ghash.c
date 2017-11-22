@@ -590,8 +590,19 @@ g_hash_table_remove_all (GHashTable *hash_table)
 void
 g_hash_table_destroy (GHashTable *hash_table)
 {
-  g_hash_table_remove_all (hash_table);
-//  g_hash_table_unref (hash_table);
+  if (hash_table != NULL)
+  {
+    g_hash_table_remove_all (hash_table);
+    // Added by T. Roehl because we don't have the g_hash_table_unref function
+    // which commonly deletes these allocations
+    //  g_hash_table_unref (hash_table);
+    if (hash_table->keys != hash_table->values)
+      g_free (hash_table->values);
+    g_free(hash_table->keys);
+    g_free(hash_table->hashes);
+    g_free(hash_table);
+    hash_table = NULL;
+  }
 }
 
 gpointer

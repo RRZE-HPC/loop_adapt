@@ -45,7 +45,8 @@ typedef enum {
 } Nodeparametertype;
 
 #define REGISTER_LOOP(s) loop_adapt_register(s);
-#define REGISTER_POLICY(s, p, num_profiles) loop_adapt_register_policy((s), (p), (num_profiles));
+#define REGISTER_POLICY(s, p, num_profiles, iters_per_profile) \
+    loop_adapt_register_policy((s), (p), (num_profiles), (iters_per_profile));
 #define REGISTER_PARAMETER(s, scope, name, cpu, type, cur, min, max) \
     if (type == NODEPARAMETER_INT) \
         loop_adapt_register_int_param((s), (scope), (cpu), (name), NULL, (cur), (min), (max)); \
@@ -87,7 +88,7 @@ void loop_adapt_get_tid_func(int (**handle)());
 
 // Register a policy for a loop. Multiple policies can be registered for a loop
 // and they are processed in order
-void loop_adapt_register_policy( char* string, char* polname, int num_profiles);
+void loop_adapt_register_policy( char* string, char* polname, int num_profiles, int iters_per_profile);
 // Register a parameter in the topology tree belonging to a loop.
 // These parameters are used as knobs for manipulating the runtime by the loop
 // policies.

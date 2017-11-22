@@ -8,22 +8,20 @@
 static Policy **eval_policies = NULL;
 static int num_eval_policies = 0;
 
-int loop_adapt_add_policy(hwloc_topology_t tree, Policy *p, int num_cpus, int *cpulist, int num_profiles)
+int loop_adapt_add_policy(hwloc_topology_t tree, Policy *p, int num_cpus, int *cpulist, int num_profiles, int iters_per_profile)
 {
     int ret = -EINVAL;
     Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
     if (tdata)
     {
-        Policy_t* tmp = realloc(tdata->policies, (tdata->num_policies+1)*sizeof(Policy_t));
-        if (!tmp)
+        tdata->policies = realloc_buffer(tdata->policies, (tdata->num_policies+1)*sizeof(Policy_t));
+        if (!tdata->policies)
         {
             fprintf(stderr, "Cannot allocate space for policy.\n");
-            free(tdata->policies);
             tdata->num_policies = 0;
             ret = -ENOMEM;
             goto loop_adapt_add_policy_out;
         }
-        tdata->policies = tmp;
         int polidx = tdata->num_policies;
         tdata->policies[tdata->num_policies] = p;
         tdata->num_policies++;
@@ -33,7 +31,7 @@ int loop_adapt_add_policy(hwloc_topology_t tree, Policy *p, int num_cpus, int *c
             tdata->cur_policy_id = polidx;
             fprintf(stderr, "Starting with policy %s (%d)\n", p->name, polidx);
         }
-        ret = populate_tree(tree, polidx, num_profiles);
+        ret = populate_tree(tree, polidx, num_profiles, iters_per_profile);
         update_cur_policy_in_tree(tree, polidx);
         p->loop_adapt_eval_init(num_cpus, cpulist, num_profiles);
     }
@@ -43,9 +41,12 @@ loop_adapt_add_policy_out:
 
 static inline int _parameter_exists(Nodevalues_t vals, char* name)
 {
-    Nodeparameter_t np = g_hash_table_lookup(vals->param_hash, (gpointer) name);
-    if (np)
-        return 1;
+    if (vals && name)
+    {
+        Nodeparameter_t np = g_hash_table_lookup(vals->param_hash, (gpointer) name);
+        if (np)
+            return 1;
+    }
     return 0;
 }
 
@@ -75,11 +76,15 @@ int loop_adapt_add_int_parameter(hwloc_obj_t obj, char* name, char* desc, int cu
     Nodeparameter_t *tmp = NULL;
     if (!obj || !name)
     {
+        fprintf(stderr, "No obj or no name\n");
         return -EINVAL;
     }
     nv = (Nodevalues_t)obj->userdata;
     if (_parameter_exists(nv, name))
+    {
+        fprintf(stderr, "Parameter already exists\n");
         return 1;
+    }
     np = _parameter_malloc(name, desc);
     if (np)
     {
@@ -109,7 +114,10 @@ int loop_adapt_add_double_parameter(hwloc_obj_t obj, char* name, char* desc, dou
     }
     nv = (Nodevalues_t)obj->userdata;
     if (_parameter_exists(nv, name))
+    {
+        fprintf(stderr, "Parameter already exists\n");
         return 1;
+    }
     np = _parameter_malloc(name, desc);
     if (np)
     {

@@ -61,17 +61,17 @@ typedef struct {
     char* name;
     char* desc;
     int done;
-    int optimal_profile;
+    //int optimal_profile;
     AdaptScope scope;
     void (*loop_adapt_eval)(hwloc_topology_t tree, hwloc_obj_t obj);
     int (*loop_adapt_eval_begin)(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj);
     int (*loop_adapt_eval_init)(int num_cpus, int* cpulist, int num_profiles);
     int (*loop_adapt_eval_end)(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj);
     void (*loop_adapt_eval_close)(void);
-    double tolerance;
+    //double tolerance;
     int num_parameters;
     PolicyParameter parameters[LOOP_ADAPT_MAX_POLICY_PARAMS];
-    char* eval;
+    //char* eval;
     int num_metrics;
     PolicyMetric metrics[LOOP_ADAPT_MAX_POLICY_METRICS];
     int metric_idx[LOOP_ADAPT_MAX_POLICY_METRICS];
@@ -83,7 +83,6 @@ typedef Policy* Policy_t;
 typedef struct {
     char* filename;
     int linenumber;
-    int num_profiles;
     int num_policies;
     LoopRunStatus status;
     int cur_policy_id;
@@ -126,7 +125,11 @@ typedef struct {
     int cur_profile;
     // One entry per policy
     int* num_profiles;
+    int* profile_iters;
+    int* cur_profile_iters;
     int* num_values;
+    int* opt_profiles;
+    // Pthread fun
     pthread_mutex_t lock;
     pthread_cond_t cond;
     /* two dimensional array, first dim is the policyID and second dim
@@ -137,9 +140,7 @@ typedef struct {
      * third dim are the values of the profile.
      */
     double ***profiles;
-    int* opt_profiles;
-//    int num_parameters;
-//    Nodeparameter_t *parameters;
+    // String to obj hashtable for the node-level parameters
     GHashTable* param_hash;
 } Nodevalues;
 

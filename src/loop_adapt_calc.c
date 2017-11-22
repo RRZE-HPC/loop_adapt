@@ -93,7 +93,7 @@ int la_calc_evaluate(Policy_t p, PolicyParameter_t param, double *opt_values, do
         luaL_openlibs(L);
         lua_states[cpu] = L;
     }
-    
+
     for (int i = 0; i < p->num_metrics; i++)
     {
         int idx = p->metric_idx[i];
@@ -105,7 +105,7 @@ int la_calc_evaluate(Policy_t p, PolicyParameter_t param, double *opt_values, do
             printf("Opt Metric %d : %f\n", idx,opt_values[idx] );
         }
     }
-    
+
     char* t = NULL;
     int ret = asprintf(&t, "%s\n%s\n%s\n%s\nreturn tostring(%s)", in_func_str,
                             (in_user_funcs ? in_user_funcs : ""),
@@ -120,6 +120,8 @@ int la_calc_evaluate(Policy_t p, PolicyParameter_t param, double *opt_values, do
             out_int = 1;
     }
     free(t);
+    if (vars)
+        free(vars);
     return out_int;
 }
 
@@ -186,15 +188,15 @@ void __attribute__((constructor (103))) init_loop_adapt_calc(void)
 
 void __attribute__((destructor (103))) close_loop_adapt_calc(void)
 {
-    if (lua_states && num_states > 0)
-    {
-        for (int i = 0; i < num_states; i++)
-        {
-            if (lua_states[i])
-                lua_close(lua_states[i]);
-        }
-        free(lua_states);
-    }
+/*    if (lua_states && num_states > 0)*/
+/*    {*/
+/*        for (int i = 0; i < num_states; i++)*/
+/*        {*/
+/*            if (lua_states[i])*/
+/*                lua_close(lua_states[i]);*/
+/*        }*/
+/*        free(lua_states);*/
+/*    }*/
     for (int i = 0; i < num_states; i++)
     {
         if (defines[i])
