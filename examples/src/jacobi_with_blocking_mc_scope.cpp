@@ -29,7 +29,7 @@ void kernel(Array* phi_new, Array* phi,  double centre_coeff, double dx_coeff, d
     int xSize = phi->xSize;
     int ySize = phi->ySize;
 
-    blockSize = GET_INT_PARAMETER("SWEEP", "blksize", omp_get_thread_num());
+    GET_INT_PARAMETER("SWEEP", blockSize, "blksize", omp_get_thread_num());
     printf("EXAMPLE Thread %d BlockSize %d\n", omp_get_thread_num(), blockSize);
     int nBlocks = (int) (ySize/((double)blockSize));
 
@@ -116,7 +116,8 @@ int main(const int argc, char* const argv[])
         printf("L2 error = %f\n",error);
     }
 
-    loop_adapt_register_tcount_func(omp_get_num_threads);
+    REGISTER_THREAD_COUNT_FUNC(omp_get_num_threads);
+    REGISTER_THREAD_ID_FUNC(sched_getcpu);
     REGISTER_LOOP("SWEEP");
     REGISTER_POLICY("SWEEP", "POL_BLOCKSIZE", NUM_PROFILES, 1);
 

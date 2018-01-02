@@ -43,7 +43,7 @@ void kernel(Array* phi_new, Array* phi,  double centre_coeff, double dx_coeff, d
         int tid = omp_get_thread_num();
         int cpu = sched_getcpu();
 
-        blockSize = GET_INT_PARAMETER("SWEEP", "blksize", cpu);
+        GET_INT_PARAMETER("SWEEP", blockSize, "blksize", cpu);
         printf("Thread %d CPU %d Blocksize %d\n", tid, cpu, blockSize);
         int nBlocks = (int) (ySize/((double)blockSize));
 
@@ -118,8 +118,8 @@ int main(const int argc, char* const argv[])
 
     phi->fill(std::bind(uFn,std::placeholders::_1, std::placeholders::_2, dx, dy));
 
-    loop_adapt_register_tcount_func(omp_get_num_threads);
-    loop_adapt_register_tid_func(sched_getcpu);
+    REGISTER_THREAD_COUNT_FUNC(omp_get_num_threads);
+    REGISTER_THREAD_ID_FUNC(sched_getcpu);
     REGISTER_LOOP("SWEEP");
     REGISTER_POLICY("SWEEP", "POL_BLOCKSIZE", NUM_PROFILES, 2);
 #pragma omp parallel
@@ -164,7 +164,7 @@ int main(const int argc, char* const argv[])
         gettimeofday(&tym,NULL);
         wce=tym.tv_sec+(tym.tv_usec*1e-6);
         double mlups = (((double)xSize)*((double)ySize)*1*1.0e-6)/(wce-wcs);
-        GET_INT_PARAMETER("SWEEP", "blksize", 0)
+        GET_INT_PARAMETER("SWEEP", blockSize, "blksize", 0)
         printf("%5d\t%5d\t%10d\t%10d\t%10d\t\t%8.2f\n",iter,thread_num, xSize, ySize, blockSize, mlups);
 
     }

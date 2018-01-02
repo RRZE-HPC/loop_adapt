@@ -42,10 +42,11 @@ int main()
 
     //int blockSize = (cacheSize/(3.0*8*sf));
     //int ablock[NUM_THREADS] = {blockSize};
-    loop_adapt_register_tcount_func(omp_get_num_threads);
+    REGISTER_THREAD_COUNT_FUNC(omp_get_num_threads);
+    REGISTER_THREAD_ID_FUNC(sched_getcpu);
     REGISTER_LOOP("SWEEP");
-    REGISTER_POLICY("SWEEP", "POL_BLOCKSIZE", NUM_PROFILES, 1);
-    //REGISTER_POLICY("SWEEP", "POL_DVFS", NUM_PROFILES);
+    //REGISTER_POLICY("SWEEP", "POL_BLOCKSIZE", NUM_PROFILES, 1);
+    REGISTER_POLICY("SWEEP", "POL_DVFS", NUM_PROFILES, 1);
 
 
     int Size = 5000;
@@ -65,7 +66,7 @@ int main()
 #pragma omp parallel
 {
     int cpu = sched_getcpu();
-    REGISTER_PARAMETER("SWEEP", LOOP_ADAPT_SCOPE_THREAD, "blksize", cpu, NODEPARAMETER_INT, (cacheSize/(3.0*8*2)), (cacheSize/(3.0*8*2.5)), (cacheSize/(3.0*8*1.5)));
+    //REGISTER_PARAMETER("SWEEP", LOOP_ADAPT_SCOPE_THREAD, "blksize", cpu, NODEPARAMETER_INT, (cacheSize/(3.0*8*2)), (cacheSize/(3.0*8*2.5)), (cacheSize/(3.0*8*1.5)));
     REGISTER_PARAMETER("SWEEP", LOOP_ADAPT_SCOPE_SOCKET, "cfreq", cpu, NODEPARAMETER_DOUBLE, 0, 0, 0);
     REGISTER_PARAMETER("SWEEP", LOOP_ADAPT_SCOPE_SOCKET, "ufreq", cpu, NODEPARAMETER_DOUBLE, 0, 0, 0);
 
@@ -98,8 +99,9 @@ int main()
                 printf("Iter %d\n", iter);
 #pragma omp parallel
 {
+                int blockSize;
                 int cpu = sched_getcpu();
-                int blockSize = GET_INT_PARAMETER("SWEEP", "blksize", cpu);
+                //GET_INT_PARAMETER("SWEEP", blockSize, "blksize", cpu);
                 int nBlocks = (int) (Size/((double)blockSize));
                 for(int bs=0; bs<(nBlocks+1); ++bs)
                 {
