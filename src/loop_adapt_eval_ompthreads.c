@@ -1,7 +1,9 @@
 #include <stdint.h>
-#include <loop_adapt_eval_dvfs.h>
+#include <loop_adapt_eval_ompthreads.h>
 #include <loop_adapt_helper.h>
 #include <loop_adapt_calc.h>
+
+#include <omp.h>
 
 static int likwid_initialized = 0;
 static int likwid_configured = 0;
@@ -9,130 +11,46 @@ static int likwid_started = 0;
 static int likwid_gid = -1;
 
 
-static int dvfs_num_cpus = 0;
-static int* dvfs_cpus = NULL;
+static int ompthreads_num_cpus = 0;
+static int* ompthreads_cpus = NULL;
 
-static char* avail_freqs = NULL;
-static int num_freqs = 0;
+static int thread_inc = 0;
+static int thread_start = 0;
+static int thread_init = 0;
 
-static double* freqs = NULL;
 
-static void loop_adapt_eval_dvfs_next_param_step(char* param, Nodevalues_t vals, int step, int cpu)
-{
-    Nodeparameter_t np = g_hash_table_lookup(vals->param_hash, (gpointer)param);
-    CpuTopology_t cputopo = get_cpuTopology();
-    if (np)
-    {
-    
-        double min = np->min.dmin;
-        double max = np->max.dmax;
-        int s = num_freqs / np->inter;
-        np->cur.dcur = freqs[num_freqs-(int)(s*step)];
-        if (strncmp(np->name, "cfreq", 5) == 0)
-        {
-            uint64_t f = (uint64_t)(np->cur.dcur*1000);
-            for (int i = 0; i < cputopo->numHWThreads; i++)
-            {
-                if (cputopo->threadPool[i].inCpuSet && cputopo->threadPool[i].packageId == cpu)
-                {
-                    printf("Setting core frequency to %lu MHz for CPU %d\n", f, cputopo->threadPool[i].apicId);
-                }
-            }
-            //freq_setCpuClockMin(cpu, f);
-            //freq_setCpuClockMax(cpu, f);
-            
-            if (loop_adapt_debug)
-                printf("Setting core frequency to %lu MHz\n", f);
-        }
-        else if (strncmp(np->name, "ufreq", 5) == 0)
-        {
-            uint64_t f = (uint64_t)(np->cur.dcur*1000);
-            freq_setUncoreFreqMin(cputopo->threadPool[cpu].packageId, f);
-            freq_setUncoreFreqMax(cputopo->threadPool[cpu].packageId, f);
-            freq_setUncoreFreqMin(cputopo->threadPool[cpu].packageId, f);
-            freq_setUncoreFreqMax(cputopo->threadPool[cpu].packageId, f);
-            printf("Setting uncore frequency to %lu MHz for socket %d\n", f, cputopo->threadPool[cpu].packageId);
-            if (loop_adapt_debug)
-                printf("Setting uncore frequency to %lu MHz\n", f);
-        }
-    }
-}
-
-static void parse_avail_freqs(char* s)
-{
-    int num_f = 0;
-    const char split[2] = " ";
-    char *token, *eptr;
-    
-    for (int i = 0; i < strlen(s); i++)
-    {
-        if (s[i] == '.')
-            num_f++;
-    }
-    num_freqs = num_f;
-    freqs = malloc(num_f * sizeof(double));
-    memset(freqs, 0, num_f * sizeof(double));
-    num_f = 0;
-    token = strtok(s, split);
-    while(token)
-    {
-        double f = strtod(token, &eptr);
-        if (token != eptr)
-        {
-            freqs[num_f] = f;
-            printf("%d -> %f MHz\n", num_f, freqs[num_f]);
-            num_f++;
-        }
-        token = strtok(NULL, split);
-    }
-}
-
-int loop_adapt_eval_dvfs_init(int num_cpus, int* cpulist, int num_profiles)
+int loop_adapt_eval_ompthreads_init(int num_cpus, int* cpulist, int num_profiles)
 {
     topology_init();
-    //affinity_init();
     timer_init();
-    //perfmon_init(num_cpus, cpulist);
     int npros = num_profiles;
     npros++;
-    
-    char minclock[20];
-    char maxclock[20];
-    char minuclock[20];
-    char maxuclock[20];
-    snprintf(minclock, 19, "MIN_CPUFREQ");
-    snprintf(maxclock, 19, "MAX_CPUFREQ");
-    snprintf(minuclock, 19, "MIN_UNCOREFREQ");
-    snprintf(maxuclock, 19, "MAX_UNCOREFREQ");
+
+
     CpuTopology_t cputopo = get_cpuTopology();
-    
-    parse_avail_freqs(freq_getAvailFreq(cpulist[0]));
-    
-    for (int c = 0; c < num_cpus; c++)
+    char* avail_cpus = "AVAILABLE_CPUS";
+    char* avail_cores = "AVAILABLE_CORES";
+    if (loop_adapt_debug == 2)
     {
-        if (loop_adapt_debug == 2)
-        {
-            fprintf(stderr, "DEBUG: Add define %s = %f for CPU %d\n", minclock, freqs[0],  cpulist[c]);
-            fprintf(stderr, "DEBUG: Add define %s = %f for CPU %d\n", maxclock, freqs[num_freqs-1],  cpulist[c]);
-            fprintf(stderr, "DEBUG: Add define %s = %f for CPU %d\n", minuclock, freqs[0],  cpulist[c]);
-            fprintf(stderr, "DEBUG: Add define %s = %f for CPU %d\n", maxuclock, freqs[num_freqs-1],  cpulist[c]);
-        }
-        la_calc_add_def(minclock, freqs[0], cpulist[c]);
-        la_calc_add_def(maxclock, freqs[num_freqs-1], cpulist[c]);
-        la_calc_add_def(minuclock, freqs[0], cpulist[c]);
-        la_calc_add_def(maxuclock, freqs[num_freqs-1], cpulist[c]);
+        fprintf(stderr, "DEBUG: Add define %s = %d for CPU %d\n", avail_cpus, cputopo->numHWThreads,  -1);
+        fprintf(stderr, "DEBUG: Add define %s = %d for CPU %d\n", avail_cores, cputopo->numHWThreads/cputopo->numThreadsPerCore,  -1);
     }
-    
-    dvfs_num_cpus = num_cpus;
-    dvfs_cpus = (int*)malloc(dvfs_num_cpus * sizeof(int));
-    if (!dvfs_cpus)
+    la_calc_add_def(avail_cpus, cputopo->numHWThreads, -1);
+    la_calc_add_def(avail_cores, cputopo->numHWThreads/cputopo->numThreadsPerCore, -1);
+
+    ompthreads_num_cpus = num_cpus;
+    ompthreads_cpus = (int*)malloc(ompthreads_num_cpus * sizeof(int));
+    if (!ompthreads_cpus)
         return -ENOMEM;
-    memcpy(dvfs_cpus, cpulist, dvfs_num_cpus * sizeof(int));
+    memcpy(ompthreads_cpus, cpulist, ompthreads_num_cpus * sizeof(int));
+
+    if (getenv("OMP_NUM_THREADS"))
+        thread_init = atoi(getenv("OMP_NUM_THREADS"));
 
     return 0;
 }
 
-void loop_adapt_eval_dvfs(hwloc_topology_t tree, hwloc_obj_t obj)
+void loop_adapt_eval_ompthreads(hwloc_topology_t tree, hwloc_obj_t obj)
 {
     Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
     Nodevalues_t v = (Nodevalues_t)obj->userdata;
@@ -150,12 +68,11 @@ void loop_adapt_eval_dvfs(hwloc_topology_t tree, hwloc_obj_t obj)
     {
         PolicyParameter_t pp = &p->parameters[i];
         int eval = la_calc_evaluate(p, pp, opt_values, cur_values);
-
         if (eval)
         {
             //p->optimal_profile = cur_profile;
             v->opt_profiles[v->cur_policy] = cur_profile;
-            if (loop_adapt_debug == 2)
+            //if (loop_adapt_debug == 2)
                 fprintf(stderr, "DEBUG: Evaluate param %s for %s with idx %d (opt:%d, cur:%d)\n", pp->name, loop_adapt_type_name((AdaptScope)obj->type), obj->logical_index, opt_profile, cur_profile);
             // we search through all parameters and set the best setting to the
             // current setting. After the policy is completely evaluated, the
@@ -186,10 +103,15 @@ void loop_adapt_eval_dvfs(hwloc_topology_t tree, hwloc_obj_t obj)
         // done) the parameters are adjusted.
         if (getLoopAdaptType(obj->type) == p->scope)
         {
-            for (int i = 0; i < POL_DVFS.num_parameters; i++)
+            for (int i = 0; i < POL_OMPTHREADS.num_parameters; i++)
             {
-                char* pname = pp->name;
-                loop_adapt_eval_dvfs_next_param_step(pname, v, v->cur_profile-1, obj->os_index);
+                Nodeparameter_t np = g_hash_table_lookup(v->param_hash, (gpointer)pp->name);
+                if (thread_inc == 0)
+                {
+                    thread_inc = (np->max.imax - np->min.imin)/np->inter;
+                }
+                np->cur.icur = np->min.imin + ((v->cur_profile-1)*thread_inc);
+                omp_set_num_threads(np->cur.icur);
             }
         }
     }
@@ -204,7 +126,7 @@ void loop_adapt_eval_dvfs(hwloc_topology_t tree, hwloc_obj_t obj)
             walker->type == HWLOC_OBJ_NUMANODE ||
             walker->type == HWLOC_OBJ_MACHINE)
         {
-            loop_adapt_eval_dvfs(tree, walker);
+            loop_adapt_eval_ompthreads(tree, walker);
             walker = walker->parent;
         }
         else
@@ -215,7 +137,7 @@ void loop_adapt_eval_dvfs(hwloc_topology_t tree, hwloc_obj_t obj)
     return;
 }
 
-int loop_adapt_eval_dvfs_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj)
+int loop_adapt_eval_ompthreads_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj)
 {
     int ret = 0;
     Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
@@ -224,25 +146,25 @@ int loop_adapt_eval_dvfs_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj
     {
         if (!likwid_initialized)
         {
-            perfmon_init(dvfs_num_cpus, dvfs_cpus);
+            perfmon_init(ompthreads_num_cpus, ompthreads_cpus);
         }
         if (!likwid_configured)
         {
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Adding group %s to LIKWID\n", POL_DVFS.likwid_group);
-            likwid_gid = perfmon_addEventSet(POL_DVFS.likwid_group);
+                fprintf(stderr, "DEBUG: Adding group %s to LIKWID\n", POL_OMPTHREADS.likwid_group);
+            likwid_gid = perfmon_addEventSet(POL_OMPTHREADS.likwid_group);
             if (likwid_gid >= 0)
             {
                 // We store which indicies we need later for evaluation. We can also use
                 // special performance groups that offer only the required metrics but
                 // with this way we can use default performance groups.
-                for (int m = 0; m < POL_DVFS.num_metrics; m++)
+                for (int m = 0; m < POL_OMPTHREADS.num_metrics; m++)
                 {
                     for (int i = 0; i < perfmon_getNumberOfMetrics(likwid_gid); i++)
                     {
-                        if (strcmp(POL_DVFS.metrics[m].name, perfmon_getMetricName(likwid_gid, i)) == 0)
+                        if (strcmp(POL_OMPTHREADS.metrics[m].name, perfmon_getMetricName(likwid_gid, i)) == 0)
                         {
-                            POL_DVFS.metric_idx[m] = i;
+                            POL_OMPTHREADS.metric_idx[m] = i;
                             if (loop_adapt_debug == 2)
                                 fprintf(stderr, "DEBUG: Using metric with ID %d\n", i);
                         }
@@ -281,7 +203,7 @@ int loop_adapt_eval_dvfs_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj
     return ret;
 }
 
-int loop_adapt_eval_dvfs_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj)
+int loop_adapt_eval_ompthreads_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj)
 {
     int ret = 0;
     Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
@@ -296,9 +218,10 @@ int loop_adapt_eval_dvfs_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj)
             Policy_t p = tdata->cur_policy;
             int max_vals = perfmon_getNumberOfMetrics(p->likwid_gid);
             double* pdata = vals->profiles[vals->cur_policy][vals->cur_profile];
-            for (int m = 0; m < max_vals; m++)
+            for (int m = 0; m < p->num_metrics; m++)
             {
-                pdata[m] = perfmon_getLastMetric(p->likwid_gid, m, obj->logical_index);
+                pdata[m] = perfmon_getLastMetric(p->likwid_gid, p->metric_idx[m], obj->logical_index);
+                printf("CPU %d Metric %s : %f\n", cpuid, p->metrics[m].var, pdata[m]);
             }
         }
     }
@@ -306,15 +229,11 @@ int loop_adapt_eval_dvfs_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj)
 }
 
 
-void loop_adapt_eval_dvfs_close()
+void loop_adapt_eval_ompthreads_close()
 {
-/*    if (freqs)*/
-/*        free(freqs);*/
-/*    if (dvfs_cpus)*/
-/*    {*/
-/*        free(dvfs_cpus);*/
-/*        dvfs_num_cpus = 0;*/
-/*    }*/
+
+    omp_set_num_threads(thread_init);
+
     if (likwid_started)
     {
         perfmon_stopCounters();

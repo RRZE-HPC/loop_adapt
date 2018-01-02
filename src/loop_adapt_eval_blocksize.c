@@ -1,4 +1,5 @@
 #include <stdarg.h>
+#include <math.h>
 #include <loop_adapt.h>
 #include <loop_adapt_eval_blocksize.h>
 #include <loop_adapt_calc.h>
@@ -10,6 +11,8 @@ static int likwid_configured = 0;
 static int likwid_started = 0;
 static int likwid_gid = -1;
 
+static pthread_mutex_t blocksize_lock = PTHREAD_MUTEX_INITIALIZER;
+
 static int blocksize_num_cpus = 0;
 static int* blocksize_cpus = NULL;
 
@@ -20,21 +23,23 @@ static void loop_adapt_eval_blocksize_next_param_step(char* param, Nodevalues_t 
     {
         if (np->type == NODEPARAMETER_INT)
         {
-            int min = np->min.imin;
-            int max = np->max.imax;
-            int s = (max-min) / np->inter;
-            np->cur.icur = min + (step * s);
-            if (loop_adapt_debug == 2)
-                fprintf(stderr, "Next param value for %s : %d\n", param, np->cur.icur);
+            double min = (double)np->min.imin;
+            double max = (double)np->max.imax;
+            double s = (max-min) / (np->inter-1);
+            //if (loop_adapt_debug == 2)
+                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Current param value for %s : %d\n", param, np->cur.icur);
+            np->cur.icur = ceil(min + (step * s));
+            //if (loop_adapt_debug == 2)
+                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Next param value for %s : %d\n", param, np->cur.icur);
         }
         else if (np->type == NODEPARAMETER_DOUBLE)
         {
             double min = np->min.dmin;
             double max = np->max.imax;
-            double s = (max-min) / np->inter;
-            np->cur.dcur = min + (step * s);
+            double s = (max-min) / (np->inter-1);
+            np->cur.dcur = (double)ceil(min + (step * s));
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "Next param value for %s : %f\n", param, np->cur.dcur);
+                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Next param value for %s : %f\n", param, np->cur.dcur);
         }
     }
 }
@@ -50,6 +55,7 @@ int loop_adapt_eval_blocksize_init(int num_cpus, int* cpulist, int num_profiles)
     // avoid warnings.
     int npros = num_profiles;
     npros++;
+    pthread_mutex_lock(&blocksize_lock);
     blocksize_num_cpus = num_cpus;
     blocksize_cpus = (int*)malloc(blocksize_num_cpus * sizeof(int));
     if (!blocksize_cpus)
@@ -65,19 +71,13 @@ int loop_adapt_eval_blocksize_init(int num_cpus, int* cpulist, int num_profiles)
         snprintf(level, 19, "L%d_CACHESIZE", cputopo->cacheLevels[i].level);
         char linesize[20];
         snprintf(linesize, 19, "L%d_LINESIZE", cputopo->cacheLevels[i].level);
-        // Defines are CPU specific, so we have to loop over all CPUs and add
-        // the defines there
-        for (int c=0; c < num_cpus; c++)
-        {
-            la_calc_add_def(level, cputopo->cacheLevels[i].size, cpulist[c]);
-            la_calc_add_def(linesize, cputopo->cacheLevels[i].lineSize, cpulist[c]);
-            if (loop_adapt_debug == 2)
-            {
-                fprintf(stderr, "DEBUG: Add define %s = %ld for CPU %d\n", level, cputopo->cacheLevels[i].size,  cpulist[c]);
-                fprintf(stderr, "DEBUG: Add define %s = %ld for CPU %d\n", linesize, cputopo->cacheLevels[i].lineSize,  cpulist[c]);
-            }
-        }
+
+        la_calc_add_def(level, cputopo->cacheLevels[i].size, -1);
+        la_calc_add_def(linesize, cputopo->cacheLevels[i].lineSize, -1);
+        fprintf(stderr, "DEBUG POL_BLOCKSIZE: Add define %s = %ld for CPU %d\n", level, cputopo->cacheLevels[i].size, -1);
+        fprintf(stderr, "DEBUG POL_BLOCKSIZE: Add define %s = %ld for CPU %d\n", linesize, cputopo->cacheLevels[i].lineSize,  -1);
     }
+    pthread_mutex_unlock(&blocksize_lock);
 
     // Initialize LIKWID
     // There might be policies which do not require LIKWID, therefore all
@@ -94,14 +94,17 @@ int loop_adapt_eval_blocksize_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_
     Nodevalues_t vals = (Nodevalues_t)obj->userdata;
     if (tdata && vals)
     {
+        pthread_mutex_lock(&blocksize_lock);
         if (!likwid_initialized)
         {
+            
             perfmon_init(blocksize_num_cpus, blocksize_cpus);
+            
         }
         if (!likwid_configured)
         {
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Adding group %s to LIKWID\n", POL_BLOCKSIZE.likwid_group);
+                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Adding group %s to LIKWID\n", POL_BLOCKSIZE.likwid_group);
             likwid_gid = perfmon_addEventSet(POL_BLOCKSIZE.likwid_group);
             if (likwid_gid >= 0)
             {
@@ -116,7 +119,7 @@ int loop_adapt_eval_blocksize_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_
                         {
                             POL_BLOCKSIZE.metric_idx[m] = i;
                             if (loop_adapt_debug == 2)
-                                fprintf(stderr, "DEBUG: Using metric with ID %d\n", i);
+                                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Using metric with ID %d\n", i);
                         }
                     }
                 }
@@ -126,14 +129,14 @@ int loop_adapt_eval_blocksize_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_
         if (likwid_configured && likwid_gid >= 0 && !likwid_started)
         {
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Setup LIKWID counters with group ID %d\n", likwid_gid);
+                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Setup LIKWID counters with group ID %d\n", likwid_gid);
             ret = perfmon_setupCounters(likwid_gid);
             if (ret < 0)
             {
                 printf("Cannot setup LIKWID counters for group ID %d\n", likwid_gid);
             }
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Starting LIKWID counters with group ID %d\n", likwid_gid);
+                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Starting LIKWID counters with group ID %d\n", likwid_gid);
             ret = perfmon_startCounters();
             if (ret < 0)
             {
@@ -141,12 +144,13 @@ int loop_adapt_eval_blocksize_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_
             }
             likwid_started = 1;
         }
+        pthread_mutex_unlock(&blocksize_lock);
         TimerData *t = vals->runtimes[vals->cur_policy] + vals->cur_profile;
         timer_start(t);
         if (likwid_started)
         {
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Reading LIKWID counters on CPU %d in eval_begin\n",cpuid);
+                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Reading LIKWID counters on CPU %d in eval_begin Profile %d\n", cpuid, vals->cur_profile);
             ret = perfmon_readCountersCpu(cpuid);
         }
     }
@@ -160,27 +164,33 @@ int loop_adapt_eval_blocksize_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t 
     Nodevalues_t vals = (Nodevalues_t)obj->userdata;
     if (tdata && vals)
     {
-        TimerData *t = vals->runtimes[vals->cur_policy] + vals->cur_profile;
+        TimerData *t = &vals->runtimes[vals->cur_policy][vals->cur_profile];
         if (likwid_started)
         {
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Reading LIKWID counters on CPU %d in eval_end\n", cpuid);
+                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Reading LIKWID counters on CPU %d in eval_end Profile %d\n", cpuid, vals->cur_profile);
             ret = perfmon_readCountersCpu(cpuid);
             timer_stop(t);
+            //printf("TPol %d VPol %d VPro %d\n", tdata->cur_policy_id, vals->cur_policy, vals->cur_profile);
+            //printf("Pol %d CPU %d Timer %f\n", tdata->cur_policy_id, cpuid, timer_print(t));
             Policy_t p = tdata->cur_policy;
-            int max_vals = perfmon_getNumberOfMetrics(p->likwid_gid);
+            
             double* pdata = vals->profiles[vals->cur_policy][vals->cur_profile];
-            for (int m = 0; m < max_vals; m++)
+            for (int m = 0; m < p->num_metrics; m++)
             {
-                pdata[m] = perfmon_getLastMetric(p->likwid_gid, m, obj->logical_index);
+                pdata[m] = perfmon_getLastMetric(p->likwid_gid, p->metric_idx[m], obj->logical_index);
+                //printf("Pol %d CPU %d Metric %s : %f\n", tdata->cur_policy_id, cpuid, p->metrics[m].var, vals->profiles[vals->cur_policy][vals->cur_profile][m]);
             }
+            pdata[p->num_metrics] = timer_print(t);
         }
     }
     return ret;
 }
 
 
-
+// Data is read in end and the Nodes' cur_profile value is updated but
+// the evaluation is in the startloop afterwards, so cur_profle is set to
+// nodes' cur_profile - 1
 void loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
 {
     Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
@@ -200,17 +210,17 @@ void loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
         for (int i = 0; i < p->num_parameters; i++)
         {
             PolicyParameter_t pp = &p->parameters[i];
-            if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Evaluate param %s for %s with idx %d (opt:%d, cur:%d)\n", pp->name, loop_adapt_type_name((AdaptScope)obj->type), obj->logical_index, opt_profile, cur_profile);
+            //if (loop_adapt_debug == 2)
+                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Evaluate param %s for %s with idx %d (opt:%d, cur:%d)\n", pp->name, loop_adapt_type_name((AdaptScope)obj->type), obj->logical_index, opt_profile, cur_profile);
 
             int eval = la_calc_evaluate(p, pp, opt_values, cur_values);
-
+            //if (loop_adapt_debug == 2)
+                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Evaluation %s = %d\n", pp->eval, eval);
             if (eval)
             {
-                //p->optimal_profile = cur_profile;
                 v->opt_profiles[v->cur_policy] = cur_profile;
-                if (loop_adapt_debug == 2)
-                    fprintf(stderr, "DEBUG: New optimal profile %d\n", cur_profile);
+                //if (loop_adapt_debug == 2)
+                    fprintf(stderr, "DEBUG POL_BLOCKSIZE: New optimal profile %d\n", cur_profile);
                 // we search through all parameters and set the best setting to the
                 // current setting. After the policy is completely evaluated, the
                 // best setting is returned by GET_[INT/DBL]_PARAMETER
@@ -243,19 +253,24 @@ void loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
 
 void loop_adapt_eval_blocksize_close()
 {
+    pthread_mutex_lock(&blocksize_lock);
+
     if (likwid_started)
     {
         if (loop_adapt_debug == 2)
-            fprintf(stderr, "DEBUG: Stopping LIKWID counters\n");
+            fprintf(stderr, "DEBUG POL_BLOCKSIZE: Stopping LIKWID counters\n");
         perfmon_stopCounters();
         likwid_started = 0;
+
+        if (likwid_configured && likwid_initialized)
+        {
+            if (loop_adapt_debug == 2)
+                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Finalizing LIKWID counters\n");
+            perfmon_finalize();
+            likwid_configured = 0;
+            likwid_initialized = 0;
+        }
     }
-    if (likwid_configured)
-    {
-        if (loop_adapt_debug == 2)
-            fprintf(stderr, "DEBUG: Finalizing LIKWID counters\n");
-        perfmon_finalize();
-        likwid_configured = 0;
-    }
+    pthread_mutex_unlock(&blocksize_lock);
     return;
 }

@@ -22,8 +22,10 @@ set (SOURCES
     src/loop_adapt.c
     src/loop_adapt_eval.c
     src/loop_adapt_eval_blocksize.c
-    #    src/loop_adapt_eval_dvfs.c
+    src/loop_adapt_eval_dvfs.c
+    src/loop_adapt_eval_ompthreads.c
     src/loop_adapt_helper.c
+    src/loop_adapt_config.c
     src/loop_adapt_calc.c
     )
 
@@ -183,6 +185,8 @@ include_directories(${PROJECT_SOURCE_DIR}/include
 add_library(loopAdapt ${SOURCES})
 
 include_directories(SYSTEM "${HWLOC_INCLUDE_DIR}")
+
+add_definitions(-DLOOP_ADAPT_ACTIVE)
 
 if(BUILTIN_HWLOC)
     target_link_libraries(loopAdapt "${LIBHWLOC}")

@@ -143,7 +143,7 @@ allocate_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type, int polidx, in
         if (!v->profiles || v->num_policies < polidx)
         {
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Enlarge arrays of node %d\n", i);
+                fprintf(stderr, "DEBUG: Enlarge arrays of node %d to %d\n", i, polidx+1);
             v->opt_profiles = (int*)realloc_buffer(v->opt_profiles, MAX(1, polidx+1)*sizeof(int));
             v->num_profiles = (int*)realloc_buffer(v->num_profiles, MAX(1, polidx+1)*sizeof(int));
             v->num_values = realloc_buffer(v->num_values, MAX(1, polidx+1)*sizeof(int));
@@ -160,8 +160,6 @@ allocate_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type, int polidx, in
                 v->profiles[polidx][j] = malloc(num_values * sizeof(double));
                 memset(v->profiles[polidx][j], 0, num_values * sizeof(double));
             }
-            if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Number of policies %d\n", polidx+1);
             v->num_policies = polidx+1;
         }
 
@@ -173,6 +171,8 @@ allocate_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type, int polidx, in
         v->cur_profile_iters[polidx] = 0;
         v->cur_policy = 0;
         v->cur_profile = 0;
+        v->num_events = 0;
+        v->events = NULL;
         v->param_hash = g_hash_table_new(g_str_hash, g_str_equal);
         pthread_mutex_init(&v->lock, NULL);
         pthread_cond_init(&v->cond, NULL);
@@ -276,14 +276,14 @@ void _update_tree(hwloc_obj_t base, hwloc_obj_t obj, int profile)
     for (int m = 0; m < bvals->num_values[bvals->cur_policy]; m++)
     {
         ovals->profiles[bvals->cur_policy][profile][m] += bvals->profiles[bvals->cur_policy][profile][m];
-        if (ovals->runtimes[bvals->cur_policy][profile].start.int64 < bvals->runtimes[bvals->cur_policy][profile].start.int64)
-        {
-            bvals->runtimes[bvals->cur_policy][profile].start.int64 = ovals->runtimes[bvals->cur_policy][profile].start.int64;
-        }
-        if (ovals->runtimes[bvals->cur_policy][profile].stop.int64 > bvals->runtimes[bvals->cur_policy][profile].stop.int64)
-        {
-            bvals->runtimes[bvals->cur_policy][profile].stop.int64 = ovals->runtimes[bvals->cur_policy][profile].stop.int64;
-        }
+    }
+    //if (ovals->runtimes[bvals->cur_policy][profile].start.int64 < bvals->runtimes[bvals->cur_policy][profile].start.int64)
+    {
+        bvals->runtimes[bvals->cur_policy][profile].start.int64 = ovals->runtimes[bvals->cur_policy][profile].start.int64;
+    }
+    //if (ovals->runtimes[bvals->cur_policy][profile].stop.int64 > bvals->runtimes[bvals->cur_policy][profile].stop.int64)
+    {
+        bvals->runtimes[bvals->cur_policy][profile].stop.int64 = ovals->runtimes[bvals->cur_policy][profile].stop.int64;
     }
     ovals->cur_profile = bvals->cur_profile;
     //ovals->num_values = bvals->num_values;

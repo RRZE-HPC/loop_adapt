@@ -8,7 +8,7 @@ POL_FUNCS(dvfs)
 
 
 Policy POL_DVFS = {
-    .likwid_group = "L3",
+    .likwid_group = "MEMTEST",
     .name = "DVFS",
     .desc = "This policy tries to adapt the cpu and uncore frequency.",
     STR_POL_FUNCS(dvfs)
@@ -19,14 +19,16 @@ Policy POL_DVFS = {
                      "CPU frequency",
                      "MIN_CPUFREQ/1000000000",
                      "MAX_CPUFREQ/1000000000",
-                     "mem_cur < mem_opt"},
+                     "data_cur < 0.2 and data_opt < data_cur and mem_cur < mem_opt"},
                     {"ufreq",
                      "Uncore frequency",
                      "MIN_UNCOREFREQ/1000000000",
-                     "MAX_UNCOREFREQ/1000000000"} },
-    .num_metrics = 2,
+                     "MAX_UNCOREFREQ/1000000000",
+                     "data > 0.2 and data_opt > data_cur and mem_cur > mem_opt"} },
+    .num_metrics = 3,
     .metrics = {{ "time", "Runtime (RDTSC) [s]"},
-                { "mem", "Memory bandwidth [MByte/s]"} },
+                { "mem", "Memory bandwidth [MBytes/s]"},
+                { "data", "Data access ratio"} },
 };
 
 

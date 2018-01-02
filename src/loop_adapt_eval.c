@@ -32,7 +32,11 @@ int loop_adapt_add_policy(hwloc_topology_t tree, Policy *p, int num_cpus, int *c
             fprintf(stderr, "Starting with policy %s (%d)\n", p->name, polidx);
         }
         ret = populate_tree(tree, polidx, num_profiles, iters_per_profile);
-        update_cur_policy_in_tree(tree, polidx);
+        if (tdata->cur_policy_id < 0)
+        {
+            printf("Update tree with polidx %d\n", polidx);
+            update_cur_policy_in_tree(tree, polidx);
+        }
         p->loop_adapt_eval_init(num_cpus, cpulist, num_profiles);
     }
 loop_adapt_add_policy_out:
@@ -95,6 +99,7 @@ int loop_adapt_add_int_parameter(hwloc_obj_t obj, char* name, char* desc, int cu
         np->min.imin = min;
         np->max.imax = max;
         np->cur.icur = cur;
+        np->start.istart = cur;
         np->inter = nv->num_profiles[nv->cur_policy]-2;
         // Add the parameter to the parameter hash table of the node
         g_hash_table_insert(nv->param_hash, (gpointer) g_strdup(name), (gpointer) np);
@@ -128,9 +133,109 @@ int loop_adapt_add_double_parameter(hwloc_obj_t obj, char* name, char* desc, dou
         np->min.dmin = min;
         np->max.dmax = max;
         np->cur.dcur = cur;
+        np->start.dstart = cur;
         np->inter = nv->num_profiles[nv->cur_policy]-2;
         // Add the parameter to the parameter hash table of the node
         g_hash_table_insert(nv->param_hash, (gpointer) g_strdup(name), (gpointer) np);
+    }
+    return 0;
+}
+
+static int _loop_adapt_reset_parameter_in_node(hwloc_obj_t obj, Policy_t p)
+{
+    Nodevalues_t nv = (Nodevalues_t)obj->userdata;
+    
+    for (int i = 0; i < p->num_parameters; i++)
+    {
+        //if (loop_adapt_debug == 2)
+        //    fprintf(stderr, "DEBUG: Reset param %s in %s %d\n", p->parameters[i].name, loop_adapt_type_name(obj->type), obj->os_index);
+        Nodeparameter_t np = g_hash_table_lookup(nv->param_hash, (gpointer) p->parameters[i].name);
+        if (np && np->type == NODEPARAMETER_INT)
+        {
+            np->best.ibest = np->start.istart;
+            np->cur.icur = np->start.istart;
+        }
+        else if (np && np->type == NODEPARAMETER_DOUBLE)
+        {
+            np->best.dbest = np->start.dstart;
+            np->cur.dcur = np->start.dstart;
+        }
+    }
+}
+
+int loop_adapt_reset_parameter(hwloc_topology_t tree, Policy_t p)
+{
+    for (int i = 0; i < hwloc_get_nbobjs_by_type(tree, (hwloc_obj_type_t)p->scope); i++)
+    {
+        hwloc_obj_t obj = hwloc_get_obj_by_type(tree, (hwloc_obj_type_t)p->scope, i);
+        _loop_adapt_reset_parameter_in_node(obj, p);
+    }
+    return 0;
+}
+
+static int _loop_adapt_best_parameter_in_node(hwloc_obj_t obj, Policy_t p)
+{
+    Nodevalues_t nv = (Nodevalues_t)obj->userdata;
+    
+    for (int i = 0; i < p->num_parameters; i++)
+    {
+        //if (loop_adapt_debug == 2)
+        //    fprintf(stderr, "DEBUG: Reset param %s in %s %d\n", p->parameters[i].name, loop_adapt_type_name(obj->type), obj->os_index);
+        Nodeparameter_t np = g_hash_table_lookup(nv->param_hash, (gpointer) p->parameters[i].name);
+        if (np && np->type == NODEPARAMETER_INT)
+        {
+            np->cur.icur = np->best.ibest;
+            printf("Best %d\n", np->cur.icur);
+        }
+        else if (np && np->type == NODEPARAMETER_DOUBLE)
+        {
+            np->cur.dcur = np->best.dbest;
+            printf("Best %f\n", np->cur.dcur);
+        }
+    }
+}
+
+int loop_adapt_best_parameter(hwloc_topology_t tree, Policy_t p)
+{
+    for (int i = 0; i < hwloc_get_nbobjs_by_type(tree, (hwloc_obj_type_t)p->scope); i++)
+    {
+        hwloc_obj_t obj = hwloc_get_obj_by_type(tree, (hwloc_obj_type_t)p->scope, i);
+        _loop_adapt_best_parameter_in_node(obj, p);
+    }
+    return 0;
+}
+
+int loop_adapt_add_event(hwloc_obj_t obj, char* name, char* var, Nodeparametertype type, void* ptr)
+{
+    int ret = 0;
+    Nodevalues_t nv = NULL;
+    Nodeevent_t ne = NULL;
+    
+    if (!obj || !name || !var || !ptr)
+    {
+        return -EINVAL;
+    }
+    nv = (Nodevalues_t)obj->userdata;
+    for (int i=0 ; i < nv->num_events; i++)
+    {
+        ne = nv->events[i];
+        if (strncmp(ne->name, name, strlen(ne->name)))
+        {
+            fprintf(stderr, "Event already exists\n");
+            return 1;
+        }
+    }
+    ne = malloc(sizeof(Nodeevent));
+    if (ne)
+    {
+        ret = asprintf(&ne->name, "%s", name);
+        ret = asprintf(&ne->varname, "%s", var);
+        ne->type = type;
+        ne->ptr = ptr;
+
+        nv->events = realloc_buffer(nv->events, (nv->num_events+1)*sizeof(Nodeevent_t));
+        nv->events[nv->num_events] = ne;
+        nv->num_events++;
     }
     return 0;
 }
@@ -145,6 +250,7 @@ int loop_adapt_begin_policies(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj)
         {
             p = tdata->policies[0];
             tdata->cur_policy = p;
+            tdata->cur_policy_id = 0;
         }
         p->loop_adapt_eval_begin(cpuid, tree, obj);
     }

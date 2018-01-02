@@ -11,6 +11,9 @@ extern "C"
 //#include <loop_adapt_types.h>
 //#include <loop_adapt_eval.h>
 static int loop_adapt_debug = 0;
+static int loop_adapt_active = 1;
+
+#ifdef LOOP_ADAPT_ACTIVE
 
 typedef enum {
     LOOP_ADAPT_SCOPE_NONE = -1,
@@ -46,30 +49,50 @@ typedef enum {
 
 #define REGISTER_LOOP(s) loop_adapt_register(s);
 #define REGISTER_POLICY(s, p, num_profiles, iters_per_profile) \
-    loop_adapt_register_policy((s), (p), (num_profiles), (iters_per_profile));
+    loop_adapt_register_policy(s, p, num_profiles, iters_per_profile);
 #define REGISTER_PARAMETER(s, scope, name, cpu, type, cur, min, max) \
     if (type == NODEPARAMETER_INT) \
-        loop_adapt_register_int_param((s), (scope), (cpu), (name), NULL, (cur), (min), (max)); \
+        loop_adapt_register_int_param(s, scope, cpu, name, NULL, cur, min, max); \
     else if (type == NODEPARAMETER_DOUBLE) \
-        loop_adapt_register_double_param((s), (scope), (cpu), (name), NULL, (cur), (min), (max));
+        loop_adapt_register_double_param(s, scope, cpu, name, NULL, cur, min, max);
 
-#define GET_INT_PARAMETER(s, name, cpu) \
-    loop_adapt_get_int_param((s), LOOP_ADAPT_SCOPE_THREAD, (cpu), (name));
-#define GET_DBL_PARAMETER(s, name, cpu) \
-    loop_adapt_get_double_param((s), LOOP_ADAPT_SCOPE_THREAD, (cpu), (name));
+#define GET_INT_PARAMETER(s, orig, scope, name, cpu) \
+    orig = loop_adapt_get_int_param(s, scope, cpu, name);
 
-#define LOOP_BEGIN(s) loop_adapt_begin((s), __FILE__, __LINE__)
-#define LOOP_END(s) loop_adapt_end((s))
+#define GET_DBL_PARAMETER(s, orig, scope, name, cpu) \
+    orig = loop_adapt_get_double_param(s, scope, cpu, name);
+
+#define LOOP_BEGIN(s) loop_adapt_begin(s, __FILE__, __LINE__)
+#define LOOP_END(s) loop_adapt_end(s)
 
 
 #define LA_FOR(name, start, cond, inc) \
-    for ((start); (cond) && LOOP_BEGIN((name)); (inc), LOOP_END((name)))
+    for (start; cond && LOOP_BEGIN(name); inc, LOOP_END(name))
+
+#define LA_FOR_BEGIN(name, ...) \
+    for (__VA_ARGS__) \
+    { \
+        LOOP_BEGIN(name);
+
+#define LA_FOR_END(name) \
+        LOOP_END(name); \
+    }
 
 #define LA_WHILE(name, cond) \
-    while (LOOP_BEGIN((name)) && (cond) && LOOP_END((name)))
+    while (LOOP_BEGIN(name) && (cond) && LOOP_END(name))
 
 #define LA_DO(name) \
-    LOOP_BEGIN((name)); do
+    LOOP_BEGIN(name); do
+
+#define REGISTER_THREAD_COUNT_FUNC(func) \
+    loop_adapt_register_tcount_func(func);
+
+#define REGISTER_THREAD_ID_FUNC(func) \
+    loop_adapt_register_tid_func(func);
+    
+
+#define REGISTER_EVENT(s, scope, cpu, name, var, type, ptr) \
+    loop_adapt_register_event(s, scope, cpu, name, var, type, ptr);
 
 
 // Register a new loop in the loop_adapt library
@@ -112,6 +135,33 @@ void loop_adapt_register_double_param( char* string,
 double loop_adapt_get_double_param( char* string, AdaptScope scope, int cpu, char* name);
 
 int loop_adapt_list_policy();
+void loop_adapt_register_event(char* string, AdaptScope scope, int cpu, char* name, char* var, Nodeparametertype type, void* ptr);
+
+#else
+#define REGISTER_LOOP(s)
+#define REGISTER_POLICY(s, p, num_profiles, iters_per_profile)
+#define REGISTER_PARAMETER(s, scope, name, cpu, type, cur, min, max)
+#define GET_INT_PARAMETER(s, orig, name, cpu) orig = orig;
+#define GET_DBL_PARAMETER(s, orig, name, cpu)
+#define LOOP_BEGIN(s)
+#define LOOP_END(s)
+
+#define LA_FOR(name, start, cond, inc) \
+    for (start; cond; inc)
+
+#define LA_FOR_BEGIN(name, ...) \
+    for (__VA_ARGS__) {
+#define LA_FOR_END(name) }
+
+#define LA_WHILE(name, cond) while(cond)
+#define LA_DO(name) do
+
+#define REGISTER_THREAD_COUNT_FUNC(func)
+#define REGISTER_THREAD_ID_FUNC(func)
+
+#define REGISTER_EVENT(s, scope, cpu, name, var, type, ptr)
+
+#endif
 
 #ifdef __cplusplus
 }

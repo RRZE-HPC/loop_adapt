@@ -16,20 +16,18 @@
 #include <loop_adapt_eval.h>
 #include <loop_adapt_helper.h>
 #include <loop_adapt_calc.h>
+#include <loop_adapt_config.h>
 
+//int loop_adapt_active = 1;
 
-static int loop_adapt_active = 1;
-
-static GHashTable* global_hash = NULL;
 static hwloc_topology_t topotree = NULL;
 static int num_cpus = 0;
 static int *cpus_to_objidx = NULL;
 static int *cpulist = NULL;
 
-/*static int default_num_profiles = 5;*/
-/*static int runtime_num_profiles = 0;*/
+GHashTable* loop_adapt_global_hash = NULL;
+pthread_mutex_t loop_adapt_global_hash_lock = PTHREAD_MUTEX_INITIALIZER;
 
-/*static int default_max_num_values = 30;*/
 static int max_num_values = 0;
 
 int (*tcount_func)() = NULL;
@@ -37,16 +35,14 @@ int (*tid_func)() = NULL;
 
 cpu_set_t loop_adapt_cpuset;
 
-//static char* likwid_group = NULL;
-//static int likwid_gid = -1;
-//static int likwid_num_metrics = 0;
-//#define MIN(x,y) ((x)<(y)?(x):(y))
+static pthread_mutex_t loop_adapt_lock = PTHREAD_MUTEX_INITIALIZER;
+
 
 
 __attribute__((constructor)) void loop_adapt_init (void)
 {
-    global_hash = g_hash_table_new(g_str_hash, g_str_equal);
-    if (!global_hash)
+    loop_adapt_global_hash = g_hash_table_new(g_str_hash, g_str_equal);
+    if (!loop_adapt_global_hash)
     {
         loop_adapt_active = 0;
         return;
@@ -72,7 +68,7 @@ __attribute__((constructor)) void loop_adapt_init (void)
     setenv("LIKWID_FORCE", "1", 1);
     CPU_ZERO(&loop_adapt_cpuset);
     ret = sched_getaffinity(0, sizeof(loop_adapt_cpuset), &loop_adapt_cpuset);
-
+    timer_init();
 /*    if (getenv("LOOP_ADAPT_NUM_PROFILES") == NULL)*/
 /*    {*/
 /*        runtime_num_profiles = default_num_profiles;*/
@@ -119,7 +115,12 @@ void loop_adapt_register(char* string)
     // If yes, warn and return
     if (loop_adapt_active)
     {
-        dup_tree = g_hash_table_lookup(global_hash, (gpointer) string);
+//        pthread_mutex_lock(&loop_adapt_global_hash_lock);
+#pragma omp critical (lookup)
+{
+        dup_tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
+}
+//        pthread_mutex_unlock(&loop_adapt_global_hash_lock);
         if (dup_tree)
         {
             fprintf(stderr, "Loop string %s already registered\n", string);
@@ -145,19 +146,17 @@ void loop_adapt_register(char* string)
         }
         memset(tdata, 0, sizeof(Treedata));
         tdata->status = LOOP_STOPPED;
+        tdata->cur_policy_id = -1;
         // Safe the global data struct in the tree
         hwloc_topology_set_userdata(dup_tree, tdata);
 
-        // Moreover, each HW thread, package, NUMA node and the machine object
-        // get a values struct
-        // The num_profiles in Treedata must be set when calling these functions
-        //allocate_nodevalues(dup_tree, LOOP_ADAPT_SCOPE_THREAD, max_num_values);
-        //allocate_nodevalues(dup_tree, LOOP_ADAPT_SCOPE_SOCKET, max_num_values);
-        //allocate_nodevalues(dup_tree, LOOP_ADAPT_SCOPE_NUMA, max_num_values);
-        //allocate_nodevalues(dup_tree, LOOP_ADAPT_SCOPE_MACHINE, max_num_values);
-
         // insert the loop-specific tree into the hash table using the string as key
-        g_hash_table_insert(global_hash, (gpointer) g_strdup(string), (gpointer) dup_tree);
+        pthread_mutex_lock(&loop_adapt_global_hash_lock);
+#pragma omp critical (lookup)
+{
+        g_hash_table_insert(loop_adapt_global_hash, (gpointer) g_strdup(string), (gpointer) dup_tree);
+}
+        pthread_mutex_unlock(&loop_adapt_global_hash_lock);
     }
 }
 
@@ -182,10 +181,16 @@ static Policy_t loop_adapt_read_policy( char* polname)
 
 void loop_adapt_register_policy( char* string, char* polname, int num_profiles, int iters_per_profile)
 {
+    hwloc_topology_t tree = NULL;
     Policy_t p = loop_adapt_read_policy(polname);
     if (p)
     {
-        hwloc_topology_t tree = g_hash_table_lookup(global_hash, (gpointer) string);
+//        pthread_mutex_lock(&loop_adapt_global_hash_lock);
+#pragma omp critical (lookup)
+{
+        tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
+}
+//        pthread_mutex_unlock(&loop_adapt_global_hash_lock);
         if (tree)
         {
             printf("Add policy %s to tree of loop region %s with %d profiles and %d iterations per profile\n", p->name, string, num_profiles, iters_per_profile);
@@ -195,6 +200,10 @@ void loop_adapt_register_policy( char* string, char* polname, int num_profiles, 
     }
 }
 
+int loop_adapt_for_type(AdaptScope scope)
+{
+    return hwloc_get_nbobjs_by_type(topotree, scope);
+}
 
 
 void loop_adapt_register_int_param( char* string,
@@ -207,9 +216,12 @@ void loop_adapt_register_int_param( char* string,
                                     int max)
 {
     int objidx;
-    hwloc_topology_t tree = g_hash_table_lookup(global_hash, (gpointer) string);
+    hwloc_topology_t tree = NULL;
+
+    tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
+
     int len = hwloc_get_nbobjs_by_type(tree, scope);
-    if (cpu >= 0 && cpu < num_cpus)
+    if (tree && cpu >= 0 && cpu < num_cpus)
     {
         if (scope == LOOP_ADAPT_SCOPE_THREAD)
             objidx = cpus_to_objidx[cpu];
@@ -245,23 +257,30 @@ void loop_adapt_register_int_param( char* string,
 
 int loop_adapt_get_int_param( char* string, AdaptScope scope, int cpu, char* name)
 {
+    int ret = 0;
     int objidx;
-    hwloc_topology_t tree = g_hash_table_lookup(global_hash, (gpointer) string);
-    int len = hwloc_get_nbobjs_by_type(tree, scope);
-    if (cpu >= 0 && cpu < num_cpus)
+    TimerData t;
+    hwloc_topology_t tree = NULL;
+
+    tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
+
+    //int len = hwloc_get_nbobjs_by_type(tree, scope);
+    if (tree && cpu >= 0 && cpu < num_cpus)
     {
         if (scope == LOOP_ADAPT_SCOPE_THREAD)
         {
             objidx = cpus_to_objidx[cpu];
-            if (loop_adapt_debug)
-                fprintf(stderr, "DEBUG: Get param %s for CPU %d (Idx %d):",name, cpu, objidx);
+            //if (loop_adapt_debug)
+                //fprintf(stderr, "DEBUG: Get param %s for CPU %d (Idx %d):",name, cpu, objidx);
         }
         else
         {
             objidx = get_objidx_above_cpuidx(tree, scope, cpus_to_objidx[cpu]);
-            if (loop_adapt_debug)
-                fprintf(stderr, "DEBUG: Get param %s for %s above CPU %d (Idx %d):",name, loop_adapt_type_name(scope), cpu, objidx);
+            //if (loop_adapt_debug)
+                //fprintf(stderr, "DEBUG: Get param %s for %s above CPU %d (Idx %d):",name, loop_adapt_type_name(scope), cpu, objidx);
         }
+        
+
         hwloc_obj_t obj = hwloc_get_obj_by_type(tree, scope, objidx);
         Nodevalues_t v = (Nodevalues_t)obj->userdata;
         if (v)
@@ -271,20 +290,22 @@ int loop_adapt_get_int_param( char* string, AdaptScope scope, int cpu, char* nam
             {
                 if (np->best.ibest < 0 || v->cur_profile < v->num_profiles[v->cur_policy])
                 {
-                    if (loop_adapt_debug)
-                        fprintf(stderr, " %d\n", np->cur.icur);
-                    return np->cur.icur;
+                    //if (loop_adapt_debug)
+                        //fprintf(stderr, " %d\n", np->cur.icur);
+                    ret = np->cur.icur;
                 }
                 else
                 {
-                    if (loop_adapt_debug)
-                        fprintf(stderr, " %d\n", np->best.ibest);
-                    return np->best.ibest;
+                    //if (loop_adapt_debug)
+                        //fprintf(stderr, " %d\n", np->best.ibest);
+                    ret = np->best.ibest;
                 }
             }
+            if (loop_adapt_debug)
+                fprintf(stderr, "DEBUG: Get param %s for %s %d: %d\n",name, loop_adapt_type_name(scope), objidx, ret);
         }
     }
-    return 0;
+    return ret;
 }
 
 void loop_adapt_register_double_param( char* string,
@@ -297,7 +318,10 @@ void loop_adapt_register_double_param( char* string,
                                        double max)
 {
     int objidx;
-    hwloc_topology_t tree = g_hash_table_lookup(global_hash, (gpointer) string);
+    hwloc_topology_t tree = NULL;
+
+    tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
+
     int len = hwloc_get_nbobjs_by_type(tree, scope);
     if (cpu >= 0 && cpu < num_cpus)
     {
@@ -332,7 +356,10 @@ void loop_adapt_register_double_param( char* string,
 int loop_adapt_get_double_param_param( char* string, AdaptScope scope, int cpu, char* name)
 {
     int objidx;
-    hwloc_topology_t tree = g_hash_table_lookup(global_hash, (gpointer) string);
+    hwloc_topology_t tree = NULL;
+
+    tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
+
     int len = hwloc_get_nbobjs_by_type(tree, scope);
     if (cpu >= 0 && cpu < num_cpus)
     {
@@ -357,29 +384,37 @@ int loop_adapt_get_double_param_param( char* string, AdaptScope scope, int cpu, 
     return 0;
 }
 
-/*void loop_adapt_register_event(char* string, AdaptScope scope, int cpu, char* name, char* var, Nodeparametertype type, void* ptr)*/
-/*{*/
-/*    hwloc_topology_t tree = g_hash_table_lookup(global_hash, (gpointer) string);*/
-/*    int len = hwloc_get_nbobjs_by_type(tree, type);*/
-/*    if (objidx >= 0)*/
-/*    {*/
-/*        hwloc_obj_t obj = hwloc_get_obj_by_type(tree, scope, objidx);*/
-/*        if (obj)*/
-/*        {*/
-/*            printf("Register event %s\n", name);*/
-/*            loop_adapt_add_event(obj, name, var, ptr);*/
-/*        }*/
-/*    }*/
-/*}*/
+void loop_adapt_register_event(char* string, AdaptScope scope, int cpu, char* name, char* var, Nodeparametertype type, void* ptr)
+{
+    int objidx;
+    hwloc_topology_t tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
+    int len = hwloc_get_nbobjs_by_type(tree, type);
+    if (cpu >= 0 && cpu < num_cpus)
+    {
+        if (scope == LOOP_ADAPT_SCOPE_THREAD)
+            objidx = cpus_to_objidx[cpu];
+        else
+            objidx = get_objidx_above_cpuidx(tree, scope, cpus_to_objidx[cpu]);
+        if (objidx >= 0)
+        {
+            hwloc_obj_t obj = hwloc_get_obj_by_type(tree, scope, objidx);
+            if (obj)
+            {
+                printf("Register event %s\n", name);
+                loop_adapt_add_event(obj, name, var, type, ptr);
+            }
+        }
+    }
+}
 
 int loop_adapt_begin(char* string, char* filename, int linenumber)
 {
-
     if (loop_adapt_active)
     {
+        hwloc_topology_t tree = NULL;
         hwloc_obj_t obj = NULL, new = NULL;
         Nodevalues_t v = NULL, newv = NULL;
-        hwloc_topology_t tree = g_hash_table_lookup(global_hash, (gpointer) string);
+        tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
         if (tree)
         {
             Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
@@ -416,10 +451,8 @@ int loop_adapt_begin(char* string, char* filename, int linenumber)
 
                         if (v->cur_profile > 1)
                         {
-                            //printf("single loop_adapt_exec_policies %d\n", cpuid);
                             loop_adapt_exec_policies(tree, obj);
                         }
-                        //printf("Call single loop_adapt_begin_policies %d\n", cpuid);
                         loop_adapt_begin_policies(cpuid, tree, obj);
                     }
                 }
@@ -452,7 +485,6 @@ int loop_adapt_begin(char* string, char* filename, int linenumber)
 
                                 if (newv->cur_profile > 1)
                                 {
-                                    //printf("multi loop_adapt_exec_policies %d\n", cpulist[c]);
                                     loop_adapt_exec_policies(tree, new);
                                 }
                                 
@@ -471,7 +503,6 @@ int loop_adapt_begin(char* string, char* filename, int linenumber)
                                 newv->cur_profile_iters[newv->cur_policy] == 0 && 
                                 newv->cur_profile < newv->num_profiles[newv->cur_policy])
                             {
-                                //printf("Call multi loop_adapt_begin_policies %d\n", cpulist[c]);
                                 loop_adapt_begin_policies(cpulist[c], tree, new);
                             }
                         }
@@ -494,9 +525,10 @@ int loop_adapt_end(char* string)
 {
     if (loop_adapt_active)
     {
+        hwloc_topology_t tree = NULL;
         hwloc_obj_t obj = NULL, new = NULL;
         Nodevalues_t v = NULL, newv = NULL;
-        hwloc_topology_t tree = g_hash_table_lookup(global_hash, (gpointer) string);
+        tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
         if (tree)
         {
             Treedata *tdata = (Treedata *)hwloc_topology_get_userdata(tree);
@@ -525,7 +557,9 @@ int loop_adapt_end(char* string)
                         //printf("Call single loop_adapt_end_policies %d\n", cpuid);
                         loop_adapt_end_policies(cpuid, tree, obj);
                         if (v->cur_profile > 0)
+                        {
                             update_tree(obj, v->cur_profile-1);
+                        }
                         v->cur_profile++;
                         v->cur_profile_iters[v->cur_policy] = 0;
                     }
@@ -556,7 +590,9 @@ int loop_adapt_end(char* string)
                                 //printf("Call multi loop_adapt_end_policies %d\n", cpulist[c]);
                                 loop_adapt_end_policies(cpulist[c], tree, new);
                                 if (newv->cur_profile > 0)
+                                {
                                     update_tree(new, newv->cur_profile-1);
+                                }
                                 newv->cur_profile++;
                                 newv->cur_profile_iters[newv->cur_policy] = 0;
                             }
@@ -564,28 +600,79 @@ int loop_adapt_end(char* string)
                             {
                                 newv->cur_profile_iters[newv->cur_policy]++;
                             }
+                            if (newv->cur_profile == newv->num_profiles[newv->cur_policy])
+                            {
+                                loop_adapt_exec_policies(tree, new);
+                            }
                         }
                     }
                 }
                 if (v->cur_profile == v->num_profiles[v->cur_policy])
                 {
                     printf("Set optimal parameters\n");
-                    tdata->cur_policy->done = 1;
-                    tdata->cur_policy->loop_adapt_eval_close();
-                    tdata->cur_policy = NULL;
-                    for (int i=0; i < tdata->num_policies; i++)
+#pragma omp barrier
+                    pthread_mutex_lock(&loop_adapt_lock);
+                    if (tdata->cur_policy)
                     {
-                        if (!tdata->policies[i]->done)
+                        if (v->opt_profiles[v->cur_policy] == 0)
                         {
-                            printf("Switch to policy %s\n", tdata->policies[i]->name);
-                            tdata->cur_policy = tdata->policies[i];
-                            tdata->cur_policy_id = i;
-                            update_cur_policy_in_tree(tree, tdata->cur_policy_id);
+                            printf("Set start value as best value in all nodes\n");
+                            loop_adapt_reset_parameter(tree, tdata->cur_policy);
                         }
+                        else
+                        {
+                            loop_adapt_best_parameter(tree, tdata->cur_policy);
+                        }
+                        tdata->cur_policy->done = 1;
+                        tdata->cur_policy->loop_adapt_eval_close();
+                        if (tdata->num_policies > 1)
+                        {
+                            int idx = -1;
+                            for (int i=0; i < tdata->num_policies; i++)
+                            {
+                                
+                                if (!tdata->policies[i]->done)
+                                {
+                                    idx = i;
+                                    break;
+                                }
+                            }
+                            if (idx >= 0)
+                            {
+                                printf("Switch to policy %s (%d)\n", tdata->policies[idx]->name, idx);
+                                tdata->cur_policy = tdata->policies[idx];
+                                tdata->cur_policy_id = idx;
+                                update_cur_policy_in_tree(tree, idx);
+                            }
+                            else
+                            {
+                            tdata->cur_policy = NULL;
+                            tdata->cur_policy_id = -1;
+                            }
+                         }
+                         else
+                         {
+                            tdata->cur_policy = NULL;
+                            tdata->cur_policy_id = -1;
+                         }
                     }
-                    if (!tdata->cur_policy)
+                    pthread_mutex_unlock(&loop_adapt_lock);
+                    if (!tdata->cur_policy && tdata->cur_policy_id < 0)
                     {
                         printf("Disable loop_adapt\n");
+                        for (int c = 0; c < num_cpus; c++)
+                        {
+                            if (CPU_ISSET(cpulist[c], &loop_adapt_cpuset))
+                            {
+                                objidx = cpus_to_objidx[cpulist[c]];
+            
+                                new = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);
+                                newv = (Nodevalues_t)new->userdata;
+                                update_tree(new, newv->cur_profile-1);
+                             }
+                        }
+                        loop_adapt_write_profiles(string, tree);
+                        loop_adapt_write_parameters(string, tree);
                         loop_adapt_active = 0;
                     }
                 }
@@ -611,26 +698,35 @@ __attribute__((destructor)) void loop_adapt_finalize (void)
     gpointer gvalue;
     char* key;
     hwloc_topology_t tree;
-    g_hash_table_iter_init(&iter, global_hash);
-    while(g_hash_table_iter_next(&iter, &gkey, &gvalue))
+
+    pthread_mutex_lock(&loop_adapt_global_hash_lock);
+    if (loop_adapt_global_hash)
     {
-        key = (char*)gkey;
-        tree = (hwloc_topology_t)gvalue;
-
-        tidy_tree(tree);
-
-        Treedata *tdata = (Treedata *)hwloc_topology_get_userdata(tree);
-        free(tdata->filename);
-        if (tdata->num_policies > 0)
+        
+        g_hash_table_iter_init(&iter, loop_adapt_global_hash);
+        while(g_hash_table_iter_next(&iter, &gkey, &gvalue))
         {
-            free(tdata->policies);
-            tdata->num_policies = 0;
-            tdata->cur_policy = NULL;
+            key = (char*)gkey;
+            tree = (hwloc_topology_t)gvalue;
+
+            tidy_tree(tree);
+
+            Treedata *tdata = (Treedata *)hwloc_topology_get_userdata(tree);
+            free(tdata->filename);
+            if (tdata->num_policies > 0)
+            {
+                free(tdata->policies);
+                tdata->num_policies = 0;
+                tdata->cur_policy = NULL;
+            }
+            free(tdata);
+            hwloc_topology_set_userdata(tree, NULL);
+            hwloc_topology_destroy(tree);
         }
-        free(tdata);
-        hwloc_topology_set_userdata(tree, NULL);
-        hwloc_topology_destroy(tree);
+        g_hash_table_destroy(loop_adapt_global_hash);
+        loop_adapt_global_hash = NULL;
+        
     }
-    g_hash_table_destroy(global_hash);
+    pthread_mutex_unlock(&loop_adapt_global_hash_lock);
 }
 

@@ -96,11 +96,15 @@ typedef struct {
     char* name;
     char* desc;
     Nodeparametertype type;
+    int inter;
     union {
         int ibest;
         double dbest;
     } best;
-    int inter;
+    union {
+        int istart;
+        double dstart;
+    } start;
     union {
         int icur;
         double dcur;
@@ -118,6 +122,15 @@ typedef struct {
 } Nodeparameter;
 
 typedef Nodeparameter* Nodeparameter_t;
+
+typedef struct {
+    char* name;
+    char* varname;
+    Nodeparametertype type;
+    void* ptr;
+} Nodeevent;
+
+typedef Nodeevent* Nodeevent_t;
 
 typedef struct {
     int cur_policy;
@@ -142,6 +155,9 @@ typedef struct {
     double ***profiles;
     // String to obj hashtable for the node-level parameters
     GHashTable* param_hash;
+    // String to obj hashtable for the node-level events
+    int num_events;
+    Nodeevent_t *events;
 } Nodevalues;
 
 typedef Nodevalues* Nodevalues_t;
