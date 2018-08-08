@@ -16,6 +16,7 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${loopAdapt_C_FLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} ${loopAdapt_CXX_FLAGS}")
 
+
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -xHOST")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -xHOST -std=c++11")
