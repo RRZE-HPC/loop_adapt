@@ -24,13 +24,13 @@ static void loop_adapt_eval_dvfs_next_param_step(char* param, Nodevalues_t vals,
     if (np)
     {
     
-        double min = np->min.dmin;
-        double max = np->max.dmax;
+        double min = np->min.dval;
+        double max = np->max.dval;
         int s = num_freqs / np->inter;
-        np->cur.dcur = freqs[num_freqs-(int)(s*step)];
+        np->cur.dval = freqs[num_freqs-(int)(s*step)];
         if (strncmp(np->name, "cfreq", 5) == 0)
         {
-            uint64_t f = (uint64_t)(np->cur.dcur*1000);
+            uint64_t f = (uint64_t)(np->cur.dval*1000);
             for (int i = 0; i < cputopo->numHWThreads; i++)
             {
                 if (cputopo->threadPool[i].inCpuSet && cputopo->threadPool[i].packageId == cpu)
@@ -46,7 +46,7 @@ static void loop_adapt_eval_dvfs_next_param_step(char* param, Nodevalues_t vals,
         }
         else if (strncmp(np->name, "ufreq", 5) == 0)
         {
-            uint64_t f = (uint64_t)(np->cur.dcur*1000);
+            uint64_t f = (uint64_t)(np->cur.dval*1000);
             freq_setUncoreFreqMin(cputopo->threadPool[cpu].packageId, f);
             freq_setUncoreFreqMax(cputopo->threadPool[cpu].packageId, f);
             freq_setUncoreFreqMin(cputopo->threadPool[cpu].packageId, f);
@@ -132,7 +132,7 @@ int loop_adapt_eval_dvfs_init(int num_cpus, int* cpulist, int num_profiles)
     return 0;
 }
 
-void loop_adapt_eval_dvfs(hwloc_topology_t tree, hwloc_obj_t obj)
+int loop_adapt_eval_dvfs(hwloc_topology_t tree, hwloc_obj_t obj)
 {
     Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
     Nodevalues_t v = (Nodevalues_t)obj->userdata;
@@ -166,7 +166,7 @@ void loop_adapt_eval_dvfs(hwloc_topology_t tree, hwloc_obj_t obj)
             // should be propagated to the other ones.
             // Often the LA_LOOP macros are used in serial regions and therefore
             // the best parameter is set for all other objects of the scope.
-            loop_adapt_get_tcount_func(&tcount_func);
+            loop_adapt_get_cpucount_func(&tcount_func);
             if (tcount_func && tcount_func() == 1)
             {
                 int len = hwloc_get_nbobjs_by_type(tree, (hwloc_obj_type_t)p->scope);
@@ -212,14 +212,19 @@ void loop_adapt_eval_dvfs(hwloc_topology_t tree, hwloc_obj_t obj)
             walker = walker->parent;
         }
     }
-    return;
+    return 0;
 }
 
 int loop_adapt_eval_dvfs_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj)
 {
     int ret = 0;
+    char spid[30];
     Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
     Nodevalues_t vals = (Nodevalues_t)obj->userdata;
+    ret = snprintf(spid, 29, "%d", getpid());
+    spid[ret] = '\0';
+    ret = 0;
+    setenv("LIKWID_PERF_PID", spid, 1);
     if (tdata && vals)
     {
         if (!likwid_initialized)
@@ -269,7 +274,7 @@ int loop_adapt_eval_dvfs_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj
             }
             likwid_started = 1;
         }
-        TimerData *t = vals->runtimes[vals->cur_policy] + vals->cur_profile;
+        TimerData *t = vals->timers[vals->cur_policy] + vals->cur_profile;
         timer_start(t);
         if (likwid_started)
         {
@@ -288,7 +293,7 @@ int loop_adapt_eval_dvfs_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj)
     Nodevalues_t vals = (Nodevalues_t)obj->userdata;
     if (tdata && vals)
     {
-        TimerData *t = vals->runtimes[vals->cur_policy] + vals->cur_profile;
+        TimerData *t = vals->timers[vals->cur_policy] + vals->cur_profile;
         if (likwid_started)
         {
             ret = perfmon_readCountersCpu(cpuid);

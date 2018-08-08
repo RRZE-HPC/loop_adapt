@@ -77,6 +77,17 @@ int get_objidx_above_cpuidx(hwloc_topology_t tree, AdaptScope scope, int cpuidx)
     return -1;
 }
 
+int get_pes_below_obj(hwloc_topology_t tree, AdaptScope scope, int idx)
+{
+    hwloc_obj_t root = hwloc_get_obj_by_type(tree, (hwloc_obj_type_t)scope, idx);
+    if (root)
+    {
+        hwloc_cpuset_t cpuset = root->cpuset;
+        return hwloc_bitmap_weight(cpuset);
+    }
+    return 0;
+}
+
 
 void update_best(PolicyParameter_t pp, hwloc_obj_t baseobj, hwloc_obj_t setobj)
 {
@@ -91,13 +102,13 @@ void update_best(PolicyParameter_t pp, hwloc_obj_t baseobj, hwloc_obj_t setobj)
             printf("Setting best for param %s to ", pname);
         if (setp->type == NODEPARAMETER_INT)
         {
-            if (loop_adapt_debug) printf("%d", basep->cur.icur);
-            setp->best.ibest = basep->cur.icur;
+            if (loop_adapt_debug) printf("%d", basep->cur.ival);
+            setp->best.ival = basep->cur.ival;
         }
         else if (setp->type == NODEPARAMETER_DOUBLE)
         {
-            if (loop_adapt_debug) printf("%f", basep->cur.dcur);
-            setp->best.dbest = basep->cur.dcur;
+            if (loop_adapt_debug) printf("%f", basep->cur.dval);
+            setp->best.dval = basep->cur.dval;
         }
         if (loop_adapt_debug)
             printf(" in node %d type %s\n", setobj->os_index, loop_adapt_type_name(setobj->type));
@@ -111,17 +122,17 @@ void set_param_step(char* param, Nodevalues_t vals, int step)
     {
         if (np->type == NODEPARAMETER_INT)
         {
-            int min = np->min.imin;
-            int max = np->max.imax;
+            int min = np->min.ival;
+            int max = np->max.ival;
             int s = (max-min) / np->inter;
-            np->cur.icur = min + (step * s);
+            np->cur.ival = min + (step * s);
         }
         else if (np->type == NODEPARAMETER_DOUBLE)
         {
-            double min = np->min.dmin;
-            double max = np->max.imax;
+            double min = np->min.dval;
+            double max = np->max.ival;
             double s = (max-min) / np->inter;
-            np->cur.dcur = min + (step * s);
+            np->cur.dval = min + (step * s);
         }
     }
 }
@@ -137,22 +148,35 @@ allocate_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type, int polidx, in
         // Get the object
         hwloc_obj_t obj = hwloc_get_obj_by_type(tree, type, i);
         // Allocate the memory for the profiles and profiles' values
-        Nodevalues_t v = malloc(sizeof(Nodevalues));
-        memset(v, 0, sizeof(Nodevalues));
+        Nodevalues_t v = NULL;
+        if (obj->userdata == NULL)
+        {
+            v = malloc(sizeof(Nodevalues));
+            memset(v, 0, sizeof(Nodevalues));
+        }
+        else
+        {
+            v = (Nodevalues_t)obj->userdata;
+        }
         
         if (!v->profiles || v->num_policies < polidx)
         {
-            if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Enlarge arrays of node %d to %d\n", i, polidx+1);
+/*            if (loop_adapt_debug == 2)*/
+/*                fprintf(stderr, "DEBUG: Enlarge arrays of node %d to %d\n", i, polidx+1);*/
             v->opt_profiles = (int*)realloc_buffer(v->opt_profiles, MAX(1, polidx+1)*sizeof(int));
             v->num_profiles = (int*)realloc_buffer(v->num_profiles, MAX(1, polidx+1)*sizeof(int));
             v->num_values = realloc_buffer(v->num_values, MAX(1, polidx+1)*sizeof(int));
             v->profile_iters = (int*)realloc_buffer(v->profile_iters, MAX(1, polidx+1)*sizeof(int));
             v->cur_profile_iters = (int*)realloc_buffer(v->cur_profile_iters, MAX(1, polidx+1)*sizeof(int));
 
-            v->runtimes = (TimerData**)realloc_buffer(v->runtimes,  MAX(1, polidx+1)*sizeof(TimerData*));
+            v->timers = (TimerData**)realloc_buffer(v->timers,  MAX(1, polidx+1)*sizeof(TimerData*));
+            v->timers[polidx] = malloc((num_profiles)*sizeof(TimerData));
+            
+            v->runtimes = (double**)realloc_buffer(v->runtimes,  MAX(1, polidx+1)*sizeof(double*));
+            v->runtimes[polidx] = malloc((num_profiles)*sizeof(double));
 
             // Allocate space for metrics
+            double ***p = v->profiles;
             v->profiles = (double***)realloc_buffer(v->profiles, MAX(1, polidx+1)*sizeof(double**));
             v->profiles[polidx] = malloc(num_profiles*sizeof(double*));
             for (int j = 0; j < num_profiles; j++)
@@ -163,7 +187,6 @@ allocate_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type, int polidx, in
             v->num_policies = polidx+1;
         }
 
-        v->runtimes[polidx] = malloc((num_profiles)*sizeof(TimerData));
         v->num_profiles[polidx] = num_profiles;
         v->num_values[polidx] = num_values;
         v->opt_profiles[polidx] = 0;
@@ -172,6 +195,8 @@ allocate_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type, int polidx, in
         v->cur_policy = 0;
         v->cur_profile = 0;
         v->num_events = 0;
+        v->num_pes = get_pes_below_obj(tree, type, i);
+        v->count = 0;
         v->events = NULL;
         v->param_hash = g_hash_table_new(g_str_hash, g_str_equal);
         pthread_mutex_init(&v->lock, NULL);
@@ -216,7 +241,7 @@ void free_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type)
                     free(v->profiles[j][k]);
             }
             free(v->profiles[j]);
-            free(v->runtimes[j]);
+            free(v->timers[j]);
         }
 
         pthread_mutex_destroy(&v->lock);
@@ -227,6 +252,7 @@ void free_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type)
         free(v->cur_profile_iters);
         free(v->opt_profiles);
         free(v->profiles);
+        free(v->timers);
         free(v->runtimes);
         free(v->num_profiles);
         free(v->num_values);
@@ -269,23 +295,48 @@ AdaptScope getLoopAdaptType(hwloc_obj_type_t t)
 
 void _update_tree(hwloc_obj_t base, hwloc_obj_t obj, int profile)
 {
+    int do_print = 0;
     Nodevalues_t bvals = (Nodevalues_t)base->userdata;
     Nodevalues_t ovals = (Nodevalues_t)obj->userdata;
+    if (obj->type == HWLOC_OBJ_MACHINE || obj->type == HWLOC_OBJ_PACKAGE)
+        do_print = 1;
+    if (!ovals || !bvals || !(ovals->num_values + ovals->cur_policy) || !(bvals->num_values + bvals->cur_policy))
+    {
+        printf("_update_tree return 1\n");
+        return;
+    }
+/*    if (!(ovals->profiles[ovals->cur_policy] + profile) || !(bvals->profiles[bvals->cur_policy] + profile))*/
+/*    {*/
+/*        printf("_update_tree return 2\n");*/
+/*        return;*/
+/*    }*/
+    if (!(ovals->profiles[ovals->cur_policy][profile]))
+    {
+        printf("_update_tree return 3\n");
+        return;
+    }
+    if (!(bvals->profiles[bvals->cur_policy][profile]))
+    {
+        printf("_update_tree return 4\n");
+        return;
+    }
     pthread_mutex_lock(&ovals->lock);
 
+
+    ovals->cur_policy = bvals->cur_policy;
     for (int m = 0; m < bvals->num_values[bvals->cur_policy]; m++)
     {
-        ovals->profiles[bvals->cur_policy][profile][m] += bvals->profiles[bvals->cur_policy][profile][m];
+        ovals->profiles[ovals->cur_policy][profile][m] += bvals->profiles[bvals->cur_policy][profile][m];
     }
-    //if (ovals->runtimes[bvals->cur_policy][profile].start.int64 < bvals->runtimes[bvals->cur_policy][profile].start.int64)
-    {
-        bvals->runtimes[bvals->cur_policy][profile].start.int64 = ovals->runtimes[bvals->cur_policy][profile].start.int64;
-    }
-    //if (ovals->runtimes[bvals->cur_policy][profile].stop.int64 > bvals->runtimes[bvals->cur_policy][profile].stop.int64)
-    {
-        bvals->runtimes[bvals->cur_policy][profile].stop.int64 = ovals->runtimes[bvals->cur_policy][profile].stop.int64;
-    }
-    ovals->cur_profile = bvals->cur_profile;
+
+    //ovals->runtimes[ovals->cur_policy][profile] = MAX(ovals->runtimes[ovals->cur_policy][profile], bvals->runtimes[ovals->cur_policy][profile]);
+    ovals->runtimes[ovals->cur_policy][profile] += bvals->runtimes[ovals->cur_policy][profile];
+    ovals->timers[ovals->cur_policy][profile].start.int64 = MIN(ovals->timers[ovals->cur_policy][profile].start.int64, bvals->timers[bvals->cur_policy][profile].start.int64);
+    ovals->timers[ovals->cur_policy][profile].stop.int64 = MAX(ovals->timers[ovals->cur_policy][profile].stop.int64, bvals->timers[bvals->cur_policy][profile].stop.int64);
+
+    ovals->cur_profile_iters[ovals->cur_policy] = MAX(ovals->cur_profile_iters[ovals->cur_policy], bvals->cur_profile_iters[bvals->cur_policy]);
+    ovals->profile_iters[ovals->cur_policy] = MAX(ovals->profile_iters[ovals->cur_policy], bvals->profile_iters[bvals->cur_policy]);
+    ovals->cur_profile = MAX(ovals->cur_profile, bvals->cur_profile);
     //ovals->num_values = bvals->num_values;
     memcpy(ovals->num_values, bvals->num_values, bvals->num_policies*sizeof(int));
     memcpy(ovals->num_profiles, bvals->num_profiles, bvals->num_policies*sizeof(int));
@@ -325,7 +376,9 @@ static inline int update_cur_policy_in_tree_types(hwloc_topology_t tree, hwloc_o
         if (nv)
         {
             nv->cur_profile = 0;
+            //printf("Setting cur_profile to 0 for %s %d\n", loop_adapt_type_name(type), obj->os_index);
             nv->cur_policy = polidx;
+            nv->done = 0;
         }
     }
 }

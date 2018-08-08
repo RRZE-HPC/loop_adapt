@@ -1,4 +1,6 @@
 #include <stdint.h>
+#include <sched.h>
+#include <unistd.h>
 #include <loop_adapt_eval_ompthreads.h>
 #include <loop_adapt_helper.h>
 #include <loop_adapt_calc.h>
@@ -12,12 +14,14 @@ static int likwid_gid = -1;
 
 
 static int ompthreads_num_cpus = 0;
+static int ompthreads_active_cpus = 0;
 static int* ompthreads_cpus = NULL;
 
 static int thread_inc = 0;
 static int thread_start = 0;
 static int thread_init = 0;
 
+static cpu_set_t loop_adapt_ompthreads_cpuset;
 
 int loop_adapt_eval_ompthreads_init(int num_cpus, int* cpulist, int num_profiles)
 {
@@ -30,13 +34,16 @@ int loop_adapt_eval_ompthreads_init(int num_cpus, int* cpulist, int num_profiles
     CpuTopology_t cputopo = get_cpuTopology();
     char* avail_cpus = "AVAILABLE_CPUS";
     char* avail_cores = "AVAILABLE_CORES";
+    char* active_cpus = "ACTIVE_CPUS";
     if (loop_adapt_debug == 2)
     {
-        fprintf(stderr, "DEBUG: Add define %s = %d for CPU %d\n", avail_cpus, cputopo->numHWThreads,  -1);
-        fprintf(stderr, "DEBUG: Add define %s = %d for CPU %d\n", avail_cores, cputopo->numHWThreads/cputopo->numThreadsPerCore,  -1);
+        fprintf(stderr, "DEBUG POL_OMPTHREADS: Add define %s = %d globally\n", avail_cpus, cputopo->numHWThreads,  -1);
+        fprintf(stderr, "DEBUG POL_OMPTHREADS: Add define %s = %d globally\n", avail_cores, cputopo->numHWThreads/cputopo->numThreadsPerCore,  -1);
+        fprintf(stderr, "DEBUG POL_OMPTHREADS: Add define %s = %d globally\n", active_cpus, cputopo->activeHWThreads,  -1);
     }
     la_calc_add_def(avail_cpus, cputopo->numHWThreads, -1);
     la_calc_add_def(avail_cores, cputopo->numHWThreads/cputopo->numThreadsPerCore, -1);
+    la_calc_add_def(active_cpus, cputopo->activeHWThreads, -1);
 
     ompthreads_num_cpus = num_cpus;
     ompthreads_cpus = (int*)malloc(ompthreads_num_cpus * sizeof(int));
@@ -46,17 +53,21 @@ int loop_adapt_eval_ompthreads_init(int num_cpus, int* cpulist, int num_profiles
 
     if (getenv("OMP_NUM_THREADS"))
         thread_init = atoi(getenv("OMP_NUM_THREADS"));
-
+    CPU_ZERO(&loop_adapt_ompthreads_cpuset);
+    int ret = sched_getaffinity(0, sizeof(loop_adapt_ompthreads_cpuset), &loop_adapt_ompthreads_cpuset);
+    ompthreads_active_cpus = CPU_COUNT(&loop_adapt_ompthreads_cpuset);
     return 0;
 }
 
-void loop_adapt_eval_ompthreads(hwloc_topology_t tree, hwloc_obj_t obj)
+
+void _loop_adapt_eval_ompthreads(hwloc_topology_t tree, hwloc_obj_t obj)
 {
     Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
     Nodevalues_t v = (Nodevalues_t)obj->userdata;
     int cur_profile = v->cur_profile - 1;
     Policy_t p = tdata->cur_policy;
     int opt_profile = v->opt_profiles[v->cur_policy];
+    printf("Opt %d Cur %d Type %s\n", opt_profile, cur_profile, loop_adapt_type_name((AdaptScope)obj->type));
     double *cur_values = v->profiles[v->cur_policy][cur_profile];
     double *opt_values = v->profiles[v->cur_policy][opt_profile];
     int (*tcount_func)() = NULL;
@@ -68,12 +79,13 @@ void loop_adapt_eval_ompthreads(hwloc_topology_t tree, hwloc_obj_t obj)
     {
         PolicyParameter_t pp = &p->parameters[i];
         int eval = la_calc_evaluate(p, pp, opt_values, cur_values);
+        printf("Eval %d\n", eval);
         if (eval)
         {
             //p->optimal_profile = cur_profile;
             v->opt_profiles[v->cur_policy] = cur_profile;
             //if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Evaluate param %s for %s with idx %d (opt:%d, cur:%d)\n", pp->name, loop_adapt_type_name((AdaptScope)obj->type), obj->logical_index, opt_profile, cur_profile);
+                fprintf(stderr, "DEBUG POL_OMPTHREADS: Evaluate param %s for %s with idx %d (opt:%d, cur:%d)\n", pp->name, loop_adapt_type_name((AdaptScope)obj->type), obj->logical_index, opt_profile, cur_profile);
             // we search through all parameters and set the best setting to the
             // current setting. After the policy is completely evaluated, the
             // best setting is returned by GET_[INT/DBL]_PARAMETER
@@ -83,7 +95,7 @@ void loop_adapt_eval_ompthreads(hwloc_topology_t tree, hwloc_obj_t obj)
             // should be propagated to the other ones.
             // Often the LA_LOOP macros are used in serial regions and therefore
             // the best parameter is set for all other objects of the scope.
-            loop_adapt_get_tcount_func(&tcount_func);
+            loop_adapt_get_cpucount_func(&tcount_func);
             if (tcount_func && tcount_func() == 1)
             {
                 int len = hwloc_get_nbobjs_by_type(tree, (hwloc_obj_type_t)p->scope);
@@ -101,47 +113,59 @@ void loop_adapt_eval_ompthreads(hwloc_topology_t tree, hwloc_obj_t obj)
         
         // If we are in the scope of the policy (at which level should changes be
         // done) the parameters are adjusted.
-        if (getLoopAdaptType(obj->type) == p->scope)
+        if (getLoopAdaptType(obj->type) == p->scope && cur_profile < v->num_profiles[v->cur_policy]-1)
         {
             for (int i = 0; i < POL_OMPTHREADS.num_parameters; i++)
             {
                 Nodeparameter_t np = g_hash_table_lookup(v->param_hash, (gpointer)pp->name);
+                Value old;
+                Value* oldptr = np->old_vals + cur_profile;
+                old.ival = np->cur.ival;
                 if (thread_inc == 0)
                 {
-                    thread_inc = (np->max.imax - np->min.imin)/np->inter;
+                    thread_inc = (np->max.ival - np->min.ival)/np->inter;
                 }
-                np->cur.icur = np->min.imin + ((v->cur_profile-1)*thread_inc);
-                omp_set_num_threads(np->cur.icur);
+                np->cur.ival = np->min.ival + ((v->cur_profile-1)*thread_inc);
+                fprintf(stderr, "Setting OMP_NUM_THREADS to %d\n", np->cur.ival);
+                fprintf(stderr, "Storing old param value %d at pos %d\n", old, cur_profile);
+                np->old_vals[cur_profile] = old;
+                np->num_old_vals = cur_profile + 1;
+                memcpy(oldptr, &old, sizeof(Value));
+                omp_set_num_threads(np->cur.ival);
+                ompthreads_active_cpus = np->cur.ival;
             }
         }
     }
+}
 
-    // Walk up the tree to see whether adjustments are required.
-    // Currently this does not wait until all subnodes have updated the
-    // values.
-    hwloc_obj_t walker = obj->parent;
-    while (walker)
+int loop_adapt_eval_ompthreads(hwloc_topology_t tree, hwloc_obj_t obj)
+{
+    int ret = 0;
+    Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
+    Policy_t p = tdata->cur_policy;
+    Nodevalues_t v = (Nodevalues_t)obj->userdata;
+    Nodevalues_t wv = NULL;
+
+    if (!likwid_started)
+        return 0;
+
+    if (obj->type == p->scope)
     {
-        if (walker->type == HWLOC_OBJ_PACKAGE ||
-            walker->type == HWLOC_OBJ_NUMANODE ||
-            walker->type == HWLOC_OBJ_MACHINE)
-        {
-            loop_adapt_eval_ompthreads(tree, walker);
-            walker = walker->parent;
-        }
-        else
-        {
-            walker = walker->parent;
-        }
+        _loop_adapt_eval_ompthreads(tree, obj);
     }
-    return;
+    return ret;
 }
 
 int loop_adapt_eval_ompthreads_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj)
 {
     int ret = 0;
+    char spid[30];
     Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
     Nodevalues_t vals = (Nodevalues_t)obj->userdata;
+    ret = snprintf(spid, 29, "%d", getpid());
+    spid[ret] = '\0';
+    ret = 0;
+    setenv("LIKWID_PERF_PID", spid, 1);
     if (tdata && vals)
     {
         if (!likwid_initialized)
@@ -151,7 +175,7 @@ int loop_adapt_eval_ompthreads_begin(int cpuid, hwloc_topology_t tree, hwloc_obj
         if (!likwid_configured)
         {
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Adding group %s to LIKWID\n", POL_OMPTHREADS.likwid_group);
+                fprintf(stderr, "DEBUG POL_OMPTHREADS: Adding group %s to LIKWID\n", POL_OMPTHREADS.likwid_group);
             likwid_gid = perfmon_addEventSet(POL_OMPTHREADS.likwid_group);
             if (likwid_gid >= 0)
             {
@@ -165,25 +189,25 @@ int loop_adapt_eval_ompthreads_begin(int cpuid, hwloc_topology_t tree, hwloc_obj
                         if (strcmp(POL_OMPTHREADS.metrics[m].name, perfmon_getMetricName(likwid_gid, i)) == 0)
                         {
                             POL_OMPTHREADS.metric_idx[m] = i;
-                            if (loop_adapt_debug == 2)
-                                fprintf(stderr, "DEBUG: Using metric with ID %d\n", i);
+                            //if (loop_adapt_debug == 2)
+                                fprintf(stderr, "DEBUG POL_OMPTHREADS: Using metric with ID %d\n", i);
                         }
                     }
                 }
                 likwid_configured = 1;
             }
         }
-        if (likwid_configured && likwid_gid < 0 && !likwid_started)
+        if (likwid_configured && likwid_gid >= 0 && !likwid_started)
         {
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Setup LIKWID counters with group ID %d\n", likwid_gid);
+                fprintf(stderr, "DEBUG POL_OMPTHREADS: Setup LIKWID counters with group ID %d\n", likwid_gid);
             ret = perfmon_setupCounters(likwid_gid);
             if (ret < 0)
             {
                 printf("Cannot setup LIKWID counters for group ID %d\n", likwid_gid);
             }
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Starting LIKWID counters with group ID %d\n", likwid_gid);
+                fprintf(stderr, "DEBUG POL_OMPTHREADS: Starting LIKWID counters with group ID %d\n", likwid_gid);
             ret = perfmon_startCounters();
             if (ret < 0)
             {
@@ -191,12 +215,12 @@ int loop_adapt_eval_ompthreads_begin(int cpuid, hwloc_topology_t tree, hwloc_obj
             }
             likwid_started = 1;
         }
-        TimerData *t = vals->runtimes[vals->cur_policy] + vals->cur_profile;
-        timer_start(t);
+
+        timer_start(&vals->timers[vals->cur_policy][vals->cur_profile]);
         if (likwid_started)
         {
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG: Reading LIKWID counters on CPU %d\n",cpuid);
+                fprintf(stderr, "DEBUG POL_OMPTHREADS: Reading LIKWID counters on CPU %d into [%d][%d]\n",cpuid, vals->cur_policy, vals->cur_profile);
             ret = perfmon_readCountersCpu(cpuid);
         }
     }
@@ -210,18 +234,21 @@ int loop_adapt_eval_ompthreads_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t
     Nodevalues_t vals = (Nodevalues_t)obj->userdata;
     if (tdata && vals)
     {
-        TimerData *t = vals->runtimes[vals->cur_policy] + vals->cur_profile;
+        TimerData *t = vals->timers[vals->cur_policy] + vals->cur_profile;
+        double *r = vals->runtimes[vals->cur_policy] + vals->cur_profile;
         if (likwid_started)
         {
+            if (loop_adapt_debug == 2)
+                fprintf(stderr, "DEBUG POL_OMPTHREADS: Reading LIKWID counters on CPU %d into [%d][%d]\n",cpuid, vals->cur_policy, vals->cur_profile);
             ret = perfmon_readCountersCpu(cpuid);
             timer_stop(t);
+            *r = timer_print(t);
             Policy_t p = tdata->cur_policy;
             int max_vals = perfmon_getNumberOfMetrics(p->likwid_gid);
             double* pdata = vals->profiles[vals->cur_policy][vals->cur_profile];
             for (int m = 0; m < p->num_metrics; m++)
             {
                 pdata[m] = perfmon_getLastMetric(p->likwid_gid, p->metric_idx[m], obj->logical_index);
-                printf("CPU %d Metric %s : %f\n", cpuid, p->metrics[m].var, pdata[m]);
             }
         }
     }

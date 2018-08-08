@@ -2,11 +2,13 @@
 #define LOOP_ADAPT_HELPER_H
 
 #include <loop_adapt_types.h>
+#include <syscall.h>
 
 //int allocate_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type, int num_profiles, int num_values);
 
 #define MIN(a,b) ( (a) < (b) ? (a) : (b))
 #define MAX(a,b) ( (a) >= (b) ? (a) : (b))
+#define gettid() syscall(SYS_gettid)
 
 void *realloc_buffer(void *ptrmem, size_t size);
 

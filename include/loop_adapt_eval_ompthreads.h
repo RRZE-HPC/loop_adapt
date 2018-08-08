@@ -8,7 +8,7 @@ POL_FUNCS(ompthreads)
 
 
 Policy POL_OMPTHREADS = {
-    .likwid_group = "MEMTEST",
+    .likwid_group = "ENERGY",
     .name = "OMPTHREADS",
     .desc = "This policy tries to adapt number of OpenMP threads.",
     STR_POL_FUNCS(ompthreads)
@@ -19,10 +19,9 @@ Policy POL_OMPTHREADS = {
                      "Number of threads",
                      "1",
                      "AVAILABLE_CPUS",
-                     "time_opt < time_cur"} },
-    .num_metrics = 2,
-    .metrics = {{ "time", "Runtime (RDTSC) [s]"},
-                { "energy", "Energy PKG [W]"}},
+                     "time_cur < time_opt"} },
+    .num_metrics = 1,
+    .metrics = {{ "time", "Runtime (RDTSC) [s]"}},
 };
 
 

@@ -19,28 +19,34 @@ static int* blocksize_cpus = NULL;
 static void loop_adapt_eval_blocksize_next_param_step(char* param, Nodevalues_t vals, int step)
 {
     Nodeparameter_t np = g_hash_table_lookup(vals->param_hash, (gpointer)param);
+    Value old;
+    Value* oldptr = NULL;
     if (np)
     {
+        oldptr = np->old_vals + np->num_old_vals;
+        old.ival = np->cur.ival;
         if (np->type == NODEPARAMETER_INT)
         {
-            double min = (double)np->min.imin;
-            double max = (double)np->max.imax;
+            double min = (double)np->min.ival;
+            double max = (double)np->max.ival;
             double s = (max-min) / (np->inter-1);
             //if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Current param value for %s : %d\n", param, np->cur.icur);
-            np->cur.icur = ceil(min + (step * s));
+                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Current param value for %s : %d\n", param, np->cur.ival);
+            np->cur.ival = ceil(min + (step * s));
             //if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Next param value for %s : %d\n", param, np->cur.icur);
+                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Next param value for %s : %d\n", param, np->cur.ival);
         }
         else if (np->type == NODEPARAMETER_DOUBLE)
         {
-            double min = np->min.dmin;
-            double max = np->max.imax;
+            double min = np->min.dval;
+            double max = np->max.ival;
             double s = (max-min) / (np->inter-1);
-            np->cur.dcur = (double)ceil(min + (step * s));
+            np->cur.dval = (double)ceil(min + (step * s));
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Next param value for %s : %f\n", param, np->cur.dcur);
+                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Next param value for %s : %f\n", param, np->cur.dval);
         }
+        np->old_vals[np->num_old_vals] = old;
+        np->num_old_vals++;
     }
 }
 
@@ -90,8 +96,13 @@ int loop_adapt_eval_blocksize_init(int num_cpus, int* cpulist, int num_profiles)
 int loop_adapt_eval_blocksize_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj)
 {
     int ret = 0;
+    char spid[30];
     Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
     Nodevalues_t vals = (Nodevalues_t)obj->userdata;
+    ret = snprintf(spid, 29, "%d", getpid());
+    spid[ret] = '\0';
+    ret = 0;
+    setenv("LIKWID_PERF_PID", spid, 1);
     if (tdata && vals)
     {
         pthread_mutex_lock(&blocksize_lock);
@@ -145,7 +156,7 @@ int loop_adapt_eval_blocksize_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_
             likwid_started = 1;
         }
         pthread_mutex_unlock(&blocksize_lock);
-        TimerData *t = vals->runtimes[vals->cur_policy] + vals->cur_profile;
+        TimerData *t = vals->timers[vals->cur_policy] + vals->cur_profile;
         timer_start(t);
         if (likwid_started)
         {
@@ -164,7 +175,7 @@ int loop_adapt_eval_blocksize_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t 
     Nodevalues_t vals = (Nodevalues_t)obj->userdata;
     if (tdata && vals)
     {
-        TimerData *t = &vals->runtimes[vals->cur_policy][vals->cur_profile];
+        TimerData *t = &vals->timers[vals->cur_policy][vals->cur_profile];
         if (likwid_started)
         {
             if (loop_adapt_debug == 2)
@@ -191,11 +202,11 @@ int loop_adapt_eval_blocksize_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t 
 // Data is read in end and the Nodes' cur_profile value is updated but
 // the evaluation is in the startloop afterwards, so cur_profle is set to
 // nodes' cur_profile - 1
-void loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
+int loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
 {
     Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
     Nodevalues_t v = (Nodevalues_t)obj->userdata;
-    int cur_profile = v->cur_profile - 1;
+    int cur_profile = (v->cur_profile > 0 ? v->cur_profile - 1 : 0);
     Policy_t p = tdata->cur_policy;
     int opt_profile = v->opt_profiles[v->cur_policy];
     double *cur_values = v->profiles[v->cur_policy][cur_profile];
@@ -248,7 +259,7 @@ void loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
             walker = walker->parent;
         }
     }
-    return;
+    return 0;
 }
 
 void loop_adapt_eval_blocksize_close()

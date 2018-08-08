@@ -7,7 +7,7 @@
 #define POL_FUNCS(NAME)  \
     int loop_adapt_eval_ ## NAME##_init(int num_cpus, int* cpulist, int num_profiles); \
     int loop_adapt_eval_ ## NAME##_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj); \
-    void loop_adapt_eval_ ## NAME (hwloc_topology_t tree, hwloc_obj_t obj); \
+    int loop_adapt_eval_ ## NAME (hwloc_topology_t tree, hwloc_obj_t obj); \
     int loop_adapt_eval_ ## NAME##_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj); \
     void loop_adapt_eval_ ## NAME##_close(); \
 
@@ -29,4 +29,5 @@ int loop_adapt_add_double_parameter(hwloc_obj_t obj, char* name, char* desc, dou
 int loop_adapt_add_event(hwloc_obj_t obj, char* name, char* var, Nodeparametertype type, void* ptr);
 int loop_adapt_reset_parameter(hwloc_topology_t tree, Policy_t p);
 int loop_adapt_best_parameter(hwloc_topology_t tree, Policy_t p);
+int loop_adapt_first_parameter(hwloc_topology_t tree, Policy_t p);
 #endif

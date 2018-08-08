@@ -51,20 +51,32 @@ void _loop_adapt_write_type_parameter_func(gpointer key, gpointer val, gpointer 
     if (param->type == NODEPARAMETER_INT)
     {
         fprintf(fp, "-- Type int\n");
-        fprintf(fp, "-- Min %d\n", param->min.imin);
-        fprintf(fp, "-- Max %d\n", param->max.imax);
-        fprintf(fp, "-- Start %d\n", param->start.istart);
-        fprintf(fp, "-- Best %d\n", param->best.ibest);
-        fprintf(fp, "-- Cur %d\n", param->cur.icur);
+        fprintf(fp, "-- Min %d\n", param->min.ival);
+        fprintf(fp, "-- Max %d\n", param->max.ival);
+        fprintf(fp, "-- Start %d\n", param->start.ival);
+        fprintf(fp, "-- Best %d\n", param->best.ival);
+        fprintf(fp, "-- Cur %d\n", param->cur.ival);
+        fprintf(fp, "-- Steps");
+        for (int i = 1; i < param->num_old_vals; i++)
+        {
+            fprintf(fp, " %d", param->old_vals[i].ival);
+        }
+        fprintf(fp, "\n");
     }
     else if (param->type == NODEPARAMETER_DOUBLE)
     {
         fprintf(fp, "-- Type double\n");
-        fprintf(fp, "-- Min %f\n", param->min.dmin);
-        fprintf(fp, "-- Max %f\n", param->max.dmax);
-        fprintf(fp, "-- Start %f\n", param->start.dstart);
-        fprintf(fp, "-- Best %f\n", param->best.dbest);
-        fprintf(fp, "-- Cur %f\n", param->cur.dcur);
+        fprintf(fp, "-- Min %f\n", param->min.dval);
+        fprintf(fp, "-- Max %f\n", param->max.dval);
+        fprintf(fp, "-- Start %f\n", param->start.dval);
+        fprintf(fp, "-- Best %f\n", param->best.dval);
+        fprintf(fp, "-- Cur %f\n", param->cur.dval);
+        fprintf(fp, "-- Steps");
+        for (int i = 1; i < param->num_old_vals; i++)
+        {
+            fprintf(fp, " %f", param->old_vals[i].dval);
+        }
+        fprintf(fp, "\n");
     }
 }
 

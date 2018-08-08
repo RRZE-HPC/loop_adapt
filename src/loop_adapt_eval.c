@@ -86,7 +86,7 @@ int loop_adapt_add_int_parameter(hwloc_obj_t obj, char* name, char* desc, int cu
     nv = (Nodevalues_t)obj->userdata;
     if (_parameter_exists(nv, name))
     {
-        fprintf(stderr, "Parameter already exists\n");
+        fprintf(stderr, "Parameter already exists for %s %d\n", loop_adapt_type_name(obj->type), obj->os_index);
         return 1;
     }
     np = _parameter_malloc(name, desc);
@@ -95,12 +95,14 @@ int loop_adapt_add_int_parameter(hwloc_obj_t obj, char* name, char* desc, int cu
         np->type = NODEPARAMETER_INT;
         np->pre = pre;
         np->post = post;
-        np->best.ibest = -1;
-        np->min.imin = min;
-        np->max.imax = max;
-        np->cur.icur = cur;
-        np->start.istart = cur;
+        np->best.ival = -1;
+        np->min.ival = min;
+        np->max.ival = max;
+        np->cur.ival = cur;
+        np->start.ival = cur;
         np->inter = nv->num_profiles[nv->cur_policy]-2;
+        np->old_vals = (Value*)malloc(nv->num_profiles[nv->cur_policy] * sizeof(Value));
+        np->num_old_vals = 0;
         // Add the parameter to the parameter hash table of the node
         g_hash_table_insert(nv->param_hash, (gpointer) g_strdup(name), (gpointer) np);
     }
@@ -129,12 +131,14 @@ int loop_adapt_add_double_parameter(hwloc_obj_t obj, char* name, char* desc, dou
         np->type = NODEPARAMETER_DOUBLE;
         np->pre = pre;
         np->post = post;
-        np->best.dbest = -1.0;
-        np->min.dmin = min;
-        np->max.dmax = max;
-        np->cur.dcur = cur;
-        np->start.dstart = cur;
+        np->best.dval = -1.0;
+        np->min.dval = min;
+        np->max.dval = max;
+        np->cur.dval = cur;
+        np->start.dval = cur;
         np->inter = nv->num_profiles[nv->cur_policy]-2;
+        np->old_vals = (Value*)malloc(nv->num_profiles[nv->cur_policy] * sizeof(Value));
+        np->num_old_vals = 0;
         // Add the parameter to the parameter hash table of the node
         g_hash_table_insert(nv->param_hash, (gpointer) g_strdup(name), (gpointer) np);
     }
@@ -152,13 +156,13 @@ static int _loop_adapt_reset_parameter_in_node(hwloc_obj_t obj, Policy_t p)
         Nodeparameter_t np = g_hash_table_lookup(nv->param_hash, (gpointer) p->parameters[i].name);
         if (np && np->type == NODEPARAMETER_INT)
         {
-            np->best.ibest = np->start.istart;
-            np->cur.icur = np->start.istart;
+            np->best.ival = np->start.ival;
+            np->cur.ival = np->start.ival;
         }
         else if (np && np->type == NODEPARAMETER_DOUBLE)
         {
-            np->best.dbest = np->start.dstart;
-            np->cur.dcur = np->start.dstart;
+            np->best.dval = np->start.dval;
+            np->cur.dval = np->start.dval;
         }
     }
 }
@@ -184,13 +188,13 @@ static int _loop_adapt_best_parameter_in_node(hwloc_obj_t obj, Policy_t p)
         Nodeparameter_t np = g_hash_table_lookup(nv->param_hash, (gpointer) p->parameters[i].name);
         if (np && np->type == NODEPARAMETER_INT)
         {
-            np->cur.icur = np->best.ibest;
-            printf("Best %d\n", np->cur.icur);
+            np->cur.ival = np->best.ival;
+            printf("Best %d\n", np->cur.ival);
         }
         else if (np && np->type == NODEPARAMETER_DOUBLE)
         {
-            np->cur.dcur = np->best.dbest;
-            printf("Best %f\n", np->cur.dcur);
+            np->cur.dval = np->best.dval;
+            printf("Best %f\n", np->cur.dval);
         }
     }
 }
@@ -201,6 +205,35 @@ int loop_adapt_best_parameter(hwloc_topology_t tree, Policy_t p)
     {
         hwloc_obj_t obj = hwloc_get_obj_by_type(tree, (hwloc_obj_type_t)p->scope, i);
         _loop_adapt_best_parameter_in_node(obj, p);
+    }
+    return 0;
+}
+
+static int _loop_adapt_first_parameter_in_node(hwloc_obj_t obj, Policy_t p)
+{
+    Nodevalues_t nv = (Nodevalues_t)obj->userdata;
+    for (int i = 0; i < p->num_parameters; i++)
+    {
+        Nodeparameter_t np = g_hash_table_lookup(nv->param_hash, (gpointer) p->parameters[i].name);
+        if (np && np->type == NODEPARAMETER_INT)
+        {
+            np->cur.ival = np->min.ival;
+            printf("Initial %d\n", np->min.ival);
+        }
+        else if (np && np->type == NODEPARAMETER_DOUBLE)
+        {
+            np->cur.dval = np->min.dval;
+            printf("Initial %f\n", np->min.dval);
+        }
+    }
+}
+
+int loop_adapt_first_parameter(hwloc_topology_t tree, Policy_t p)
+{
+    for (int i = 0; i < hwloc_get_nbobjs_by_type(tree, (hwloc_obj_type_t)p->scope); i++)
+    {
+        hwloc_obj_t obj = hwloc_get_obj_by_type(tree, (hwloc_obj_type_t)p->scope, i);
+        _loop_adapt_first_parameter_in_node(obj, p);
     }
     return 0;
 }
@@ -273,13 +306,16 @@ int loop_adapt_end_policies(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj)
 
 int loop_adapt_exec_policies(hwloc_topology_t tree, hwloc_obj_t obj)
 {
+    int ret = 0;
     Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
+    Nodevalues_t vals = (Nodevalues_t)obj->userdata;
     if (tdata && tdata->num_policies > 0)
     {
         Policy_t cur_p = tdata->cur_policy;
         if (cur_p)
         {
-            cur_p->loop_adapt_eval(tree, obj);
+            printf("Executing policy %s for %s %d for profile %d\n", cur_p->name, loop_adapt_type_name(obj->type), obj->logical_index, vals->cur_profile-1);
+            ret = cur_p->loop_adapt_eval(tree, obj);
         }
         for (int i = 0; i < tdata->num_policies; i++)
         {
@@ -287,7 +323,7 @@ int loop_adapt_exec_policies(hwloc_topology_t tree, hwloc_obj_t obj)
             if (p != cur_p && p->likwid_group == cur_p->likwid_group)
             {
                 printf("Executing policy %s because it uses the same data\n", p->name);
-                p->loop_adapt_eval(tree, obj);
+                ret = p->loop_adapt_eval(tree, obj);
             }
         }
     }
@@ -295,7 +331,7 @@ int loop_adapt_exec_policies(hwloc_topology_t tree, hwloc_obj_t obj)
     {
         fprintf(stdout, "No policy registered.\n");
     }
-    return 0;
+    return ret;
 }
 
 __attribute__((destructor)) void loop_adapt_eval_finalize (void)

@@ -61,9 +61,10 @@ typedef struct {
     char* name;
     char* desc;
     int done;
+    int finalized;
     //int optimal_profile;
     AdaptScope scope;
-    void (*loop_adapt_eval)(hwloc_topology_t tree, hwloc_obj_t obj);
+    int (*loop_adapt_eval)(hwloc_topology_t tree, hwloc_obj_t obj);
     int (*loop_adapt_eval_begin)(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj);
     int (*loop_adapt_eval_init)(int num_cpus, int* cpulist, int num_profiles);
     int (*loop_adapt_eval_end)(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj);
@@ -71,6 +72,7 @@ typedef struct {
     //double tolerance;
     int num_parameters;
     PolicyParameter parameters[LOOP_ADAPT_MAX_POLICY_PARAMS];
+    
     //char* eval;
     int num_metrics;
     PolicyMetric metrics[LOOP_ADAPT_MAX_POLICY_METRICS];
@@ -79,6 +81,23 @@ typedef struct {
 
 typedef Policy* Policy_t;
 
+typedef enum {
+    LOOP_ADAPT_THREAD_PAUSE = 0,
+    LOOP_ADAPT_THREAD_RUN,
+} ThreadState;
+
+typedef struct {
+    pthread_t pthread;
+    int thread_id;
+    int system_tid;
+    int cpuid;
+    int objidx;
+    int reg_tid;
+    cpu_set_t cpuset;
+    ThreadState state;
+} ThreadData;
+
+typedef ThreadData* ThreadData_t;
 
 typedef struct {
     char* filename;
@@ -88,35 +107,31 @@ typedef struct {
     int cur_policy_id;
     Policy_t cur_policy;
     Policy_t *policies;
+    pthread_mutex_t lock;
+    GHashTable* threads;
 } Treedata;
 
 typedef Treedata* Treedata_t;
+
+typedef union {
+    int ival;
+    double dval;
+    char *cval;
+} Value;
+
 
 typedef struct {
     char* name;
     char* desc;
     Nodeparametertype type;
     int inter;
-    union {
-        int ibest;
-        double dbest;
-    } best;
-    union {
-        int istart;
-        double dstart;
-    } start;
-    union {
-        int icur;
-        double dcur;
-    } cur;
-    union {
-        int imin;
-        double dmin;
-    } min;
-    union {
-        int imax;
-        double dmax;
-    } max;
+    Value best;
+    Value start;
+    Value cur;
+    Value min;
+    Value max;
+    int num_old_vals;
+    Value* old_vals;
     void (*pre)(char* fmt, ...);
     void (*post)(char* fmt, ...);
 } Nodeparameter;
@@ -142,13 +157,17 @@ typedef struct {
     int* cur_profile_iters;
     int* num_values;
     int* opt_profiles;
+    int count;
+    int num_pes;
+    int done;
     // Pthread fun
     pthread_mutex_t lock;
     pthread_cond_t cond;
     /* two dimensional array, first dim is the policyID and second dim
      * is the profileID.
      */
-    TimerData **runtimes;
+    TimerData **timers;
+    double** runtimes;
     /* three dimensional array, first dim is the policyID, second profileID and
      * third dim are the values of the profile.
      */

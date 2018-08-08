@@ -8,8 +8,8 @@
 
 #include <likwid.h>
 
-#define ARRAY_SIZE 60000000
-#define ITERATIONS 20
+#define ARRAY_SIZE 80000000
+#define ITERATIONS 15
 
 #define TEST_LOOP(s, var, start, cond, inc) \
     for (var = (start); cond; var += inc)
@@ -22,7 +22,7 @@ void dummy(void)
 int main(int argc, char* argv[])
 {
     int i, j;
-    double *a, *b;
+    double *a, *b, *c;
     double s = 0;
     int blockSize = 0;
     int edata = 1;
@@ -31,10 +31,12 @@ int main(int argc, char* argv[])
     TimerData t;
     a = malloc(ARRAY_SIZE * sizeof(double));
     b = malloc(ARRAY_SIZE * sizeof(double));
+    c = malloc(ARRAY_SIZE * sizeof(double));
     for (i = 0; i < ARRAY_SIZE; i++)
     {
         a[i] = 0;
         b[i] = 2.0;
+        c[i] = 2.0;
     }
     timer_init();
 
@@ -42,8 +44,8 @@ int main(int argc, char* argv[])
     REGISTER_THREAD_COUNT_FUNC(omp_get_num_threads);
     REGISTER_THREAD_ID_FUNC(sched_getcpu);
     REGISTER_LOOP("LOOP");
-    REGISTER_POLICY("LOOP", "POL_BLOCKSIZE", 5, 2);
-    //REGISTER_POLICY("LOOP", "POL_OMPTHREADS", 3, 2);
+    REGISTER_POLICY("LOOP", "POL_BLOCKSIZE", 5, 1);
+    //REGISTER_POLICY("LOOP", "POL_OMPTHREADS", 7, 1);
     //REGISTER_EVENT("LOOP", LOOP_ADAPT_SCOPE_MACHINE, sched_getcpu(), "edata", "edata", NODEPARAMETER_INT, &edata);
     
 #pragma omp parallel
@@ -51,38 +53,35 @@ int main(int argc, char* argv[])
     max_threads = omp_get_num_threads();
     REGISTER_PARAMETER("LOOP", LOOP_ADAPT_SCOPE_THREAD, "blksize", sched_getcpu(), NODEPARAMETER_INT, 5, 1, 10);
 }
-    REGISTER_PARAMETER("LOOP", LOOP_ADAPT_SCOPE_MACHINE, "nthreads", 0, NODEPARAMETER_INT, max_threads, 1, max_threads);
-    nr_threads = max_threads;
+    //REGISTER_PARAMETER("LOOP", LOOP_ADAPT_SCOPE_MACHINE, "nthreads", 0, NODEPARAMETER_INT, 1, 1, max_threads);
+    //nr_threads = max_threads;
 
     timer_start(&t);
     LA_FOR("LOOP", j = 0, j < ITERATIONS, j++)
     {
-        GET_INT_PARAMETER("LOOP", nr_threads, LOOP_ADAPT_SCOPE_MACHINE, "nthreads", 0);
-        //printf("Running with %d threads\n", nr_threads);
+        printf("Loop Body Begin\n");
+        //GET_INT_PARAMETER("LOOP", nr_threads, LOOP_ADAPT_SCOPE_MACHINE, "nthreads", 0);
 #pragma omp parallel private(i) num_threads(nr_threads)
 {
-        int cpu = sched_getcpu();
-    
-        GET_INT_PARAMETER("LOOP", blockSize, LOOP_ADAPT_SCOPE_THREAD, "blksize", cpu);
+        //int cpu = sched_getcpu();
+
+        
+        GET_INT_PARAMETER("LOOP", blockSize, LOOP_ADAPT_SCOPE_THREAD, "blksize", sched_getcpu());
         
 #pragma omp for 
         for (i = 0; i < ARRAY_SIZE; i++)
         {
-            
-            a[i] = (b[i]*b[i])+(0.5*b[i]);
+            a[i] = (b[i]*b[i])+(0.5*b[i])+(c[i]*c[i])+(0.5*c[i]);
             if (a[i] < 0)
                 dummy();
         }
 }
+        printf("Loop Body End\n");
     }
     timer_stop(&t);
-    printf("Loop time %f\n", timer_print(&t));
-    for (i = 0; i < ARRAY_SIZE; i++)
-    {
-        s += a[i] + 2;
-    }
-
-    printf("sum %f\n", s);
+    free(a);
+    free(b);
+    free(c);
     return 0;
 
 }

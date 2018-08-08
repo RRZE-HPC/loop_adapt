@@ -119,8 +119,9 @@ int la_calc_evaluate(Policy_t p, PolicyParameter_t param, double *opt_values, do
         la_calc_add_var(p->metrics[i].var, "cur", cur_values[i], &vars);
         if (loop_adapt_debug == 2)
         {
-            printf("Cur Metric %s_opt : %f\n", p->metrics[i].var, opt_values[i] );
-            printf("Opt Metric %s_cur : %f\n", p->metrics[i].var, cur_values[i] );
+            printf("Opt Metric %s_opt : %f\n", p->metrics[i].var, opt_values[i] );
+            printf("Cur Metric %s_cur : %f\n", p->metrics[i].var, cur_values[i] );
+            fflush(stdout);
         }
     }
 
