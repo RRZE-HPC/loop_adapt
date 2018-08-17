@@ -1,8 +1,9 @@
 #include <stdarg.h>
 #include <math.h>
 #include <loop_adapt.h>
-#include <loop_adapt_eval_blocksize.h>
+#include <loop_adapt_policy_blocksize.h>
 #include <loop_adapt_calc.h>
+#include <loop_adapt_search.h>
 
 #include <hwloc.h>
 
@@ -16,42 +17,9 @@ static pthread_mutex_t blocksize_lock = PTHREAD_MUTEX_INITIALIZER;
 static int blocksize_num_cpus = 0;
 static int* blocksize_cpus = NULL;
 
-static void loop_adapt_eval_blocksize_next_param_step(char* param, Nodevalues_t vals, int step)
-{
-    Nodeparameter_t np = g_hash_table_lookup(vals->param_hash, (gpointer)param);
-    Value old;
-    Value* oldptr = NULL;
-    if (np)
-    {
-        oldptr = np->old_vals + np->num_old_vals;
-        old.ival = np->cur.ival;
-        if (np->type == NODEPARAMETER_INT)
-        {
-            double min = (double)np->min.ival;
-            double max = (double)np->max.ival;
-            double s = (max-min) / (np->inter-1);
-            //if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Current param value for %s : %d\n", param, np->cur.ival);
-            np->cur.ival = ceil(min + (step * s));
-            //if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Next param value for %s : %d\n", param, np->cur.ival);
-        }
-        else if (np->type == NODEPARAMETER_DOUBLE)
-        {
-            double min = np->min.dval;
-            double max = np->max.ival;
-            double s = (max-min) / (np->inter-1);
-            np->cur.dval = (double)ceil(min + (step * s));
-            if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Next param value for %s : %f\n", param, np->cur.dval);
-        }
-        np->old_vals[np->num_old_vals] = old;
-        np->num_old_vals++;
-    }
-}
 
 
-int loop_adapt_eval_blocksize_init(int num_cpus, int* cpulist, int num_profiles)
+int loop_adapt_policy_blocksize_init(int num_cpus, int* cpulist, int num_profiles)
 {
     topology_init();
     //affinity_init();
@@ -80,8 +48,11 @@ int loop_adapt_eval_blocksize_init(int num_cpus, int* cpulist, int num_profiles)
 
         la_calc_add_def(level, cputopo->cacheLevels[i].size, -1);
         la_calc_add_def(linesize, cputopo->cacheLevels[i].lineSize, -1);
-        fprintf(stderr, "DEBUG POL_BLOCKSIZE: Add define %s = %ld for CPU %d\n", level, cputopo->cacheLevels[i].size, -1);
-        fprintf(stderr, "DEBUG POL_BLOCKSIZE: Add define %s = %ld for CPU %d\n", linesize, cputopo->cacheLevels[i].lineSize,  -1);
+        if (loop_adapt_debug)
+        {
+            fprintf(stderr, "DEBUG POL_BLOCKSIZE: Add define %s = %ld for all nodes\n", level, cputopo->cacheLevels[i].size);
+            fprintf(stderr, "DEBUG POL_BLOCKSIZE: Add define %s = %ld for all nodes\n", linesize, cputopo->cacheLevels[i].lineSize);
+        }
     }
     pthread_mutex_unlock(&blocksize_lock);
 
@@ -93,16 +64,13 @@ int loop_adapt_eval_blocksize_init(int num_cpus, int* cpulist, int num_profiles)
     return 0;
 }
 
-int loop_adapt_eval_blocksize_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj)
+int loop_adapt_policy_blocksize_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj)
 {
     int ret = 0;
-    char spid[30];
     Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
     Nodevalues_t vals = (Nodevalues_t)obj->userdata;
-    ret = snprintf(spid, 29, "%d", getpid());
-    spid[ret] = '\0';
-    ret = 0;
-    setenv("LIKWID_PERF_PID", spid, 1);
+    TimerData* t = NULL;
+
     if (tdata && vals)
     {
         pthread_mutex_lock(&blocksize_lock);
@@ -156,43 +124,56 @@ int loop_adapt_eval_blocksize_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_
             likwid_started = 1;
         }
         pthread_mutex_unlock(&blocksize_lock);
-        TimerData *t = vals->timers[vals->cur_policy] + vals->cur_profile;
-        timer_start(t);
+        PolicyProfile_t pp = vals->policies[vals->cur_policy];
+        t = loop_adapt_policy_profile_get_timer(pp);
+        if (t)
+            timer_stop(t);
+
         if (likwid_started)
         {
-            if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Reading LIKWID counters on CPU %d in eval_begin Profile %d\n", cpuid, vals->cur_profile);
+/*            if (loop_adapt_debug == 2)*/
+/*                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Reading LIKWID counters on CPU %d Profile %d\n", cpuid, pp->cur_profile);*/
             ret = perfmon_readCountersCpu(cpuid);
         }
     }
     return ret;
 }
 
-int loop_adapt_eval_blocksize_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj)
+int loop_adapt_policy_blocksize_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj)
 {
     int ret = 0;
+    double* pdata = NULL;
+    double *runtime = NULL;
+    Policy_t p = NULL;
+    TimerData *t = NULL;
     Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
     Nodevalues_t vals = (Nodevalues_t)obj->userdata;
     if (tdata && vals)
     {
-        TimerData *t = &vals->timers[vals->cur_policy][vals->cur_profile];
+        p = tdata->cur_policy;
+        PolicyProfile_t pp = vals->policies[vals->cur_policy];
+
         if (likwid_started)
         {
-            if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Reading LIKWID counters on CPU %d in eval_end Profile %d\n", cpuid, vals->cur_profile);
+/*            if (loop_adapt_debug == 2)*/
+/*                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Reading LIKWID counters on CPU %d Profile %d\n", cpuid, pp->cur_profile);*/
             ret = perfmon_readCountersCpu(cpuid);
-            timer_stop(t);
-            //printf("TPol %d VPol %d VPro %d\n", tdata->cur_policy_id, vals->cur_policy, vals->cur_profile);
-            //printf("Pol %d CPU %d Timer %f\n", tdata->cur_policy_id, cpuid, timer_print(t));
-            Policy_t p = tdata->cur_policy;
-            
-            double* pdata = vals->profiles[vals->cur_policy][vals->cur_profile];
+
+            t = loop_adapt_policy_profile_get_timer(pp);
+            if (t)
+                timer_stop(t);
+            runtime = loop_adapt_policy_profile_get_runtime(pp);
+            pdata = loop_adapt_policy_profile_get_values(pp);
+
+
             for (int m = 0; m < p->num_metrics; m++)
             {
                 pdata[m] = perfmon_getLastMetric(p->likwid_gid, p->metric_idx[m], obj->logical_index);
-                //printf("Pol %d CPU %d Metric %s : %f\n", tdata->cur_policy_id, cpuid, p->metrics[m].var, vals->profiles[vals->cur_policy][vals->cur_profile][m]);
+/*                if (loop_adapt_debug == 2)*/
+/*                    printf("Pol %d CPU %d/%d Metric %s %d: %f\n", tdata->cur_policy_id, cpuid, obj->logical_index, p->metrics[m].var, m, pdata[m]);*/
             }
-            pdata[p->num_metrics] = timer_print(t);
+            pp->num_values = p->num_metrics;
+            *runtime = timer_print(t);
         }
     }
     return ret;
@@ -202,44 +183,80 @@ int loop_adapt_eval_blocksize_end(int cpuid, hwloc_topology_t tree, hwloc_obj_t 
 // Data is read in end and the Nodes' cur_profile value is updated but
 // the evaluation is in the startloop afterwards, so cur_profle is set to
 // nodes' cur_profile - 1
-int loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
+int loop_adapt_policy_blocksize_eval(hwloc_topology_t tree, hwloc_obj_t obj)
 {
+    int eval = 0;
+    unsigned int (*tcount_func)() = NULL;
     Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
     Nodevalues_t v = (Nodevalues_t)obj->userdata;
-    int cur_profile = (v->cur_profile > 0 ? v->cur_profile - 1 : 0);
-    Policy_t p = tdata->cur_policy;
-    int opt_profile = v->opt_profiles[v->cur_policy];
-    double *cur_values = v->profiles[v->cur_policy][cur_profile];
-    double *opt_values = v->profiles[v->cur_policy][opt_profile];
-    unsigned int (*tcount_func)() = NULL;
+    double *cur_values = NULL;
+    double *opt_values = NULL;
+    double cur_runtime = 0;
+    double opt_runtime = 0;
+    if (tdata && v)
+    {
+        Policy_t p = tdata->cur_policy;
+        PolicyProfile_t pp = v->policies[v->cur_policy];
+        if (pp->cur_profile >= 0)
+        {
+            cur_values = pp->profiles[pp->cur_profile-1]->values;
+            cur_runtime = pp->profiles[pp->cur_profile-1]->runtime;
+        }
+        else
+        {
+            return 0;
+        }
+        if (pp->opt_profile >= 0)
+        {
+            opt_values = pp->profiles[pp->opt_profile]->values;
+            opt_runtime = pp->profiles[pp->opt_profile]->runtime;
+        }
+        else
+        {
+            opt_values = pp->base_profile->values;
+            opt_runtime = pp->base_profile->runtime;
+        }
+        if (getLoopAdaptType(obj->type) == p->scope)
+        {
+            for (int i = 0; i < p->num_parameters; i++)
+            {
+                PolicyParameter_t pparam = &p->parameters[i];
+                if (loop_adapt_debug == 2)
+                    fprintf(stderr, "DEBUG POL_BLOCKSIZE: Evaluate param %s for %s with idx %d (opt:%d, cur:%d)\n", pparam->name, loop_adapt_type_name((AdaptScope)obj->type), obj->logical_index, pp->opt_profile, pp->cur_profile-1);
+
+                eval = la_calc_evaluate(p, pparam, opt_values, opt_runtime, cur_values, cur_runtime);
+                if (loop_adapt_debug == 2)
+                    fprintf(stderr, "DEBUG POL_BLOCKSIZE: Evaluation %s = %d\n", pparam->eval, eval);
+                //if (eval)
+                //{
+                    //pp->opt_profile = pp->cur_profile-1;
+                    //if (loop_adapt_debug == 2)
+                        //fprintf(stderr, "DEBUG POL_BLOCKSIZE: New optimal profile %d\n", pp->opt_profile);
+                    // we search through all parameters and set the best setting to the
+                    // current setting. After the policy is completely evaluated, the
+                    // best setting is returned by GET_[INT/DBL]_PARAMETER
+                    //update_best(pparam, obj, obj);
+                //}
+                //loop_adapt_policy_blocksize_next_param_step(pparam->name, v, pp->cur_profile);
+/*                Nodeparameter_t np = g_hash_table_lookup(v->param_hash, (gpointer)pparam->name);*/
+/*                if (np)*/
+/*                {*/
+/*                    loop_adapt_search_param_next(np);*/
+/*                }*/
+            }
+        }
+    }
+/*    int cur_profile = (v->cur_profile > 0 ? v->cur_profile - 1 : 0);*/
+/*    */
+/*    int opt_profile = v->opt_profiles[v->cur_policy];*/
+/*    double *cur_values = v->profiles[v->cur_policy][cur_profile];*/
+/*    double *opt_values = v->profiles[v->cur_policy][opt_profile];*/
+    
 
     // Evaluate the condition whether this profile is better than the old
     // optimal one
     // evaluate() returns 1 if better, 0 if not
-    if (getLoopAdaptType(obj->type) == p->scope)
-    {
-        for (int i = 0; i < p->num_parameters; i++)
-        {
-            PolicyParameter_t pp = &p->parameters[i];
-            //if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Evaluate param %s for %s with idx %d (opt:%d, cur:%d)\n", pp->name, loop_adapt_type_name((AdaptScope)obj->type), obj->logical_index, opt_profile, cur_profile);
-
-            int eval = la_calc_evaluate(p, pp, opt_values, cur_values);
-            //if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Evaluation %s = %d\n", pp->eval, eval);
-            if (eval)
-            {
-                v->opt_profiles[v->cur_policy] = cur_profile;
-                //if (loop_adapt_debug == 2)
-                    fprintf(stderr, "DEBUG POL_BLOCKSIZE: New optimal profile %d\n", cur_profile);
-                // we search through all parameters and set the best setting to the
-                // current setting. After the policy is completely evaluated, the
-                // best setting is returned by GET_[INT/DBL]_PARAMETER
-                update_best(pp, obj, obj);
-            }
-            loop_adapt_eval_blocksize_next_param_step(pp->name, v, cur_profile-1);
-        }
-    }
+    
 
     // Walk up the tree to see whether adjustments are required.
     // Currently this does not wait until all subnodes have updated the
@@ -249,9 +266,10 @@ int loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
     {
         if (walker->type == HWLOC_OBJ_PACKAGE ||
             walker->type == HWLOC_OBJ_NUMANODE ||
-            walker->type == HWLOC_OBJ_MACHINE)
+            walker->type == HWLOC_OBJ_MACHINE ||
+            walker->type == HWLOC_OBJ_PU)
         {
-            loop_adapt_eval_blocksize(tree, walker);
+            eval = loop_adapt_policy_blocksize_eval(tree, walker);
             walker = walker->parent;
         }
         else
@@ -259,10 +277,10 @@ int loop_adapt_eval_blocksize(hwloc_topology_t tree, hwloc_obj_t obj)
             walker = walker->parent;
         }
     }
-    return 0;
+    return eval;
 }
 
-void loop_adapt_eval_blocksize_close()
+void loop_adapt_policy_blocksize_close()
 {
     pthread_mutex_lock(&blocksize_lock);
 

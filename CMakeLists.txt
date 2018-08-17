@@ -20,12 +20,11 @@ endif()
 set (SOURCES
     src/ghash.c
     src/loop_adapt.c
-    src/loop_adapt_eval.c
-    src/loop_adapt_eval_blocksize.c
-    src/loop_adapt_eval_dvfs.c
-    src/loop_adapt_eval_ompthreads.c
+    src/loop_adapt_policy.c
+    src/loop_adapt_policy_blocksize.c
     src/loop_adapt_helper.c
     src/loop_adapt_config.c
+    src/loop_adapt_search.c
     src/loop_adapt_calc.c
     )
 

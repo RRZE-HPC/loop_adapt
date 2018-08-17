@@ -27,8 +27,8 @@ Shortcut for for (start; cond && LOOP_BEGIN(name); inc, LOOP_END(name)) if compi
 /** @}*/
 
 //#include <loop_adapt_types.h>
-//#include <loop_adapt_eval.h>
-static int loop_adapt_debug = 2; /*! \brief  Debug level */
+//#include <loop_adapt_policy.h>
+static int loop_adapt_debug = 1; /*! \brief  Debug level */
 static int loop_adapt_active = 1; /*! \brief Internal variable whether loop_adapt is active */
 
 #ifdef LOOP_ADAPT_ACTIVE
@@ -85,16 +85,20 @@ typedef enum {
 
 #define REGISTER_POLICY(string, policy, num_profiles, iters_per_profile) \
     loop_adapt_register_policy(string, policy, num_profiles, iters_per_profile);
-#define REGISTER_PARAMETER(string, scope, name, cpu, type, cur, min, max) \
-    if (type == NODEPARAMETER_INT) \
-        loop_adapt_register_int_param(string, scope, cpu, name, NULL, cur, min, max); \
-    else if (type == NODEPARAMETER_DOUBLE) \
-        loop_adapt_register_double_param(string, scope, cpu, name, NULL, cur, min, max);
+    
+#define REGISTER_SEARCHALGO(string, policy, search) \
+    loop_adapt_register_searchalgo(string, policy, search);
 
-#define GET_INT_PARAMETER(string, orig, scope, name, cpu) \
+#define REGISTER_PARAMETER(string, name, scope, cpu, type, cur, min, max) \
+    if (type == NODEPARAMETER_INT) \
+        loop_adapt_register_int_param(string, name, scope, cpu, NULL, cur, min, max); \
+    else if (type == NODEPARAMETER_DOUBLE) \
+        loop_adapt_register_double_param(string, name, scope, cpu, NULL, cur, min, max);
+
+#define GET_INT_PARAMETER(string, name, orig, scope, cpu) \
     orig = loop_adapt_get_int_param(string, scope, cpu, name);
 
-#define GET_DBL_PARAMETER(string, orig, scope, name, cpu) \
+#define GET_DBL_PARAMETER(string, name, orig, scope, cpu) \
     orig = loop_adapt_get_double_param(string, scope, cpu, name);
 
 #define LOOP_BEGIN(string) loop_adapt_begin(string, __FILE__, __LINE__)
@@ -179,9 +183,9 @@ void loop_adapt_register_policy( char* string, char* polname, int num_profiles, 
 These parameters are used as knobs for manipulating the runtime by the loop policies. It is _strongly_ recommended to use the macros.
 */
 void loop_adapt_register_int_param( char* string,
+                                    char* name,
                                     AdaptScope scope,
                                     int cpu,
-                                    char* name,
                                     char* desc,
                                     int cur,
                                     int min,
@@ -197,9 +201,9 @@ int loop_adapt_get_int_param( char* string, AdaptScope scope, int cpu, char* nam
 These parameters are used as knobs for manipulating the runtime by the loop policies. It is _strongly_ recommended to use the macros.
 */
 void loop_adapt_register_double_param( char* string,
+                                       char* name,
                                        AdaptScope scope,
                                        int cpu,
-                                       char* name,
                                        char* desc,
                                        double cur,
                                        double min,
@@ -211,12 +215,21 @@ Get the double value for a loop parameter. This returns the current value of a p
 */
 double loop_adapt_get_double_param( char* string, AdaptScope scope, int cpu, char* name);
 
+/*! \brief  Register a search algorithm to a policy.
+
+Register a search algorithm to a policy. All afterwards registered parameters that are handled by a policy
+are added to the search algorithm automatically. Currently this doesn't work with paramters registered before
+calling this function (TODO).
+*/
+void loop_adapt_register_searchalgo( char* string, char* polname, char *searchname);
+
 int loop_adapt_list_policy();
 void loop_adapt_register_event(char* string, AdaptScope scope, int cpu, char* name, char* var, Nodeparametertype type, void* ptr);
 /** @}*/
 #else
 #define REGISTER_LOOP(s)
 #define REGISTER_POLICY(s, p, num_profiles, iters_per_profile)
+#define REGISTER_SEARCHALGO(string, policy, search)
 #define REGISTER_PARAMETER(s, scope, name, cpu, type, cur, min, max)
 #define GET_INT_PARAMETER(s, orig, name, cpu) orig = orig;
 #define GET_DBL_PARAMETER(s, orig, name, cpu)

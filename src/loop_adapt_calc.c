@@ -97,7 +97,7 @@ int la_calc_add_lua_func(char* func)
     return 0;
 }
 
-int la_calc_evaluate(Policy_t p, PolicyParameter_t param, double *opt_values, double *cur_values)
+int la_calc_evaluate(Policy_t p, PolicyParameter_t param, double *opt_values, double opt_runtime, double *cur_values, double cur_runtime)
 {
     int cpu = sched_getcpu();
     char* out = NULL;
@@ -111,7 +111,14 @@ int la_calc_evaluate(Policy_t p, PolicyParameter_t param, double *opt_values, do
         luaL_openlibs(L);
         lua_states[cpu] = L;
     }
-
+    la_calc_add_var("runtime", "opt", opt_runtime, &vars);
+    la_calc_add_var("runtime", "cur", cur_runtime, &vars);
+    if (loop_adapt_debug == 2)
+    {
+        printf("Opt Metric runtime_opt : %f\n",  opt_runtime);
+        printf("Cur Metric runtime_cur : %f\n",  cur_runtime);
+        fflush(stdout);
+    }
     for (int i = 0; i < p->num_metrics; i++)
     {
         int idx = p->metric_idx[i];

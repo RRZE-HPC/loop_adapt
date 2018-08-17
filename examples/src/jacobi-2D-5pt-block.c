@@ -46,6 +46,7 @@ int main()
     REGISTER_THREAD_ID_FUNC(sched_getcpu);
     REGISTER_LOOP("SWEEP");
     REGISTER_POLICY("SWEEP", "POL_BLOCKSIZE", NUM_PROFILES, 10);
+    REGISTER_SEARCHALGO("SWEEP", "POL_BLOCKSIZE", "SEARCH_BASIC");
     //REGISTER_POLICY("SWEEP", "POL_DVFS", NUM_PROFILES, 1);
 
 
@@ -53,20 +54,20 @@ int main()
 
 /*    for(int Size= startSize; Size<endSize; Size+=incSize)*/
 /*    {*/
-        
+
         double *phi = (double*) malloc(Size*Size*sizeof(double));
         double *phi_new = (double*) malloc(Size*Size*sizeof(double));
-        memset(phi, 0, Size*Size*sizeof(double));
+        //memset(phi, 0, Size*Size*sizeof(double));
 
     //for (int iteration = 0; iteration < NUM_ITERATIONS ; iteration++)
 /*    int iteration;*/
 /*    LA_FOR("SWEEP", iteration=0, iteration < NUM_ITERATIONS, iteration++)*/
 /*    {*/
 
+    int cpu = sched_getcpu();
+    REGISTER_PARAMETER("SWEEP", "blksize", LOOP_ADAPT_SCOPE_MACHINE, cpu, NODEPARAMETER_INT, (cacheSize/(3.0*8*2)), (cacheSize/(3.0*8*3)), (cacheSize/(3.0*8)));
 #pragma omp parallel
 {
-    int cpu = sched_getcpu();
-    REGISTER_PARAMETER("SWEEP", LOOP_ADAPT_SCOPE_THREAD, "blksize", cpu, NODEPARAMETER_INT, (cacheSize/(3.0*8*2)), (cacheSize/(3.0*8*3)), (cacheSize/(3.0*8)));
 /*    REGISTER_PARAMETER("SWEEP", LOOP_ADAPT_SCOPE_SOCKET, "cfreq", cpu, NODEPARAMETER_DOUBLE, 0, 0, 0);*/
 /*    REGISTER_PARAMETER("SWEEP", LOOP_ADAPT_SCOPE_SOCKET, "ufreq", cpu, NODEPARAMETER_DOUBLE, 0, 0, 0);*/
 
@@ -96,12 +97,12 @@ int main()
             LA_FOR("SWEEP", iter=1, iter<=niter, ++iter)
             //for(int iter=1;iter<=niter;++iter)
             {
-                printf("Iter %d\n", iter);
+                //printf("Iter %d\n", iter);
 #pragma omp parallel
 {
-                int blockSize;
+                int blockSize = 5123;
                 int cpu = sched_getcpu();
-                GET_INT_PARAMETER("SWEEP", blockSize, LOOP_ADAPT_SCOPE_THREAD, "blksize", cpu);
+                GET_INT_PARAMETER("SWEEP", "blksize", blockSize, LOOP_ADAPT_SCOPE_MACHINE, cpu);
                 int nBlocks = (int) (Size/((double)blockSize));
                 for(int bs=0; bs<(nBlocks+1); ++bs)
                 {
@@ -144,7 +145,7 @@ int main()
         printf("%5s\t%10s\t%10s\t\t%10s\t%10s\n",thread_num_str, Size_str, blockSize_str, mlup_str, time_str);
 
 /*    }*/
-    printf("App ends\n");
+/*    printf("App ends\n");*/
 /*    for (int i = 0; i < Size ; i++)*/
 /*    {*/
 /*        for (int j= 0; j < Size; j++)*/
@@ -154,7 +155,7 @@ int main()
 /*        }*/
 /*        printf("\n");*/
 /*    }*/
-    
+
     free(phi);
     free(phi_new);
 

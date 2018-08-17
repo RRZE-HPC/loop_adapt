@@ -2,7 +2,7 @@
 #define LOOP_ADAPT_EVAL_BLOCKSIZE_H
 
 
-#include <loop_adapt_eval.h>
+#include <loop_adapt_policy.h>
 #include <loop_adapt_helper.h>
 
 
@@ -10,10 +10,11 @@ POL_FUNCS(blocksize)
 
 Policy POL_BLOCKSIZE = {
     .likwid_group = "L3",
+    .internalname = "POL_BLOCKSIZE",
     .name = "Loop Blocksize",
     .desc = "This policy tries to adapt the blocksize of a loop to improve locality in the caches.",
     STR_POL_FUNCS(blocksize)
-    .scope = LOOP_ADAPT_SCOPE_THREAD,
+    .scope = LOOP_ADAPT_SCOPE_MACHINE,
     
     .num_parameters = 1,
     .parameters = { {"blksize",

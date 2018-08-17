@@ -43,38 +43,38 @@ void _loop_adapt_write_type_parameter_func(gpointer key, gpointer val, gpointer 
     char* name = (char*) key;
     FILE *fp = (FILE *)user_data;
     Nodeparameter_t param = (Nodeparameter_t)val;
-    fprintf(fp, "- Param %s\n", param->name);
+    fprintf(fp, "%s:\n", param->name);
     if (param->desc != NULL)
     {
-        fprintf(fp, "-- Description %s\n", param->desc);
+        fprintf(fp, "\tDescription: %s\n", param->desc);
     }
     if (param->type == NODEPARAMETER_INT)
     {
-        fprintf(fp, "-- Type int\n");
-        fprintf(fp, "-- Min %d\n", param->min.ival);
-        fprintf(fp, "-- Max %d\n", param->max.ival);
-        fprintf(fp, "-- Start %d\n", param->start.ival);
-        fprintf(fp, "-- Best %d\n", param->best.ival);
-        fprintf(fp, "-- Cur %d\n", param->cur.ival);
-        fprintf(fp, "-- Steps");
-        for (int i = 1; i < param->num_old_vals; i++)
+        fprintf(fp, "\tType: int\n");
+        fprintf(fp, "\tMin: %d\n", param->min.ival);
+        fprintf(fp, "\tMax: %d\n", param->max.ival);
+        fprintf(fp, "\tStart: %d\n", param->start.ival);
+        fprintf(fp, "\tBest: %d\n", param->best.ival);
+        fprintf(fp, "\tCur: %d\n", param->cur.ival);
+        fprintf(fp, "\tSteps:\n");
+        for (int i = 0; i < param->num_old_vals; i++)
         {
-            fprintf(fp, " %d", param->old_vals[i].ival);
+            fprintf(fp, "\t\t- %d\n", param->old_vals[i].ival);
         }
         fprintf(fp, "\n");
     }
     else if (param->type == NODEPARAMETER_DOUBLE)
     {
-        fprintf(fp, "-- Type double\n");
-        fprintf(fp, "-- Min %f\n", param->min.dval);
-        fprintf(fp, "-- Max %f\n", param->max.dval);
-        fprintf(fp, "-- Start %f\n", param->start.dval);
-        fprintf(fp, "-- Best %f\n", param->best.dval);
-        fprintf(fp, "-- Cur %f\n", param->cur.dval);
-        fprintf(fp, "-- Steps");
-        for (int i = 1; i < param->num_old_vals; i++)
+        fprintf(fp, "\tType: double\n");
+        fprintf(fp, "\tMin: %f\n", param->min.dval);
+        fprintf(fp, "\tMax: %f\n", param->max.dval);
+        fprintf(fp, "\tStart: %f\n", param->start.dval);
+        fprintf(fp, "\tBest: %f\n", param->best.dval);
+        fprintf(fp, "\tCur: %f\n", param->cur.dval);
+        fprintf(fp, "\tSteps:\n");
+        for (int i = 0; i < param->num_old_vals; i++)
         {
-            fprintf(fp, " %f", param->old_vals[i].dval);
+            fprintf(fp, "\t\t- %f\n", param->old_vals[i].dval);
         }
         fprintf(fp, "\n");
     }
@@ -96,7 +96,7 @@ static int _loop_adapt_write_type_profiles(char* fileprefix, hwloc_topology_t tr
             continue;
         }
         Nodevalues_t vals = (Nodevalues_t)obj->userdata;
-        
+        PolicyProfile_t pp = vals->policies[vals->cur_policy];
         ret = asprintf(&fname, "%s_%s_%d.txt", fileprefix, loop_adapt_type_name(obj->type), obj->os_index);
         //printf("Write to file %s\n", fname);
         fp = fopen(fname, "w");
@@ -105,24 +105,26 @@ static int _loop_adapt_write_type_profiles(char* fileprefix, hwloc_topology_t tr
             fprintf(fp, "Node Type %s Index %d\n", loop_adapt_type_name(obj->type), obj->os_index);
             for (int p=0; p < vals->num_policies; p++)
             {
-                fprintf(fp, "- Policy: %d %s\n", p, tdata->policies[p]->name);
+                char* polname = tdata->policies[p]->name;
+                char* poldesc = tdata->policies[p]->desc;
+                fprintf(fp, "- Policy: %d %s (%s)\n", p, polname, (poldesc ? poldesc : "No description"));
                 fprintf(fp, "- Current policy: %d\n", vals->cur_policy);
-                fprintf(fp, "- Number of profiles: %d\n", vals->num_profiles[p]);
-                fprintf(fp, "- Current profile: %d\n", vals->cur_profile);
+                fprintf(fp, "- Number of profiles: %d\n", pp->num_profiles);
+                fprintf(fp, "- Current profile: %d\n", pp->cur_profile);
                 fprintf(fp, "- Number of values per profile: %d\n", tdata->policies[p]->num_metrics);
-                fprintf(fp, "- Number of iterations: %d\n", vals->profile_iters[p]);
-                fprintf(fp, "- Optimal profile: %d\n", vals->opt_profiles[p]);
+                fprintf(fp, "- Number of iterations: %d\n", pp->profile_iters);
+                fprintf(fp, "- Optimal profile: %d\n", pp->opt_profile);
                 fprintf(fp, "- Start Profile\n", 0);
                 for (int v = 0; v < tdata->policies[p]->num_metrics; v++)
                 {
-                    fprintf(fp, "-- Value %s: %f\n", tdata->policies[p]->metrics[v].var, vals->profiles[p][0][v]);
+                    fprintf(fp, "-- Value %s: %f\n", tdata->policies[p]->metrics[v].var, pp->base_profile->values[v]);
                 }
-                for (int k = 1; k < vals->num_profiles[p]; k++)
+                for (int k = 1; k < pp->num_profiles; k++)
                 {
                     fprintf(fp, "- Profile: %d\n", k);
                     for (int v = 0; v < tdata->policies[p]->num_metrics; v++)
                     {
-                        fprintf(fp, "-- Value %s: %f\n", tdata->policies[p]->metrics[v].var, vals->profiles[p][k][v]);
+                        fprintf(fp, "-- Value %s: %f\n", tdata->policies[p]->metrics[v].var, pp->profiles[k]->values[v]);
                     }
                 }
             }
@@ -151,7 +153,8 @@ int loop_adapt_write_profiles(char* loopname, hwloc_topology_t tree)
     if (tdata && loopname)
     {
         snprintf(fileprefix, 249, "%s/%s", loop_adapt_configdir, loopname);
-        printf("Write to fileprefix %s\n", fileprefix);
+        if (loop_adapt_debug)
+            printf("Write to fileprefix %s\n", fileprefix);
         _loop_adapt_write_type_profiles(fileprefix, tree, HWLOC_OBJ_PU);
         _loop_adapt_write_type_profiles(fileprefix, tree, HWLOC_OBJ_PACKAGE);
         _loop_adapt_write_type_profiles(fileprefix, tree, HWLOC_OBJ_NUMANODE);
@@ -204,7 +207,8 @@ int loop_adapt_write_parameters(char* loopname, hwloc_topology_t tree)
     if (tdata && loopname)
     {
         snprintf(fileprefix, 249, "%s/%s_Param", loop_adapt_configdir, loopname);
-        printf("Write to fileprefix %s\n", fileprefix);
+        if (loop_adapt_debug)
+            printf("Write to fileprefix %s\n", fileprefix);
         _loop_adapt_write_type_params(fileprefix, tree, HWLOC_OBJ_PU);
         _loop_adapt_write_type_params(fileprefix, tree, HWLOC_OBJ_PACKAGE);
         _loop_adapt_write_type_params(fileprefix, tree, HWLOC_OBJ_NUMANODE);
@@ -212,6 +216,91 @@ int loop_adapt_write_parameters(char* loopname, hwloc_topology_t tree)
     }
     return 0;
 }
+
+static int _loop_adapt_read_parameters(char* fileprefix, hwloc_topology_t tree, hwloc_obj_type_t type)
+{
+    int ret = 0;
+    FILE *fp = NULL;
+    char* fname = NULL;
+    char buff[513];
+    char key[128];
+    char val[128];
+    int ival = 0;
+    int nobj = hwloc_get_nbobjs_by_type(tree, type);
+    Treedata_t tdata = hwloc_topology_get_userdata(tree);
+    for (int i=0; i < nobj; i++)
+    {
+        hwloc_obj_t obj = hwloc_get_obj_by_type(tree, type, i);
+        if (!obj->userdata)
+        {
+            printf("No userdata, allocate new one\n");
+            //allocate_nodevalues
+        }
+        Nodevalues_t vals = (Nodevalues_t)obj->userdata;
+        if (!vals->param_hash)
+        {
+            vals->param_hash = g_hash_table_new(g_str_hash, g_str_equal);
+        }
+        ret = asprintf(&fname, "%s_%s_%d.txt", fileprefix, loop_adapt_type_name(obj->type), obj->os_index);
+        if (!access(fname, R_OK))
+        {
+            Nodeparameter_t p = malloc(sizeof(Nodeparameter));
+            fp = fopen(fname, "w");
+            if (fp)
+            {
+                while(fgets(buff, 512, fp) != NULL)
+                {
+                    if (strncmp(buff, "Param", 5) == 0)
+                    {
+                        ret = sscanf(&(buff[6]), "%s", val);
+                        if (ret == 1)
+                        {
+                            ret = asprintf(&p->name, "%s", val);
+                        }
+                    }
+                    else if (strncmp(buff, "\tType:", 6) == 0)
+                    {
+                        ret = sscanf(&(buff[7]), "%s", val);
+                        if (strncmp(val, "int", 3) == 0)
+                        {
+                            p->type = NODEPARAMETER_INT;
+                        }
+                        else if (strncmp(val, "double", 6) == 0)
+                        {
+                            p->type = NODEPARAMETER_DOUBLE;
+                        }
+                    }
+                    else if (strncmp(buff, "\tSteps:", 7) == 0)
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        
+                    }
+                }
+            }
+        }
+    }
+}
+
+int loop_adapt_read_parameters(char* loopname, hwloc_topology_t tree)
+{
+    FILE* fp = NULL;
+    char fileprefix[250];
+    Treedata_t tdata = hwloc_topology_get_userdata(tree);
+    if (tdata && loopname)
+    {
+        snprintf(fileprefix, 249, "%s/%s_Param", loop_adapt_configdir, loopname);
+        printf("Read from fileprefix %s\n", fileprefix);
+        _loop_adapt_read_parameters(fileprefix, tree, HWLOC_OBJ_PU);
+        _loop_adapt_read_parameters(fileprefix, tree, HWLOC_OBJ_PACKAGE);
+        _loop_adapt_read_parameters(fileprefix, tree, HWLOC_OBJ_NUMANODE);
+        _loop_adapt_read_parameters(fileprefix, tree, HWLOC_OBJ_MACHINE);
+    }
+}
+
+
 
 __attribute__((destructor)) void loop_adapt_config_finalize (void)
 {

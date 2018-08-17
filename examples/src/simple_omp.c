@@ -45,13 +45,14 @@ int main(int argc, char* argv[])
     REGISTER_THREAD_ID_FUNC(sched_getcpu);
     REGISTER_LOOP("LOOP");
     REGISTER_POLICY("LOOP", "POL_BLOCKSIZE", 5, 1);
+    REGISTER_SEARCHALGO("LOOP", "POL_BLOCKSIZE", "SEARCH_BASIC");
     //REGISTER_POLICY("LOOP", "POL_OMPTHREADS", 7, 1);
     //REGISTER_EVENT("LOOP", LOOP_ADAPT_SCOPE_MACHINE, sched_getcpu(), "edata", "edata", NODEPARAMETER_INT, &edata);
     
 #pragma omp parallel
 {
     max_threads = omp_get_num_threads();
-    REGISTER_PARAMETER("LOOP", LOOP_ADAPT_SCOPE_THREAD, "blksize", sched_getcpu(), NODEPARAMETER_INT, 5, 1, 10);
+    REGISTER_PARAMETER("LOOP", "blksize", LOOP_ADAPT_SCOPE_MACHINE, sched_getcpu(), NODEPARAMETER_INT, 5, 1, 10);
 }
     //REGISTER_PARAMETER("LOOP", LOOP_ADAPT_SCOPE_MACHINE, "nthreads", 0, NODEPARAMETER_INT, 1, 1, max_threads);
     //nr_threads = max_threads;
@@ -61,13 +62,11 @@ int main(int argc, char* argv[])
     {
         printf("Loop Body Begin\n");
         //GET_INT_PARAMETER("LOOP", nr_threads, LOOP_ADAPT_SCOPE_MACHINE, "nthreads", 0);
-#pragma omp parallel private(i) num_threads(nr_threads)
+        GET_INT_PARAMETER("LOOP", "blksize", blockSize, LOOP_ADAPT_SCOPE_MACHINE, sched_getcpu());
+#pragma omp parallel private(i) num_threads(max_threads)
 {
         //int cpu = sched_getcpu();
 
-        
-        GET_INT_PARAMETER("LOOP", blockSize, LOOP_ADAPT_SCOPE_THREAD, "blksize", sched_getcpu());
-        
 #pragma omp for 
         for (i = 0; i < ARRAY_SIZE; i++)
         {
