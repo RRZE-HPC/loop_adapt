@@ -110,8 +110,10 @@ int _loop_adapt_get_cpucount()
     return num_active_cpus;
 }
 
-/* Register the function to retrieve the number of threads/tasks/... like
- * omp_get_num_threads() or similar
+/* \brief Register a function that return the number of processing units
+(e.g. threads or tasks)
+
+For OpenMP you can use omp_get_num_threads().
  */
 void loop_adapt_register_cpucount_func(int (*handle)())
 {
@@ -121,9 +123,9 @@ void loop_adapt_register_cpucount_func(int (*handle)())
     }
 }
 
-/* Register the function to retrieve the identifier of a thread/task/... like
- * omp_get_thread_num() or similar.
- */
+/* \brief Register a function that return the ID of the calling processing unit
+(e.g. thread or task)
+*/
 void loop_adapt_register_getcpu_func(int (*handle)())
 {
     if (handle)
@@ -132,7 +134,7 @@ void loop_adapt_register_getcpu_func(int (*handle)())
     }
 }
 
-/* Get the function pointer to retrieve the number of threads/tasks */
+/* \brief Get the function pointer to retrieve the number of processing units */
 void loop_adapt_get_cpucount_func(int (**handle)())
 {
     *handle = NULL;
@@ -147,7 +149,9 @@ void loop_adapt_get_cpucount_func(int (**handle)())
     }
     return;
 }
-/* Get the function pointer to retrieve the identifier of a thread/task */
+
+/* \brief Get the function pointer to retrieve the identifier of a processing
+unit */
 void loop_adapt_get_getcpu_func(int (**handle)())
 {
     *handle = NULL;
@@ -157,7 +161,12 @@ void loop_adapt_get_getcpu_func(int (**handle)())
     }
 }
 
-/* Register a loop in loop_adapt */
+/* \brief Register a new loop to loop_adapt
+
+This function adds a new loop to loop_adapt. This is done by duplicating the
+base topology tree and register the tree in the global hash table using the loop
+name as key.
+*/
 void loop_adapt_register(char* string)
 {
     int err = 0;
@@ -167,9 +176,9 @@ void loop_adapt_register(char* string)
     // If yes, warn and return
     if (loop_adapt_active)
     {
-        pthread_mutex_lock(&loop_adapt_global_hash_lock);
+        //pthread_mutex_lock(&loop_adapt_global_hash_lock);
         dup_tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
-        pthread_mutex_unlock(&loop_adapt_global_hash_lock);
+        //pthread_mutex_unlock(&loop_adapt_global_hash_lock);
         if (dup_tree)
         {
             fprintf(stderr, "ERROR: Loop string %s already registered\n", string);
@@ -240,7 +249,13 @@ static Policy_t loop_adapt_read_policy( char* polname)
     return out;
 }
 
-/* Register a policy for a loop */
+/* \brief Register a policy for a loop 
+
+This function adds a new policy to a loop identified by the loop string. The
+policy is searched in the current binary using dlsym to be more flexible (extra
+shared libs per policy to add them without recompilation). A policy will take
+num_profiles profiles with iters_per_profile iterations per profile.
+*/
 void loop_adapt_register_policy( char* string, char* polname, int num_profiles, int iters_per_profile)
 {
     hwloc_topology_t tree = NULL;
@@ -270,14 +285,22 @@ void loop_adapt_register_policy( char* string, char* polname, int num_profiles, 
     }
 }
 
-/* Register a policy for a loop */
+/* \brief Register a search algorithm for policy in a loop 
+
+This function adds a new search algorithm to a policy in a loop both identified
+by strings. After resolving the appropriate policy, it checks whether the search
+algorithm exists and if yes, it adds it to the policy.
+
+NOTE: Currently, the search algorithm is per policy. I thought it might be better to
+have it per parameter. Was too complicated for now, so I did it per policy.
+*/
 void loop_adapt_register_searchalgo( char* string, char* polname, char *searchname)
 {
     hwloc_topology_t tree = NULL;
     /* Check whether this loop name is already registered */
-    pthread_mutex_lock(&loop_adapt_global_hash_lock);
+    //pthread_mutex_lock(&loop_adapt_global_hash_lock);
     tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
-    pthread_mutex_unlock(&loop_adapt_global_hash_lock);
+    //pthread_mutex_unlock(&loop_adapt_global_hash_lock);
     if (tree)
     {
         /* Read the policy from already registered ones */
@@ -314,10 +337,12 @@ void loop_adapt_register_searchalgo( char* string, char* polname, char *searchna
     }
 }
 
-/* Register an integer parameter for later manipulation through a policy. It is
- * save to register also unused parameters. It is assumed that each thread is
- * registering the parameter for itself. If the scope is not thread, it walks
- * up the tree until it found the parent node of the CPU with the proper scope.
+/*! \brief Register an integer parameter in the loop's topology tree
+
+Register an integer parameter for later manipulation through a policy It is
+save to register also unused parameters. It is assumed that each thread is
+registering the parameter for itself. If the scope is not thread, it walks
+up the tree until it found the parent node of the CPU with the proper scope.
  */
 void loop_adapt_register_int_param( char* string,
                                     char* name,
@@ -336,10 +361,10 @@ void loop_adapt_register_int_param( char* string,
         fprintf(stderr, "ERROR: Invalid argument to loop_adapt_register_int_param\n");
         return;
     }
-    // Check whether the loop was registered
-    pthread_mutex_lock(&loop_adapt_global_hash_lock);
+    // Check whether the loop was registered (Not sure whether we need this lock)
+    //pthread_mutex_lock(&loop_adapt_global_hash_lock);
     tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
-    pthread_mutex_unlock(&loop_adapt_global_hash_lock);
+    //pthread_mutex_unlock(&loop_adapt_global_hash_lock);
 
     if (tree && cpu >= 0 && cpu < num_cpus)
     {
@@ -384,27 +409,23 @@ void loop_adapt_register_int_param( char* string,
                     fprintf(stderr, "DEBUG: Parameter %s: %d/%d/%d at %s %d\n", name, min, cur, max, loop_adapt_type_name(obj->type), obj->logical_index);
                 // Add the parameter to the object's parameter hash
                 loop_adapt_add_int_parameter(obj, name, desc, cur, min, max, NULL, NULL);
-                
-/*                for (int i=0; i < tdata->num_policies; i++)*/
-/*                {*/
-/*                    Policy_t p = tdata->policies[i];*/
-/*                    PolicyProfile_t pp = vals->policies[i];*/
-/*                    for (int j = 0; j < p->num_parameters; j++)*/
-/*                    {*/
-/*                        if (strncmp(p->parameters[j].name, name, strlen(name)) == 0)*/
-/*                        {*/
-/*                            loop_adapt_search_add_int_param(p->search, name, cur, min, max, pp->num_profiles);*/
-/*                            break;*/
-/*                        }*/
-/*                    }*/
-/*                }*/
+
             }
         }
     }
 }
 
 
+/*! \brief Get an integer parameter from the loop tree
 
+This function searches for the parameter of the current CPU (or other scope if
+known) and returns the current value of the paramter. At first it resolves the
+loop name to the loop's topology tree. Afterwards it gets the tree node id to
+access the right node. If the scope it thread, just look up the id in the
+cpu-to-id mapping. If not, use the current tree node as starting point to walk
+up the tree until you find the appropriate tree node of scope. When found,
+look up the parameter name in the node's parameter hash and return the value.
+*/
 int loop_adapt_get_int_param( char* string, AdaptScope scope, int cpu, char* name)
 {
     int ret = 0;
@@ -459,7 +480,13 @@ int loop_adapt_get_int_param( char* string, AdaptScope scope, int cpu, char* nam
     return ret;
 }
 
-// See loop_adapt_register_int_param
+/*! \brief Register a double parameter in the loop's topology tree
+
+Register an double parameter for later manipulation through a policy It is
+save to register also unused parameters. It is assumed that each thread is
+registering the parameter for itself. If the scope is not thread, it walks
+up the tree until it found the parent node of the CPU with the proper scope.
+ */
 void loop_adapt_register_double_param( char* string,
                                        char* name,
                                        AdaptScope scope,
@@ -508,26 +535,21 @@ void loop_adapt_register_double_param( char* string,
                 }
                 //printf("Add parameter %s with min %f and max %f\n", name, min, max);
                 loop_adapt_add_double_parameter(obj, name, desc, cur, min, max, NULL, NULL);
-                
-/*                for (int i=0; i < tdata->num_policies; i++)*/
-/*                {*/
-/*                    Policy_t p = tdata->policies[i];*/
-/*                    PolicyProfile_t pp = vals->policies[i];*/
-/*                    for (int j = 0; j < p->num_parameters; j++)*/
-/*                    {*/
-/*                        if (strncmp(p->parameters[j].name, name, strlen(name)) == 0)*/
-/*                        {*/
-/*                            loop_adapt_search_add_dbl_param(p->search, name, cur, min, max, pp->num_profiles);*/
-/*                            break;*/
-/*                        }*/
-/*                    }*/
-/*                }*/
             }
         }
     }
 }
 
-// See loop_adapt_get_int_param
+/*! \brief Get a double parameter from the loop tree
+
+This function searches for the parameter of the current CPU (or other scope if
+known) and returns the current value of the paramter. At first it resolves the
+loop name to the loop's topology tree. Afterwards it gets the tree node id to
+access the right node. If the scope it thread, just look up the id in the
+cpu-to-id mapping. If not, use the current tree node as starting point to walk
+up the tree until you find the appropriate tree node of scope. When found,
+look up the parameter name in the node's parameter hash and return the value.
+*/
 double loop_adapt_get_double_param_param( char* string, AdaptScope scope, int cpu, char* name)
 {
     int objidx = 0;
@@ -658,6 +680,13 @@ static ThreadData_t _loop_adapt_get_thread(Treedata_t tdata)
     return t;
 }
 
+/*! \brief This function decides what to do at the beginning of a loop.
+
+This function decides what to do at the beginning of a loop. There is not much
+to decide. It just checks whether it's the first iteration for a profile and
+whether there are still profiles needed and if both is true, it calles the
+policy's begin function.
+*/
 static int _loop_adapt_begin_cpu(hwloc_topology_t tree, int cpuid)
 {
     int objidx = cpus_to_objidx[cpuid];
@@ -678,9 +707,17 @@ static int _loop_adapt_begin_cpu(hwloc_topology_t tree, int cpuid)
     return 0;
 }
 
-/* This function runs through the tree and executes the current policy on all
- * nodes of the policy scope. If the evaluation of the policy is positive,
- * update parameters.
+/*! \brief This function runs through the tree and executes the current policy on all
+nodes of the policy scope.
+ 
+This function runs through the tree and executes the current policy on all
+nodes of the policy scope (tree level). Since the profiles are propagated
+upwards in the tree, the policy scope should have the aggregated values of
+all child nodes in the tree. It calls the policy's eval function on the tree
+level. Moreover, when this function is called the first time, we initialize the
+parameters based on the search engine and when we collected the desired amount
+of profiles, it marks the policy as done and finalizes the policy for all tree
+nodes. Last part of finalization is to write out the profiles and parameters.
  */
 static int _loop_adapt_policy_tree(char* string, hwloc_topology_t tree)
 {
@@ -699,14 +736,7 @@ static int _loop_adapt_policy_tree(char* string, hwloc_topology_t tree)
                 if (vals)
                 {
                     PolicyProfile_t pp = vals->policies[vals->cur_policy];
-                    if (pp->cur_profile == pp->num_profiles && !vals->done && pp->cur_profile_iters == 0)
-                    {
-                        done = 1;
-                        if (loop_adapt_debug)
-                            printf("Analyse last %s %d\n", loop_adapt_type_name( p->scope), i);
-                        loop_adapt_exec_policies(tree, obj);
-                    }
-                    else if (pp->cur_profile > 0 && !vals->done && pp->cur_profile_iters == 0)
+                    if (pp->cur_profile > 0 && pp->cur_profile <= pp->num_profiles && !vals->done && pp->cur_profile_iters == 0)
                     {
                         if (loop_adapt_debug)
                             printf("Analyse %s %d\n", loop_adapt_type_name( p->scope), i);
@@ -719,6 +749,7 @@ static int _loop_adapt_policy_tree(char* string, hwloc_topology_t tree)
                     if (pp->cur_profile == pp->num_profiles)
                     {
                         p->done = 1;
+                        done = 1;
                     }
                 }
             }
@@ -753,6 +784,19 @@ static int _loop_adapt_policy_tree(char* string, hwloc_topology_t tree)
     return 0;
 }
 
+/*! \brief This function decides what to do at the end of a loop. 
+
+This function does the main decision what to do at the end of a loop.
+Each profile can cover multiple loop iterations, so if we still need more
+iterations for a profile, the profile iterations counter is incremented and
+the function returs.
+If we have enough iterations for the profile, call the policy's end
+function (creates a new profile) and set profile iterations to zero. Afterwards
+the profile is propagated upwards in the topology tree (thread -> NUMA node ->
+socket -> machine) and the profiles there are filled.
+The last part is to check whether there are already enough profiles, so it marks
+the policy as done.
+*/
 static int _loop_adapt_end_cpu(hwloc_topology_t tree, int cpuid)
 {
     int objidx = cpus_to_objidx[cpuid];
@@ -791,7 +835,18 @@ static int _loop_adapt_end_cpu(hwloc_topology_t tree, int cpuid)
     return 0;
 }
 
-/* This function is called at the beginning of each loop iteration */
+/*! \brief  This function is called at the beginning of each loop iteration.
+
+At the beginning of each loop body execution this function should be called. If looks
+up the given loop name string in the hash table to get the topology tree
+associated with the loop. If this function is called in parallel, it operates
+only for the current thread. Otherwise it operates on all threads.
+If there is already a profile to analyse (cur_policy > 0) it calls the
+evaluation function of the current policy on the profile (comparing the new
+profile with either base or the current optimum).
+The function itself does not perform any measurements or anything, it just calls
+the begin-function of the current policy of the loop.
+*/
 int loop_adapt_begin(char* string, char* filename, int linenumber)
 {
     /* Just do something if loop_adapt is active */
@@ -815,7 +870,11 @@ int loop_adapt_begin(char* string, char* filename, int linenumber)
             Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
             /* Set some basic information about the loop */
             if (tdata->filename == NULL && tdata->linenumber < 0)
+            {
                 _loop_adapt_fill_tdata(tdata, filename, linenumber);
+            }
+            // This gets the thread information or creates a new thread if not
+            // already registered.
             ThreadData_t thread = _loop_adapt_get_thread(tdata);
             /* Only perform the start routine if loop is currently stopped. */
             if (tdata->status == LOOP_STOPPED)
@@ -836,17 +895,22 @@ int loop_adapt_begin(char* string, char* filename, int linenumber)
                 if (loop_adapt_debug)
                     fprintf(stderr, "DEBUG: Starting loop %s for %d CPUs Total %d\n", string, cpucount, gl_cpucount);
 
+                // Here we check whether there is a profile ready for evaluation
+                // and do it if possible by calling the eval function of the
+                // policy
                 _loop_adapt_policy_tree(string, tree);
 
-                // This is the case when we are already in a parallel region or completely serial (no cpucount function registered)
-                if (cpucount > 1)
+                // This is the case when we are already in a parallel region or
+                // completely serial (no cpucount function registered)
+                if (!tcount_func || cpucount > 1)
                 {
                     loop_adapt_get_getcpu_func(&tid_func);
                     cpuid = (tid_func != NULL ? tid_func() : sched_getcpu());
 
                     _loop_adapt_begin_cpu(tree, cpuid);
                 }
-                // This is the case when we are in a serial region but threading is generally activated
+                // This is the case when we are in a serial region but threading
+                // is generally activated
                 else if (cpucount == 1)
                 {
                     /* This block is used if loop_adapt_begin is called from a
@@ -876,39 +940,6 @@ int loop_adapt_begin(char* string, char* filename, int linenumber)
 }
 
 
-/*static int _loop_adapt_final_policy_cpu(hwloc_topology_t tree, int cpuid)*/
-/*{*/
-/*    Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);*/
-/*    */
-/*    if (tdata->cur_policy)*/
-/*    {*/
-/*        int objidx = cpus_to_objidx[cpuid];*/
-/*        hwloc_obj_t cpu_obj = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);*/
-/*        if (cpu_obj)*/
-/*        {*/
-/*            Nodevalues_t cpu_vals = (Nodevalues_t)cpu_obj->userdata;*/
-/*             If the optimal profile is -1, this means that none of*/
-/*             * the tried parameter settings is better than the original*/
-/*             * ones. Otherwise set the best-performing parameter.*/
-/*             */
-/*            if (cpu_vals)*/
-/*            {*/
-/*                PolicyProfile_t p = cpu_vals->policies[cpu_vals->cur_policy];*/
-/*                if (p->opt_profile < 0)*/
-/*                {*/
-/*                    printf("Set start value as best value in all nodes\n");*/
-/*                    loop_adapt_reset_parameter(tree, tdata->cur_policy);*/
-/*                }*/
-/*                else*/
-/*                {*/
-/*                    loop_adapt_best_parameter(tree, tdata->cur_policy);*/
-/*                }*/
-/*                cpu_vals->done = 1;*/
-/*            }*/
-/*        }*/
-/*    }*/
-/*    return 0;*/
-/*}*/
 
 /*static int _loop_adapt_next_undone_policy(Treedata_t tdata)*/
 /*{*/
@@ -953,7 +984,15 @@ static int _loop_adapt_disable(char* string, hwloc_topology_t tree)
     return 0;
 }
 
-/* This function is called at the end of each loop iteration */
+/*! \brief  This function is called at the end of each loop iteration.
+
+At the end of each loop body execution this function should be called. If looks
+up the given loop name string in the hash table to get the topology tree
+associated with the loop. If this function is called in parallel, it operates
+only for the current thread. Otherwise it operates on all threads. The function
+itself does not perform any measurements or anything, it just calls the
+end-function of the current policy of the loop.
+*/
 int loop_adapt_end(char* string)
 {
     /* Just do something if loop_adapt is active */
@@ -988,14 +1027,12 @@ int loop_adapt_end(char* string)
                 }
                 uint64_t cmask = 0x0ULL;
                 // This is the case when we are already in a parallel region or completely serial
-                if (cpucount > 1)
+                if (!tcount_func || cpucount > 1)
                 {
                     int (*tid_func)() = NULL;
                     loop_adapt_get_getcpu_func(&tid_func);
                     int cpuid = (tid_func != NULL ? tid_func() : sched_getcpu());
-                    /* Get the current object ID. This is the ID in the hwloc
-                     * topology tree.
-                     */
+                    /* Call the subfunction for the current CPU */
                     int finalize = _loop_adapt_end_cpu(tree, cpuid);
                     if (finalize > 0)
                     {
@@ -1003,7 +1040,9 @@ int loop_adapt_end(char* string)
                         cmask |= (1ULL<<cpuid);
                     }
                 }
-                // This is the case when we are in a serial region but threading is generally activated
+                // This is the case when we are in a serial region but threading
+                // is generally activated otherwise there wouldn't be a
+                // tcount_func and therefore cpucount == 0
                 else if (cpucount == 1)
                 {
                     
@@ -1012,6 +1051,7 @@ int loop_adapt_end(char* string)
                         int cpuid = cpulist[c];
                         if (CPU_ISSET(cpuid, &loop_adapt_cpuset))
                         {
+                            /* Call the subfunction for all CPUs in the current CPUset */
                             int finalize = _loop_adapt_end_cpu(tree, cpuid);
                             if (finalize > 0)
                             {

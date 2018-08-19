@@ -180,7 +180,13 @@ int loop_adapt_search_param_reset(SearchAlgorithm_t s, Nodeparameter_t np)
 
     if (s->reset)
     {
+        Value old = np->cur;
         s->reset(np);
+        if (np->old_vals[np->num_old_vals-1].ival != old.ival)
+        {
+            np->old_vals[np->num_old_vals] = old;
+            np->num_old_vals++;
+        }
     }
     return 0;
 }

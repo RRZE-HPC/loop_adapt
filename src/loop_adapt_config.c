@@ -41,42 +41,51 @@ fallback_local:
 void _loop_adapt_write_type_parameter_func(gpointer key, gpointer val, gpointer user_data)
 {
     char* name = (char*) key;
-    FILE *fp = (FILE *)user_data;
+    FILE *fp = NULL;
+    char* filename = (char*)user_data;
     Nodeparameter_t param = (Nodeparameter_t)val;
-    fprintf(fp, "%s:\n", param->name);
-    if (param->desc != NULL)
+    fp = fopen(filename, "w");
+    if (fp)
     {
-        fprintf(fp, "\tDescription: %s\n", param->desc);
-    }
-    if (param->type == NODEPARAMETER_INT)
-    {
-        fprintf(fp, "\tType: int\n");
-        fprintf(fp, "\tMin: %d\n", param->min.ival);
-        fprintf(fp, "\tMax: %d\n", param->max.ival);
-        fprintf(fp, "\tStart: %d\n", param->start.ival);
-        fprintf(fp, "\tBest: %d\n", param->best.ival);
-        fprintf(fp, "\tCur: %d\n", param->cur.ival);
-        fprintf(fp, "\tSteps:\n");
-        for (int i = 0; i < param->num_old_vals; i++)
+        fprintf(fp, "%s:\n", param->name);
+        if (param->desc != NULL)
         {
-            fprintf(fp, "\t\t- %d\n", param->old_vals[i].ival);
+            fprintf(fp, "\tDescription: %s\n", param->desc);
         }
-        fprintf(fp, "\n");
-    }
-    else if (param->type == NODEPARAMETER_DOUBLE)
-    {
-        fprintf(fp, "\tType: double\n");
-        fprintf(fp, "\tMin: %f\n", param->min.dval);
-        fprintf(fp, "\tMax: %f\n", param->max.dval);
-        fprintf(fp, "\tStart: %f\n", param->start.dval);
-        fprintf(fp, "\tBest: %f\n", param->best.dval);
-        fprintf(fp, "\tCur: %f\n", param->cur.dval);
-        fprintf(fp, "\tSteps:\n");
-        for (int i = 0; i < param->num_old_vals; i++)
+        if (param->type == NODEPARAMETER_INT)
         {
-            fprintf(fp, "\t\t- %f\n", param->old_vals[i].dval);
+            fprintf(fp, "\tType: int\n");
+            fprintf(fp, "\tMin: %d\n", param->min.ival);
+            fprintf(fp, "\tMax: %d\n", param->max.ival);
+            fprintf(fp, "\tStart: %d\n", param->start.ival);
+            if (param->has_best)
+                fprintf(fp, "\tBest: %d\n", param->best.ival);
+            else
+                fprintf(fp, "\tBest: %d\n", param->start.ival);
+            fprintf(fp, "\tCur: %d\n", param->cur.ival);
+            fprintf(fp, "\tSteps:\n");
+            for (int i = 0; i < param->num_old_vals; i++)
+            {
+                fprintf(fp, "\t\t- %d\n", param->old_vals[i].ival);
+            }
+            fprintf(fp, "\n");
         }
-        fprintf(fp, "\n");
+        else if (param->type == NODEPARAMETER_DOUBLE)
+        {
+            fprintf(fp, "\tType: double\n");
+            fprintf(fp, "\tMin: %f\n", param->min.dval);
+            fprintf(fp, "\tMax: %f\n", param->max.dval);
+            fprintf(fp, "\tStart: %f\n", param->start.dval);
+            fprintf(fp, "\tBest: %f\n", param->best.dval);
+            fprintf(fp, "\tCur: %f\n", param->cur.dval);
+            fprintf(fp, "\tSteps:\n");
+            for (int i = 0; i < param->num_old_vals; i++)
+            {
+                fprintf(fp, "\t\t- %f\n", param->old_vals[i].dval);
+            }
+            fprintf(fp, "\n");
+        }
+        fclose(fp);
     }
 }
 
@@ -184,14 +193,12 @@ static int _loop_adapt_write_type_params(char* fileprefix, hwloc_topology_t tree
             continue;
         }
         ret = asprintf(&fname, "%s_%s_%d.txt", fileprefix, loop_adapt_type_name(obj->type), obj->os_index);
-        fp = fopen(fname, "w");
-        if (fp)
+        if (ret > 0)
         {
             if (vals->param_hash)
             {
-                g_hash_table_foreach(vals->param_hash, _loop_adapt_write_type_parameter_func, fp);
+                g_hash_table_foreach(vals->param_hash, _loop_adapt_write_type_parameter_func, fname);
             }
-            fclose(fp);
             free(fname);
         }
     }

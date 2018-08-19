@@ -71,7 +71,8 @@ static char* loop_adapt_type_name(AdaptScope scope)
 }
 /*! \brief  List of types a parameter can have.
 
-Currently only integer and double parameters are supported.
+Currently only integer and double parameters are supported. Internal values
+can also take pointers.
 */
 typedef enum {
     /*! \brief  Integer parameter */
@@ -136,52 +137,84 @@ typedef enum {
 /** \addtogroup LA_API loop_adapt API
 *  @{
 */
-/*! \brief  Register a function that returns the number of active threads/tasks/...
+/* \brief Register a function that return the number of processing units
+(e.g. threads or tasks)
 
-The function is used internally to detect whether the loop is executed serially (with a parallel region in the loop body) or in parallel.
-For OpenMP you can use omp_get_num_threads()
-*/
+For OpenMP you can use omp_get_num_threads().
+ */
 void loop_adapt_register_cpucount_func(int (*handle)());
-/*! \brief  Register a function that returns the current CPU id
+/* \brief Register a function that return the ID of the calling processing unit
+(e.g. thread or task)
 */
 void loop_adapt_register_getcpu_func(int (*handle)());
-/*! \brief  Get the function pointer of function which returns the number of active threads/tasks/...
-*/
+/* \brief Get the function pointer to retrieve the number of processing units */
 void loop_adapt_get_cpucount_func(int (**handle)());
-/*! \brief  Get the function pointer of function which returns  the current CPU id
-*/
+/* \brief Get the function pointer to retrieve the identifier of a processing
+unit */
 void loop_adapt_get_getcpu_func(int (**handle)());
 
-/*! \brief  Register a new loop in the loop_adapt library
+/* \brief Register a new loop to loop_adapt
 
-Each loop is handled separately, so you can have multiple loops that get adapted with the registered policies. It is _strongly_ recommended to use the macros.
+This function adds a new loop to loop_adapt. This is done by duplicating the
+base topology tree and register the tree in the global hash table using the loop
+name as key.
 */
 void loop_adapt_register(char* string);
-/*! \brief  This function is called before a loop body executes
-
-It is _strongly_ recommended to use the macros.
-*/
-int loop_adapt_begin(char* string, char* filename, int linenumber);
-/*! \brief  This function is called after the execution of a loop body
-
-It is _strongly_ recommended to use the macros.
-*/
-int loop_adapt_end(char* string);
-/*! \brief  This function prints the profile with number profile_num of the loop named string
-*/
-void loop_adapt_print(char *string, int profile_num);
 
 
 
-/*! \brief  Register a policy for a loop
+/* \brief Register a policy for a loop 
 
-Multiple policies can be registered for a loop and they are processed in order. It is _strongly_ recommended to use the macros.
+This function adds a new policy to a loop identified by the loop string. The
+policy is searched in the current binary using dlsym to be more flexible (extra
+shared libs per policy to add them without recompilation). A policy will take
+num_profiles profiles with iters_per_profile iterations per profile.
 */
 void loop_adapt_register_policy( char* string, char* polname, int num_profiles, int iters_per_profile);
-/*! \brief  Register an integer parameter for a loop
 
-These parameters are used as knobs for manipulating the runtime by the loop policies. It is _strongly_ recommended to use the macros.
+/* \brief Register a search algorithm for policy in a loop 
+
+This function adds a new search algorithm to a policy in a loop both identified
+by strings. After resolving the appropriate policy, it checks whether the search
+algorithm exists and if yes, it adds it to the policy.
+
+NOTE: Currently, the search algorithm is per policy. I thought it might be better to
+have it per parameter. Was too complicated for now, so I did it per policy.
 */
+void loop_adapt_register_searchalgo( char* string, char* polname, char *searchname);
+
+/*! \brief  This function is called at the beginning of each loop iteration.
+
+At the beginning of each loop body execution this function should be called. If looks
+up the given loop name string in the hash table to get the topology tree
+associated with the loop. If this function is called in parallel, it operates
+only for the current thread. Otherwise it operates on all threads.
+If there is already a profile to analyse (cur_policy > 0) it calls the
+evaluation function of the current policy on the profile (comparing the new
+profile with either base or the current optimum).
+The function itself does not perform any measurements or anything, it just calls
+the begin-function of the current policy of the loop.
+*/
+int loop_adapt_begin(char* string, char* filename, int linenumber);
+
+/*! \brief  This function is called at the end of each loop iteration.
+
+At the end of each loop body execution this function should be called. If looks
+up the given loop name string in the hash table to get the topology tree
+associated with the loop. If this function is called in parallel, it operates
+only for the current thread. Otherwise it operates on all threads. The function
+itself does not perform any measurements or anything, it just calls the
+end-function of the current policy of the loop.
+*/
+int loop_adapt_end(char* string);
+
+/*! \brief Register an integer parameter in the loop's topology tree
+
+Register an integer parameter for later manipulation through a policy It is
+save to register also unused parameters. It is assumed that each thread is
+registering the parameter for itself. If the scope is not thread, it walks
+up the tree until it found the parent node of the CPU with the proper scope.
+ */
 void loop_adapt_register_int_param( char* string,
                                     char* name,
                                     AdaptScope scope,
@@ -191,15 +224,26 @@ void loop_adapt_register_int_param( char* string,
                                     int min,
                                     int max);
 
-/*! \brief  Get the integer value for a loop parameter
+/*! \brief Get an integer parameter from the loop tree
 
-This returns the current value of a parameter. During the profiling runs the value changes, so you should call this function before you setup the next loop iteration config. It is _strongly_ recommended to use the macros.
+This function searches for the parameter of the current CPU (or other scope if
+known) and returns the current value of the paramter. At first it resolves the
+loop name to the loop's topology tree. Afterwards it gets the tree node id to
+access the right node. If the scope it thread, just look up the id in the
+cpu-to-id mapping. If not, use the current tree node as starting point to walk
+up the tree until you find the appropriate tree node of scope. When found,
+look up the parameter name in the node's parameter hash and return the value.
 */
 int loop_adapt_get_int_param( char* string, AdaptScope scope, int cpu, char* name);
-/*! \brief  Register a double parameter for a loop
 
-These parameters are used as knobs for manipulating the runtime by the loop policies. It is _strongly_ recommended to use the macros.
-*/
+
+/*! \brief Register a double parameter in the loop's topology tree
+
+Register an double parameter for later manipulation through a policy It is
+save to register also unused parameters. It is assumed that each thread is
+registering the parameter for itself. If the scope is not thread, it walks
+up the tree until it found the parent node of the CPU with the proper scope.
+ */
 void loop_adapt_register_double_param( char* string,
                                        char* name,
                                        AdaptScope scope,
@@ -209,22 +253,22 @@ void loop_adapt_register_double_param( char* string,
                                        double min,
                                        double max);
 
-/*! \brief  Get the double value for a loop parameter
+/*! \brief Get a double parameter from the loop tree
 
-Get the double value for a loop parameter. This returns the current value of a parameter. During the profiling runs the value changes, so you should call this function before you setup the next loop iteration config. It is _strongly_ recommended to use the macros.
+This function searches for the parameter of the current CPU (or other scope if
+known) and returns the current value of the paramter. At first it resolves the
+loop name to the loop's topology tree. Afterwards it gets the tree node id to
+access the right node. If the scope it thread, just look up the id in the
+cpu-to-id mapping. If not, use the current tree node as starting point to walk
+up the tree until you find the appropriate tree node of scope. When found,
+look up the parameter name in the node's parameter hash and return the value.
 */
 double loop_adapt_get_double_param( char* string, AdaptScope scope, int cpu, char* name);
 
-/*! \brief  Register a search algorithm to a policy.
 
-Register a search algorithm to a policy. All afterwards registered parameters that are handled by a policy
-are added to the search algorithm automatically. Currently this doesn't work with paramters registered before
-calling this function (TODO).
-*/
-void loop_adapt_register_searchalgo( char* string, char* polname, char *searchname);
 
-int loop_adapt_list_policy();
-void loop_adapt_register_event(char* string, AdaptScope scope, int cpu, char* name, char* var, Nodeparametertype type, void* ptr);
+//int loop_adapt_list_policy();
+//void loop_adapt_register_event(char* string, AdaptScope scope, int cpu, char* name, char* var, Nodeparametertype type, void* ptr);
 /** @}*/
 #else
 #define REGISTER_LOOP(s)
