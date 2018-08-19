@@ -226,39 +226,6 @@ _allocate_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type, int polidx, i
                 fprintf(stderr, "DEBUG: Enlarge policy arrays of %s %d to %d\n", loop_adapt_type_name((AdaptScope)obj->type), i, polidx+1);
             v->policies = (PolicyProfile_t*)realloc_buffer(v->policies, MAX(1, polidx+1)*sizeof(PolicyProfile_t));
             
-            // Each policy gets space in the optimial profile array
-/*            v->opt_profiles = (int*)realloc_buffer(v->opt_profiles, MAX(1, polidx+1)*sizeof(int));*/
-            // Each policy gets space in the array containing the number of profiles
-/*            v->num_profiles = (int*)realloc_buffer(v->num_profiles, MAX(1, polidx+1)*sizeof(int));*/
-            // Each policy gets space in the array containing the number of values for a profile
-/*            v->num_values = realloc_buffer(v->num_values, MAX(1, polidx+1)*sizeof(int));*/
-            // Each policy gets space in the array containing the number of iterations for a profile
-/*            v->profile_iters = (int*)realloc_buffer(v->profile_iters, MAX(1, polidx+1)*sizeof(int));*/
-            // Each policy gets space in the array containing the number of currently done iterations for a profile
-/*            v->cur_profile_iters = (int*)realloc_buffer(v->cur_profile_iters, MAX(1, polidx+1)*sizeof(int));*/
-            // Each policy gets space in the array containing the runtime of the iterations
-/*            v->timers = (TimerData**)realloc_buffer(v->timers,  MAX(1, polidx+1)*sizeof(TimerData*));*/
-/*            v->timers[polidx] = malloc((num_profiles)*sizeof(TimerData));*/
-/*            v->runtimes = (double**)realloc_buffer(v->runtimes,  MAX(1, polidx+1)*sizeof(double*));*/
-/*            v->runtimes[polidx] = malloc((num_profiles)*sizeof(double));*/
-
-            // Allocate space for metrics
-/*            double ***p = v->profiles;*/
-/*            v->profiles = (double***)realloc_buffer(v->profiles, MAX(1, polidx+1)*sizeof(double**));*/
-/*            v->profiles[polidx] = malloc(num_profiles*sizeof(double*));*/
-/*            for (int j = 0; j < num_profiles; j++)*/
-/*            {*/
-/*                v->profiles[polidx][j] = malloc((num_values+1) * sizeof(double));*/
-/*                memset(v->profiles[polidx][j], 0, (num_values+1) * sizeof(double));*/
-/*            }*/
-            // Allocate space for metrics of the base profile
-/*            v->base_profiles = (double**)realloc_buffer(v->base_profiles, MAX(1, polidx+1)*sizeof(double*));*/
-/*            v->base_profiles[polidx] = malloc((num_values+1) * sizeof(double));*/
-/*            memset(v->base_profiles[polidx], 0, (num_values+1) * sizeof(double));*/
-/*            v->base_timers = (TimerData*)realloc_buffer(v->base_timers, MAX(1, polidx+1)*sizeof(TimerData));*/
-/*            v->base_runtimes = (double*)realloc_buffer(v->base_runtimes, MAX(1, polidx+1)*sizeof(double));*/
-            // Increase the size, we added a policy
-            
         }
         PolicyProfile_t pp = new_pol_profile();
         pp->num_profiles = num_profiles;
@@ -277,19 +244,13 @@ _allocate_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type, int polidx, i
 
         v->policies[polidx] = pp;
         v->num_policies = polidx+1;
-        // Initialize the structure for the new policy
-/*        v->num_profiles[polidx] = num_profiles;*/
-/*        v->num_values[polidx] = num_values;*/
-/*        v->opt_profiles[polidx] = 0;*/
-/*        v->profile_iters[polidx] = profile_iterations;*/
-/*        v->cur_profile_iters[polidx] = 0;*/
-/*        v->base_runtimes[polidx] = 0;*/
+
         v->cur_policy = 0;
-/*        v->cur_profile = -1;*/
-        v->num_events = 0;
+
+/*        v->num_events = 0;*/
         v->num_pes = get_pes_below_obj(tree, type, i);
         v->count = 0;
-        v->events = NULL;
+/*        v->events = NULL;*/
         // The param hash contains the parameters registered at the current node
         //v->param_hash = g_hash_table_new(g_str_hash, g_str_equal);
         pthread_mutex_init(&v->lock, NULL);
@@ -327,20 +288,6 @@ static void _free_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type)
     {
         hwloc_obj_t obj = hwloc_get_obj_by_type(tree, type, i);
         Nodevalues_t v = (Nodevalues_t)obj->userdata;
-/*        for (int j = 0; j < v->num_policies; j++)*/
-/*        {*/
-/*            fprintf(stderr, "Timers %p\n", v->timers[j]);*/
-/*            for (int k = 0; k < v->num_profiles[j]; k++)*/
-/*            {*/
-/*                if (v->profiles[j][k])*/
-/*                    free(v->profiles[j][k]);*/
-/*            }*/
-/*            free(v->profiles[j]);*/
-/*            */
-/*            free(v->timers[j]);*/
-/*            free(v->runtimes[j]);*/
-/*            free(v->base_profiles[j]);*/
-/*        }*/
 
         for (int j = 0; j < v->num_policies; j++)
         {
@@ -355,17 +302,6 @@ static void _free_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type)
         }
         free(v->policies);
         v->policies = NULL;
-/*        free(v->base_profiles);*/
-/*        free(v->base_timers);*/
-/*        free(v->base_runtimes);*/
-/*        free(v->profile_iters);*/
-/*        free(v->cur_profile_iters);*/
-/*        free(v->opt_profiles);*/
-/*        free(v->profiles);*/
-/*        free(v->timers);*/
-/*        free(v->runtimes);*/
-/*        free(v->num_profiles);*/
-/*        free(v->num_values);*/
         pthread_mutex_destroy(&v->lock);
         pthread_cond_destroy(&v->cond);
         if (v->param_hash)

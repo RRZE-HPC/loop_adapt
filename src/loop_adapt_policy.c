@@ -266,40 +266,40 @@ int loop_adapt_add_double_parameter(hwloc_obj_t obj, char* name, char* desc, dou
 /*    return 0;*/
 /*}*/
 
-int loop_adapt_add_event(hwloc_obj_t obj, char* name, char* var, Nodeparametertype type, void* ptr)
-{
-    int ret = 0;
-    Nodevalues_t nv = NULL;
-    Nodeevent_t ne = NULL;
-    
-    if (!obj || !name || !var || !ptr)
-    {
-        return -EINVAL;
-    }
-    nv = (Nodevalues_t)obj->userdata;
-    for (int i=0 ; i < nv->num_events; i++)
-    {
-        ne = nv->events[i];
-        if (strncmp(ne->name, name, strlen(ne->name)))
-        {
-            fprintf(stderr, "Event already exists\n");
-            return 1;
-        }
-    }
-    ne = malloc(sizeof(Nodeevent));
-    if (ne)
-    {
-        ret = asprintf(&ne->name, "%s", name);
-        ret = asprintf(&ne->varname, "%s", var);
-        ne->type = type;
-        ne->ptr = ptr;
+/*int loop_adapt_add_event(hwloc_obj_t obj, char* name, char* var, Nodeparametertype type, void* ptr)*/
+/*{*/
+/*    int ret = 0;*/
+/*    Nodevalues_t nv = NULL;*/
+/*    Nodeevent_t ne = NULL;*/
+/*    */
+/*    if (!obj || !name || !var || !ptr)*/
+/*    {*/
+/*        return -EINVAL;*/
+/*    }*/
+/*    nv = (Nodevalues_t)obj->userdata;*/
+/*    for (int i=0 ; i < nv->num_events; i++)*/
+/*    {*/
+/*        ne = nv->events[i];*/
+/*        if (strncmp(ne->name, name, strlen(ne->name)))*/
+/*        {*/
+/*            fprintf(stderr, "Event already exists\n");*/
+/*            return 1;*/
+/*        }*/
+/*    }*/
+/*    ne = malloc(sizeof(Nodeevent));*/
+/*    if (ne)*/
+/*    {*/
+/*        ret = asprintf(&ne->name, "%s", name);*/
+/*        ret = asprintf(&ne->varname, "%s", var);*/
+/*        ne->type = type;*/
+/*        ne->ptr = ptr;*/
 
-        nv->events = realloc_buffer(nv->events, (nv->num_events+1)*sizeof(Nodeevent_t));
-        nv->events[nv->num_events] = ne;
-        nv->num_events++;
-    }
-    return 0;
-}
+/*        nv->events = realloc_buffer(nv->events, (nv->num_events+1)*sizeof(Nodeevent_t));*/
+/*        nv->events[nv->num_events] = ne;*/
+/*        nv->num_events++;*/
+/*    }*/
+/*    return 0;*/
+/*}*/
 
 int loop_adapt_begin_policies(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj)
 {

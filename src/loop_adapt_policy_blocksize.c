@@ -131,8 +131,8 @@ int loop_adapt_policy_blocksize_begin(int cpuid, hwloc_topology_t tree, hwloc_ob
 
         if (likwid_started)
         {
-/*            if (loop_adapt_debug == 2)*/
-/*                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Reading LIKWID counters on CPU %d Profile %d\n", cpuid, pp->cur_profile);*/
+            if (loop_adapt_debug == 2)
+                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Reading LIKWID counters on CPU %d Profile %d\n", cpuid, pp->cur_profile);
             ret = perfmon_readCountersCpu(cpuid);
         }
     }
@@ -155,8 +155,6 @@ int loop_adapt_policy_blocksize_end(int cpuid, hwloc_topology_t tree, hwloc_obj_
 
         if (likwid_started)
         {
-/*            if (loop_adapt_debug == 2)*/
-/*                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Reading LIKWID counters on CPU %d Profile %d\n", cpuid, pp->cur_profile);*/
             ret = perfmon_readCountersCpu(cpuid);
 
             t = loop_adapt_policy_profile_get_timer(pp);
@@ -169,8 +167,6 @@ int loop_adapt_policy_blocksize_end(int cpuid, hwloc_topology_t tree, hwloc_obj_
             for (int m = 0; m < p->num_metrics; m++)
             {
                 pdata[m] = perfmon_getLastMetric(p->likwid_gid, p->metric_idx[m], obj->logical_index);
-/*                if (loop_adapt_debug == 2)*/
-/*                    printf("Pol %d CPU %d/%d Metric %s %d: %f\n", tdata->cur_policy_id, cpuid, obj->logical_index, p->metrics[m].var, m, pdata[m]);*/
             }
             pp->num_values = p->num_metrics;
             *runtime = timer_print(t);
@@ -227,36 +223,9 @@ int loop_adapt_policy_blocksize_eval(hwloc_topology_t tree, hwloc_obj_t obj)
                 eval = la_calc_evaluate(p, pparam, opt_values, opt_runtime, cur_values, cur_runtime);
                 if (loop_adapt_debug == 2)
                     fprintf(stderr, "DEBUG POL_BLOCKSIZE: Evaluation %s = %d\n", pparam->eval, eval);
-                //if (eval)
-                //{
-                    //pp->opt_profile = pp->cur_profile-1;
-                    //if (loop_adapt_debug == 2)
-                        //fprintf(stderr, "DEBUG POL_BLOCKSIZE: New optimal profile %d\n", pp->opt_profile);
-                    // we search through all parameters and set the best setting to the
-                    // current setting. After the policy is completely evaluated, the
-                    // best setting is returned by GET_[INT/DBL]_PARAMETER
-                    //update_best(pparam, obj, obj);
-                //}
-                //loop_adapt_policy_blocksize_next_param_step(pparam->name, v, pp->cur_profile);
-/*                Nodeparameter_t np = g_hash_table_lookup(v->param_hash, (gpointer)pparam->name);*/
-/*                if (np)*/
-/*                {*/
-/*                    loop_adapt_search_param_next(np);*/
-/*                }*/
             }
         }
     }
-/*    int cur_profile = (v->cur_profile > 0 ? v->cur_profile - 1 : 0);*/
-/*    */
-/*    int opt_profile = v->opt_profiles[v->cur_policy];*/
-/*    double *cur_values = v->profiles[v->cur_policy][cur_profile];*/
-/*    double *opt_values = v->profiles[v->cur_policy][opt_profile];*/
-    
-
-    // Evaluate the condition whether this profile is better than the old
-    // optimal one
-    // evaluate() returns 1 if better, 0 if not
-    
 
     // Walk up the tree to see whether adjustments are required.
     // Currently this does not wait until all subnodes have updated the
