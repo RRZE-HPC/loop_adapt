@@ -1,0 +1,18 @@
+# 17.08.2018
+
+- Profiles are encapsulated in PolicyProfile(s) and each PolicyProfile contains
+  multiple Profiles (one for the base profile and num_profile ones for the runs
+  with changed parameter)
+- Each registered policy has an own PolicyProfile in each Tree node
+- New search algorithms
+  - Search Algorithms are registered to Loop and Policy.
+  - The consist of 4 functions (init, next, best, reset) and a name
+  - Currently, there is only a basic search trying values from min to max (see loop_adapt_search.c)
+  - At each next call, the current value is stored to track the changes and written into file
+- Functions of policies currently very similar, maybe use a common one.
+- Currently no system state change when changing a parameter. Since policies are
+not responsible anymore for changing the paramters but the search algorithms,
+the system state needs to be changed by the search algorithm. But the search
+algorithm has no knowledge about the actual policy, it just manipulates the
+parameters. The solution is that policies provide functions for that and they
+are registered in the Nodeparameters's pre and post functions.
