@@ -8,6 +8,15 @@ extern "C"
 {
 #endif
 
+/**
+ * @file loop_adapt.h
+ * @author Thomas Roehl
+ * @date 19.08.2018
+ * @brief File containing the main API of loop_adapt
+ *
+ * bla bla
+ */
+
 /** \addtogroup LA_Macros loop_adapt macros
 *  @{
 */
@@ -21,33 +30,56 @@ Shortcut for loop_adapt_register(string) if compiled with -DLOOP_ADAPT_ACTIVE. O
 Shortcut for loop_adapt_register_policy(string, policy, num_profiles, iters_per_profile) if compiled with -DLOOP_ADAPT_ACTIVE. Otherwise macro is empty
 */
 /*!
+\def REGISTER_SEARCHALGO(string, policy, search)
+Shortcut for loop_adapt_register_searchalgo(string, policy, search) if compiled with -DLOOP_ADAPT_ACTIVE. Otherwise macro is empty
+*/
+/*!
 \def LA_FOR(name, start, cond, inc)
 Shortcut for for (start; cond && LOOP_BEGIN(name); inc, LOOP_END(name)) if compiled with -DLOOP_ADAPT_ACTIVE. Otherwise macro is resolved to for (start; cond; inc)
 */
+/*!
+\def REGISTER_PARAMETER(string, name, scope, cpu, type, cur, min, max)
+Shortcut for loop_adapt_register_int/double_param if compiled with -DLOOP_ADAPT_ACTIVE based on the given type. Otherwise macro is empty
+*/
+
+/*!
+\def GET_INT_PARAMETER(string, name, orig, scope, cpu)
+Shortcut for loop_adapt_get_int_param if compiled with -DLOOP_ADAPT_ACTIVE. Otherwise macro is empty
+*/
+
+/*!
+\def GET_DBL_PARAMETER(string, name, orig, scope, cpu)
+Shortcut for loop_adapt_get_double_param if compiled with -DLOOP_ADAPT_ACTIVE. Otherwise macro is empty
+*/
+
+/*!
+\def REGISTER_THREAD_COUNT_FUNC(func)
+Shortcut for loop_adapt_register_cpucount_func if compiled with -DLOOP_ADAPT_ACTIVE. Otherwise macro is empty
+*/
+/*!
+\def REGISTER_THREAD_ID_FUNC(func)
+Shortcut for loop_adapt_register_getcpu_func if compiled with -DLOOP_ADAPT_ACTIVE. Otherwise macro is empty
+*/
 /** @}*/
 
-//#include <loop_adapt_types.h>
-//#include <loop_adapt_policy.h>
-static int loop_adapt_debug = 1; /*! \brief  Debug level */
-static int loop_adapt_active = 1; /*! \brief Internal variable whether loop_adapt is active */
+
+
 
 #ifdef LOOP_ADAPT_ACTIVE
 
 /** \addtogroup LA_API loop_adapt API
 *  @{
 */
+static int loop_adapt_debug = 1; /*! \brief  Debug level */
+static int loop_adapt_active = 1; /*! \brief Internal variable whether loop_adapt is active */
+
 /*! \brief  List of topology entities where policies and parameters can be associated to */
 typedef enum {
-    /*! \brief  No type */
-    LOOP_ADAPT_SCOPE_NONE = -1,
-    /*! \brief  Same value as HWLOC_OBJ_MACHINE to ease casting */
-    LOOP_ADAPT_SCOPE_MACHINE = HWLOC_OBJ_MACHINE,
-    /*! \brief  Same value as HWLOC_OBJ_PACKAGE to ease casting */
-    LOOP_ADAPT_SCOPE_SOCKET = HWLOC_OBJ_PACKAGE,
-    /*! \brief  Same value as HWLOC_OBJ_NUMANODE to ease casting */
-    LOOP_ADAPT_SCOPE_NUMA = HWLOC_OBJ_NUMANODE,
-    /*! \brief  Same value as HWLOC_OBJ_PU to ease casting */
-    LOOP_ADAPT_SCOPE_THREAD = HWLOC_OBJ_PU,
+    LOOP_ADAPT_SCOPE_NONE = -1, /**< \brief  No type */
+    LOOP_ADAPT_SCOPE_MACHINE = HWLOC_OBJ_MACHINE, /**< \brief  Same value as HWLOC_OBJ_MACHINE to ease casting */
+    LOOP_ADAPT_SCOPE_SOCKET = HWLOC_OBJ_PACKAGE, /**< \brief  Same value as HWLOC_OBJ_PACKAGE to ease casting */
+    LOOP_ADAPT_SCOPE_NUMA = HWLOC_OBJ_NUMANODE, /**< \brief  Same value as HWLOC_OBJ_NUMANODE to ease casting */
+    LOOP_ADAPT_SCOPE_THREAD = HWLOC_OBJ_PU, /**< \brief  Same value as HWLOC_OBJ_PU to ease casting */
     LOOP_ADAPT_SCOPE_MAX,
 } AdaptScope;
 
@@ -137,42 +169,54 @@ typedef enum {
 /** \addtogroup LA_API loop_adapt API
 *  @{
 */
-/* \brief Register a function that return the number of processing units
+/*! \brief Register a function that return the number of processing units
 (e.g. threads or tasks)
 
 For OpenMP you can use omp_get_num_threads().
+@param handle function pointer (int(*)()) to a function returning the number of processing units
  */
 void loop_adapt_register_cpucount_func(int (*handle)());
-/* \brief Register a function that return the ID of the calling processing unit
+
+/*! \brief Register a function that return the ID of the calling processing unit
 (e.g. thread or task)
+
+@param handle function pointer (int(*)()) to a function returning the ID of the calling processing unit
 */
 void loop_adapt_register_getcpu_func(int (*handle)());
-/* \brief Get the function pointer to retrieve the number of processing units */
+
+/*! \brief Get the function pointer to retrieve the number of processing units */
 void loop_adapt_get_cpucount_func(int (**handle)());
-/* \brief Get the function pointer to retrieve the identifier of a processing
+
+/*! \brief Get the function pointer to retrieve the identifier of a processing
 unit */
 void loop_adapt_get_getcpu_func(int (**handle)());
 
-/* \brief Register a new loop to loop_adapt
+/*! \brief Register a new loop to loop_adapt
 
 This function adds a new loop to loop_adapt. This is done by duplicating the
 base topology tree and register the tree in the global hash table using the loop
 name as key.
+@param string Loop identifier
 */
 void loop_adapt_register(char* string);
 
 
 
-/* \brief Register a policy for a loop 
+/*! \brief Register a policy for a loop 
 
 This function adds a new policy to a loop identified by the loop string. The
 policy is searched in the current binary using dlsym to be more flexible (extra
 shared libs per policy to add them without recompilation). A policy will take
 num_profiles profiles with iters_per_profile iterations per profile.
+
+@param string Loop identifier
+@param polname Name of the policy
+@param num_profiles Number of profiles for this policy
+@param iters_per_profile Number of iterations for each profile
 */
 void loop_adapt_register_policy( char* string, char* polname, int num_profiles, int iters_per_profile);
 
-/* \brief Register a search algorithm for policy in a loop 
+/*! \brief Register a search algorithm for policy in a loop 
 
 This function adds a new search algorithm to a policy in a loop both identified
 by strings. After resolving the appropriate policy, it checks whether the search
@@ -270,7 +314,7 @@ double loop_adapt_get_double_param( char* string, AdaptScope scope, int cpu, cha
 //int loop_adapt_list_policy();
 //void loop_adapt_register_event(char* string, AdaptScope scope, int cpu, char* name, char* var, Nodeparametertype type, void* ptr);
 /** @}*/
-#else
+#else /* LOOP_ADAPT_ACTIVE */
 #define REGISTER_LOOP(s)
 #define REGISTER_POLICY(s, p, num_profiles, iters_per_profile)
 #define REGISTER_SEARCHALGO(string, policy, search)
@@ -295,10 +339,10 @@ double loop_adapt_get_double_param( char* string, AdaptScope scope, int cpu, cha
 
 #define REGISTER_EVENT(s, scope, cpu, name, var, type, ptr)
 
-#endif
+#endif /* LOOP_ADAPT_ACTIVE */
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif
+#endif /* LOOP_ADAPT_H */
