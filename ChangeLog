@@ -10,9 +10,8 @@
   - Currently, there is only a basic search trying values from min to max (see loop_adapt_search.c)
   - At each next call, the current value is stored to track the changes and written into file
 - Functions of policies currently very similar, maybe use a common one.
-- Currently no system state change when changing a parameter. Since policies are
-not responsible anymore for changing the paramters but the search algorithms,
-the system state needs to be changed by the search algorithm. But the search
-algorithm has no knowledge about the actual policy, it just manipulates the
-parameters. The solution is that policies provide functions for that and they
-are registered in the Nodeparameters's pre and post functions.
+
+# 20.08.2018
+- Added pre and post parameter change functions. So if the system changes a
+parameter, it calls the parameter's pre and post functions (if defined).
+The functions are registered in a policies PolicyParameters.
