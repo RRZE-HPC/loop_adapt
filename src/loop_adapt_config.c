@@ -226,15 +226,43 @@ int loop_adapt_write_parameters(char* loopname, hwloc_topology_t tree)
     return 0;
 }
 
+static int read_value(char* value, int* ival, double* dval)
+{
+    int dot = 0;
+    int hex = 0;
+    for (int i = 0; i < strlen(value); i++)
+    {
+        if (value[i] == '.')
+        {
+            dot = 1;
+            break;
+        }
+    }
+    if (!dot)
+    {
+        if (strncmp(value, "0x", 2) == 0) hex = 1;
+    }
+    if (dot)
+    {
+        *dval = atof(value);
+    }
+    else
+    {
+        *ival = atoi(value);
+    }
+    return 0;
+}
+
 static int _loop_adapt_read_parameters(char* fileprefix, hwloc_topology_t tree, hwloc_obj_type_t type)
 {
     int ret = 0;
     FILE *fp = NULL;
     char* fname = NULL;
     char buff[513];
-    char key[128];
-    char val[128];
+    char key[257];
+    char val[257];
     int ival = 0;
+    double dval = 0;
     int nobj = hwloc_get_nbobjs_by_type(tree, type);
     Treedata_t tdata = hwloc_topology_get_userdata(tree);
     for (int i=0; i < nobj; i++)
@@ -259,17 +287,40 @@ static int _loop_adapt_read_parameters(char* fileprefix, hwloc_topology_t tree, 
             {
                 while(fgets(buff, 512, fp) != NULL)
                 {
-                    if (strncmp(buff, "Param", 5) == 0)
+                    if (strncmp(buff, "---", 3) == 0)
+                        continue;
+                    int c = 0;
+                    int s = 0;
+                    memset(key, '\0', 257);
+                    memset(val, '\0', 257);
+                    while (buff[c] != ':') { c++; }
+                    while (buff[s] == ' ' || buff[s] == '-') { s++; }
+                    strncpy(key, &buff[s], c-s);
+                    s = c+1;
+                    while (buff[s] == ' ' || buff[s] == '-') { s++; }
+                    if (c < strlen(buff))
                     {
-                        ret = sscanf(&(buff[6]), "%s", val);
-                        if (ret == 1)
-                        {
-                            ret = asprintf(&p->name, "%s", val);
-                        }
+                        strncpy(val, &buff[s], strlen(buff)-s-1);
                     }
-                    else if (strncmp(buff, "\tType:", 6) == 0)
+                    printf("'%s' : '%s'    : %s\n", key, val, &buff[c+1]);
+                    else if (strncmp(key, "Max", 3) == 0)
                     {
-                        ret = sscanf(&(buff[7]), "%s", val);
+                        read_value(val, &p->max.ival, &p->max.dval);
+                    }
+                    else if (strncmp(key, "Min", 3) == 0)
+                    {
+                        read_value(val, &p->min.ival, &p->min.dval);
+                    }
+                    else if (strncmp(key, "Start", 5) == 0)
+                    {
+                        read_value(val, &p->start.ival, &p->start.dval);
+                    }
+                    else if (strncmp(key, "Best", 4) == 0)
+                    {
+                        read_value(val, &p->best.ival, &p->best.dval);
+                    }
+                    else if (strncmp(key, "Type", 4) == 0)
+                    {
                         if (strncmp(val, "int", 3) == 0)
                         {
                             p->type = NODEPARAMETER_INT;
@@ -279,16 +330,17 @@ static int _loop_adapt_read_parameters(char* fileprefix, hwloc_topology_t tree, 
                             p->type = NODEPARAMETER_DOUBLE;
                         }
                     }
-                    else if (strncmp(buff, "\tSteps:", 7) == 0)
+                    else if (!p->desc && strncmp(key, "Description", 11) == 0 && strlen(val) > 0 && strncmp(val, "(null)", 6) != 0)
                     {
-                        break;
+                        asprintf(&p->desc, "%s", val);
                     }
-                    else
+                    else if (!p->name && strncmp(key, "Steps", 5) != 0 && strlen(val) == 0)
                     {
-                        
+                        asprintf(&p->name, "%s", key);
                     }
                 }
             }
+            g_hash_table_insert(vals->param_hash, p->name, p);
         }
     }
 }
