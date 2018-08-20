@@ -88,6 +88,27 @@ int get_pes_below_obj(hwloc_topology_t tree, AdaptScope scope, int idx)
     return 0;
 }
 
+int loop_adapt_location(hwloc_obj_t obj, char* array, int len)
+{
+    int ret = 0;
+    switch (obj->type)
+    {
+        case HWLOC_OBJ_MACHINE:
+            ret = snprintf(array, len-1, "N");
+            break;
+        case HWLOC_OBJ_NUMANODE:
+            ret = snprintf(array, len-1, "M%d", obj->os_index);
+            break;
+        case HWLOC_OBJ_PACKAGE:
+            ret = snprintf(array, len-1, "S%d", obj->os_index);
+            break;
+        case HWLOC_OBJ_PU:
+            ret = snprintf(array, len-1, "T%d", obj->os_index);
+            break;
+    }
+    return ret;
+}
+
 
 void update_best(PolicyParameter_t pp, hwloc_obj_t baseobj, hwloc_obj_t setobj)
 {

@@ -6,6 +6,7 @@
 
 POL_FUNCS(ompthreads)
 
+int loop_adapt_policy_ompthreads_post_param(char* location, Nodeparameter_t param);
 
 Policy POL_OMPTHREADS = {
     .likwid_group = "ENERGY",
@@ -19,7 +20,9 @@ Policy POL_OMPTHREADS = {
                      "Number of threads",
                      "1",
                      "AVAILABLE_CPUS",
-                     "time_cur < time_opt"} },
+                     "time_cur < time_opt",
+                     NULL,
+                     loop_adapt_policy_ompthreads_post_param} },
     .num_metrics = 1,
     .metrics = {{ "time", "Runtime (RDTSC) [s]"}},
 };

@@ -24,12 +24,8 @@ int loop_adapt_add_policy(hwloc_topology_t tree, Policy *p, int num_cpus, int *c
 int loop_adapt_begin_policies(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj);
 int loop_adapt_end_policies(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj);
 int loop_adapt_exec_policies(hwloc_topology_t tree, hwloc_obj_t obj);
-int loop_adapt_add_int_parameter(hwloc_obj_t obj, char* name, char* desc, int cur, int min, int max, void(*pre)(char* fmt, ...), void(*post)(char* fmt, ...));
-int loop_adapt_add_double_parameter(hwloc_obj_t obj, char* name, char* desc, double cur, double min, double max, void(*pre)(char* fmt, ...), void(*post)(char* fmt, ...));
-//int loop_adapt_add_event(hwloc_obj_t obj, char* name, char* var, Nodeparametertype type, void* ptr);
-//int loop_adapt_reset_parameter(hwloc_topology_t tree, Policy_t p);
-//int loop_adapt_best_parameter(hwloc_topology_t tree, Policy_t p);
-//int loop_adapt_first_parameter(hwloc_topology_t tree, Policy_t p);
+int loop_adapt_add_int_parameter(hwloc_obj_t obj, char* name, char* desc, int cur, int min, int max);
+int loop_adapt_add_double_parameter(hwloc_obj_t obj, char* name, char* desc, double cur, double min, double max);
 
 int loop_adapt_init_parameter(hwloc_obj_t obj, Policy_t policy);
 

@@ -408,7 +408,7 @@ void loop_adapt_register_int_param( char* string,
                 if (loop_adapt_debug)
                     fprintf(stderr, "DEBUG: Parameter %s: %d/%d/%d at %s %d\n", name, min, cur, max, loop_adapt_type_name(obj->type), obj->logical_index);
                 // Add the parameter to the object's parameter hash
-                loop_adapt_add_int_parameter(obj, name, desc, cur, min, max, NULL, NULL);
+                loop_adapt_add_int_parameter(obj, name, desc, cur, min, max);
 
             }
         }
@@ -534,7 +534,7 @@ void loop_adapt_register_double_param( char* string,
                         fprintf(stderr, "DEBUG: Calculating maximum for %s: %f\n", name, max);
                 }
                 //printf("Add parameter %s with min %f and max %f\n", name, min, max);
-                loop_adapt_add_double_parameter(obj, name, desc, cur, min, max, NULL, NULL);
+                loop_adapt_add_double_parameter(obj, name, desc, cur, min, max);
             }
         }
     }

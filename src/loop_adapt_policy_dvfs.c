@@ -19,6 +19,8 @@ static int num_freqs = 0;
 static double* freqs = NULL;
 
 
+
+
 static void parse_avail_freqs(char* s)
 {
     int num_f = 0;
@@ -46,7 +48,82 @@ static void parse_avail_freqs(char* s)
         }
         token = strtok(NULL, split);
     }
+    
 }
+
+int loop_adapt_policy_ompthreads_post_param_cpu(char* location, Nodeparameter_t param)
+{
+    if (strncmp(location, "T", 1) == 0)
+    {
+        int threadid = 0;
+        int ret = sscanf(location, "T%d", &threadid);
+        if (ret == 1 && threadid >= 0 && threadid < dvfs_num_cpus )
+        {
+            double f = param->cur.dval;
+            if (f > 0)
+            {
+                for (int i = 0; i < num_freqs; i++)
+                {
+                    if (freqs[i] == f)
+                    {
+                        freq_setCpuClockMin(threadid, (uint64_t)(f*1E6));
+                        freq_setCpuClockMax(threadid, (uint64_t)(f*1E6));
+                        freq_setCpuClockMin(threadid, (uint64_t)(f*1E6));
+                        freq_setCpuClockMax(threadid, (uint64_t)(f*1E6));
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                fprintf(stderr, "ERROR POL_DVFS: Given frequency %f not available\n", f);
+            }
+        }
+        else
+        {
+            fprintf(stderr, "ERROR POL_DVFS: Thread ID not valid\n");
+        }
+    }
+    else
+    {
+        fprintf(stderr, "ERROR POL_DVFS: Location argument for post function invalid. Accepts just 'Tx' where x is the thread ID.\n");
+    }
+    return -EINVAL;
+}
+
+int loop_adapt_policy_ompthreads_post_param_uncore(char* location, Nodeparameter_t param)
+{
+    topology_init();
+    if (strncmp(location, "S", 1) == 0)
+    {
+        int socketid = 0;
+        CpuTopology_t topo = get_cpuTopology();
+        int ret = sscanf(location, "S%d", &socketid);
+        if (ret == 1 && socketid >= 0 && socketid < topo->numSockets )
+        {
+            double f = param->cur.dval;
+            if (f > 0)
+            {
+                freq_setUncoreFreqMin(socketid, (uint64_t)(f*1E6));
+                freq_setUncoreFreqMax(socketid, (uint64_t)(f*1E6));
+            }
+            else
+            {
+                fprintf(stderr, "ERROR POL_DVFS: Uncore frequency %f must be greater than zero\n", f);
+            }
+        }
+        else
+        {
+            fprintf(stderr, "ERROR POL_DVFS: Socket ID not valid\n");
+        }
+    }
+    else
+    {
+        fprintf(stderr, "ERROR POL_DVFS: Location argument for post function invalid. Accepts just 'Sx' where x is the socket ID.\n");
+    }
+    return -EINVAL;
+}
+
 
 int loop_adapt_policy_dvfs_init(int num_cpus, int* cpulist, int num_profiles)
 {

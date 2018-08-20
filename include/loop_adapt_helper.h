@@ -28,6 +28,6 @@ void set_param_min(char* param, Nodevalues_t vals);
 void set_param_max(char* param, Nodevalues_t vals);
 void set_param_step(char* param, Nodevalues_t vals, int step);
 
-
+int loop_adapt_location(hwloc_obj_t obj, char* array, int len);
 
 #endif

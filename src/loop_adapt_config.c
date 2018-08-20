@@ -47,41 +47,45 @@ void _loop_adapt_write_type_parameter_func(gpointer key, gpointer val, gpointer 
     fp = fopen(filename, "w");
     if (fp)
     {
+        fprintf(fp, "---\n");
         fprintf(fp, "%s:\n", param->name);
         if (param->desc != NULL)
         {
-            fprintf(fp, "\tDescription: %s\n", param->desc);
+            fprintf(fp, " Description: %s\n", param->desc);
         }
         if (param->type == NODEPARAMETER_INT)
         {
-            fprintf(fp, "\tType: int\n");
-            fprintf(fp, "\tMin: %d\n", param->min.ival);
-            fprintf(fp, "\tMax: %d\n", param->max.ival);
-            fprintf(fp, "\tStart: %d\n", param->start.ival);
+            fprintf(fp, " Type: int\n");
+            fprintf(fp, " Min: %d\n", param->min.ival);
+            fprintf(fp, " Max: %d\n", param->max.ival);
+            fprintf(fp, " Start: %d\n", param->start.ival);
             if (param->has_best)
-                fprintf(fp, "\tBest: %d\n", param->best.ival);
+                fprintf(fp, " Best: %d\n", param->best.ival);
             else
-                fprintf(fp, "\tBest: %d\n", param->start.ival);
-            fprintf(fp, "\tCur: %d\n", param->cur.ival);
-            fprintf(fp, "\tSteps:\n");
+                fprintf(fp, " Best: %d\n", param->start.ival);
+            fprintf(fp, " Cur: %d\n", param->cur.ival);
+            fprintf(fp, " Steps:\n");
             for (int i = 0; i < param->num_old_vals; i++)
             {
-                fprintf(fp, "\t\t- %d\n", param->old_vals[i].ival);
+                fprintf(fp, "  - %d\n", param->old_vals[i].ival);
             }
             fprintf(fp, "\n");
         }
         else if (param->type == NODEPARAMETER_DOUBLE)
         {
-            fprintf(fp, "\tType: double\n");
-            fprintf(fp, "\tMin: %f\n", param->min.dval);
-            fprintf(fp, "\tMax: %f\n", param->max.dval);
-            fprintf(fp, "\tStart: %f\n", param->start.dval);
-            fprintf(fp, "\tBest: %f\n", param->best.dval);
-            fprintf(fp, "\tCur: %f\n", param->cur.dval);
-            fprintf(fp, "\tSteps:\n");
+            fprintf(fp, " Type: double\n");
+            fprintf(fp, " Min: %f\n", param->min.dval);
+            fprintf(fp, " Max: %f\n", param->max.dval);
+            fprintf(fp, " Start: %f\n", param->start.dval);
+            if (param->has_best)
+                fprintf(fp, " Best: %f\n", param->best.dval);
+            else
+                fprintf(fp, " Best: %f\n", param->start.dval);
+            fprintf(fp, " Cur: %f\n", param->cur.dval);
+            fprintf(fp, " Steps:\n");
             for (int i = 0; i < param->num_old_vals; i++)
             {
-                fprintf(fp, "\t\t- %f\n", param->old_vals[i].dval);
+                fprintf(fp, "  - %f\n", param->old_vals[i].dval);
             }
             fprintf(fp, "\n");
         }
@@ -111,36 +115,34 @@ static int _loop_adapt_write_type_profiles(char* fileprefix, hwloc_topology_t tr
         fp = fopen(fname, "w");
         if (fp)
         {
-            fprintf(fp, "Node Type %s Index %d\n", loop_adapt_type_name(obj->type), obj->os_index);
+            fprintf(fp, "---\n");
+            fprintf(fp, "%s-%d:\n", loop_adapt_type_name(obj->type), obj->os_index);
+            fprintf(fp, " CurrentPolicy: %d\n", vals->cur_policy);
             for (int p=0; p < vals->num_policies; p++)
             {
-                char* polname = tdata->policies[p]->name;
-                char* poldesc = tdata->policies[p]->desc;
-                fprintf(fp, "- Policy: %d %s (%s)\n", p, polname, (poldesc ? poldesc : "No description"));
-                fprintf(fp, "- Current policy: %d\n", vals->cur_policy);
-                fprintf(fp, "- Number of profiles: %d\n", pp->num_profiles);
-                fprintf(fp, "- Current profile: %d\n", pp->cur_profile);
-                fprintf(fp, "- Number of values per profile: %d\n", tdata->policies[p]->num_metrics);
-                fprintf(fp, "- Number of iterations: %d\n", pp->profile_iters);
-                fprintf(fp, "- Optimal profile: %d\n", pp->opt_profile);
-                fprintf(fp, "- Start Profile\n", 0);
+                fprintf(fp, " Policy%d:\n", p);
+                fprintf(fp, "  Name: %s\n", tdata->policies[p]->name);
+                fprintf(fp, "  InternalName: %s\n", tdata->policies[p]->internalname);
+                fprintf(fp, "  Description: %s\n", tdata->policies[p]->desc);
+                fprintf(fp, "  NumProfiles: %d\n", pp->num_profiles);
+                fprintf(fp, "  NumValues: %d\n", tdata->policies[p]->num_metrics);
+                fprintf(fp, "  NumIterations: %d\n", pp->profile_iters);
+                fprintf(fp, "  CurrentProfile: %d\n", pp->cur_profile);
+                fprintf(fp, "  OptimalProfile: %d\n", pp->opt_profile);
+                fprintf(fp, "  BaseProfile:\n");
                 for (int v = 0; v < tdata->policies[p]->num_metrics; v++)
                 {
-                    fprintf(fp, "-- Value %s: %f\n", tdata->policies[p]->metrics[v].var, pp->base_profile->values[v]);
+                    fprintf(fp, "    %s: %f\n", tdata->policies[p]->metrics[v].var, pp->base_profile->values[v]);
                 }
                 for (int k = 1; k < pp->num_profiles; k++)
                 {
-                    fprintf(fp, "- Profile: %d\n", k);
+                    fprintf(fp, "  Profile%d:\n", k);
                     for (int v = 0; v < tdata->policies[p]->num_metrics; v++)
                     {
-                        fprintf(fp, "-- Value %s: %f\n", tdata->policies[p]->metrics[v].var, pp->profiles[k]->values[v]);
+                        fprintf(fp, "    %s: %f\n", tdata->policies[p]->metrics[v].var, pp->profiles[k]->values[v]);
                     }
                 }
             }
-/*            if (vals->param_hash)*/
-/*            {*/
-/*                g_hash_table_foreach(vals->param_hash, _loop_adapt_write_type_parameter_func, fp);*/
-/*            }*/
             fclose(fp);
             free(fname);
         }

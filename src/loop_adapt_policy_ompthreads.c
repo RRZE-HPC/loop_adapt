@@ -18,11 +18,33 @@ static int ompthreads_num_cpus = 0;
 static int ompthreads_active_cpus = 0;
 static int* ompthreads_cpus = NULL;
 
-static int thread_inc = 0;
-static int thread_start = 0;
-static int thread_init = 0;
+static int ompthreads_init_value = 0;
 
 static cpu_set_t loop_adapt_ompthreads_cpuset;
+
+int loop_adapt_policy_ompthreads_post_param(char* location, Nodeparameter_t param)
+{
+    if (strncmp(location, "N", 1) == 0)
+    {
+        int num_threads = param->cur.ival;
+        if (num_threads > 0)
+        {
+            if (loop_adapt_debug)
+                fprintf(stderr, "DEBUG: Setting OpenMP threads to %d\n", num_threads);
+            omp_set_num_threads(num_threads);
+            return 0;
+        }
+        else
+        {
+            fprintf(stderr, "ERROR POL_OMPTHREADS: Parameter value for post function invalid. Accepts just > 0\n");
+        }
+    }
+    else
+    {
+        fprintf(stderr, "ERROR POL_OMPTHREADS: Location argument for post function invalid. Accepts just 'N'\n");
+    }
+    return -EINVAL;
+}
 
 int loop_adapt_policy_ompthreads_init(int num_cpus, int* cpulist, int num_profiles)
 {
@@ -53,7 +75,9 @@ int loop_adapt_policy_ompthreads_init(int num_cpus, int* cpulist, int num_profil
     memcpy(ompthreads_cpus, cpulist, ompthreads_num_cpus * sizeof(int));
 
     if (getenv("OMP_NUM_THREADS"))
-        thread_init = atoi(getenv("OMP_NUM_THREADS"));
+    {
+        ompthreads_init_value = atoi(getenv("OMP_NUM_THREADS"));
+    }
     CPU_ZERO(&loop_adapt_ompthreads_cpuset);
     int ret = sched_getaffinity(0, sizeof(loop_adapt_ompthreads_cpuset), &loop_adapt_ompthreads_cpuset);
     ompthreads_active_cpus = CPU_COUNT(&loop_adapt_ompthreads_cpuset);

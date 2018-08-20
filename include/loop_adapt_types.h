@@ -32,36 +32,7 @@ typedef union {
 } Value;
 
 
-/*! \brief Description of a policy parameter
 
-This structure describes a parameter associated to a policy. It contains the
-name, description and default mimimum and maximum values if nothing is given
-by the user. The eval string is evaluated during the policy's eval function to
-see whether the parameter benefits from changing its value. It uses the
-variable names defined by PolicyMetric with suffixes '_cur' and '_opt' for
-current profile value and optimal (or base) profile value.
-*/
-typedef struct {
-    char* name; /**< \brief Name of the parameter */
-    char* desc; /**< \brief Description of the parameter */
-    char* def_min; /**< \brief Default mimimum of the parameter */
-    char* def_max; /**< \brief Default maximum of the parameter */
-    char* eval; /**< \brief Evaluation formula for the parameter */
-} PolicyParameter;
-/*! \brief Pointer to a PolicyParameter structure */
-typedef PolicyParameter* PolicyParameter_t;
-
-
-/*! \brief Mapping of variable name to metric name
-
-Since working on full metric names is no fun, we establish a mapping from
-metric names to variable names. The variables are use in the evaluation string
-for a policy parameter.
-*/
-typedef struct {
-    char* var; /**< \brief Variable name */
-    char* name; /**< \brief Metric name */
-} PolicyMetric;
 
 
 /*! \brief Base structure of a search algorithm
@@ -84,8 +55,6 @@ typedef struct {
     Value max; /**< \brief Maximal value (maximum at registration) */
     int num_old_vals; /**< \brief Number of recorded (tried) parameter values (should be same as change) */
     Value* old_vals; /**< \brief Storage of recorded (tried) parameter values */
-    void (*pre)(char* fmt, ...); /**< \brief Function called before changing the paramter (currently unused) */
-    void (*post)(char* fmt, ...); /**< \brief Function called after changing the paramter (currently unused) */
 } Nodeparameter;
 /*! \brief Pointer to a Nodeparameter structure */
 typedef Nodeparameter* Nodeparameter_t;
@@ -106,6 +75,40 @@ typedef struct {
 } SearchAlgorithm;
 /*! \brief Pointer to a SearchAlgorithm structure */
 typedef SearchAlgorithm* SearchAlgorithm_t;
+
+
+/*! \brief Description of a policy parameter
+
+This structure describes a parameter associated to a policy. It contains the
+name, description and default mimimum and maximum values if nothing is given
+by the user. The eval string is evaluated during the policy's eval function to
+see whether the parameter benefits from changing its value. It uses the
+variable names defined by PolicyMetric with suffixes '_cur' and '_opt' for
+current profile value and optimal (or base) profile value.
+*/
+typedef struct {
+    char* name; /**< \brief Name of the parameter */
+    char* desc; /**< \brief Description of the parameter */
+    char* def_min; /**< \brief Default mimimum of the parameter */
+    char* def_max; /**< \brief Default maximum of the parameter */
+    char* eval; /**< \brief Evaluation formula for the parameter */
+    int (*pre)(char* location, Nodeparameter_t param); /**< \brief Function called before changing the parameter */
+    int (*post)(char* location, Nodeparameter_t param); /**< \brief Function called after changing the parameter */
+} PolicyParameter;
+/*! \brief Pointer to a PolicyParameter structure */
+typedef PolicyParameter* PolicyParameter_t;
+
+
+/*! \brief Mapping of variable name to metric name
+
+Since working on full metric names is no fun, we establish a mapping from
+metric names to variable names. The variables are use in the evaluation string
+for a policy parameter.
+*/
+typedef struct {
+    char* var; /**< \brief Variable name */
+    char* name; /**< \brief Metric name */
+} PolicyMetric;
 
 /*! \brief Base structure of a policy
 
