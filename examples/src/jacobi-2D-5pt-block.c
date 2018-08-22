@@ -98,11 +98,11 @@ int main()
             //for(int iter=1;iter<=niter;++iter)
             {
                 //printf("Iter %d\n", iter);
-#pragma omp parallel
-{
                 int blockSize = 5123;
                 int cpu = sched_getcpu();
                 GET_INT_PARAMETER("SWEEP", "blksize", blockSize, LOOP_ADAPT_SCOPE_MACHINE, cpu);
+#pragma omp parallel
+{
                 int nBlocks = (int) (Size/((double)blockSize));
                 for(int bs=0; bs<(nBlocks+1); ++bs)
                 {
