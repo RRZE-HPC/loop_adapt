@@ -433,6 +433,7 @@ int loop_adapt_get_int_param( char* string, AdaptScope scope, int cpu, char* nam
     TimerData t;
     hwloc_topology_t tree = NULL;
     // Check whether the loop was registered
+    pthread_mutex_lock(&loop_adapt_global_hash_lock);
     tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
 
     if (tree && cpu >= 0 && cpu < num_cpus)
@@ -457,7 +458,6 @@ int loop_adapt_get_int_param( char* string, AdaptScope scope, int cpu, char* nam
                 fprintf(stderr, "DEBUG: Get param %s for %s above CPU %d (Idx %d): ",name, loop_adapt_type_name(scope), cpu, objidx);
             }
         }
-        
 
         hwloc_obj_t obj = hwloc_get_obj_by_type(tree, scope, objidx);
         Nodevalues_t v = (Nodevalues_t)obj->userdata;
@@ -466,6 +466,7 @@ int loop_adapt_get_int_param( char* string, AdaptScope scope, int cpu, char* nam
         if (v && v->policies && v->param_hash)
         {
             // Get the parameter data from object's parameter hash table
+            pthread_mutex_lock(&v->lock);
             Nodeparameter_t np = g_hash_table_lookup(v->param_hash, (gpointer) name);
             if (np)
             {
@@ -473,10 +474,12 @@ int loop_adapt_get_int_param( char* string, AdaptScope scope, int cpu, char* nam
                     fprintf(stderr, "%s = %d\n", name, np->cur.ival);
                 ret = np->cur.ival;
             }
+            pthread_mutex_unlock(&v->lock);
         }
         if (loop_adapt_debug)
             fflush(stderr);
     }
+    pthread_mutex_unlock(&loop_adapt_global_hash_lock);
     return ret;
 }
 
@@ -506,7 +509,6 @@ void loop_adapt_register_double_param( char* string,
     }
     tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
 
-    
     if (cpu >= 0 && cpu < num_cpus)
     {
         tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
@@ -738,13 +740,7 @@ static int _loop_adapt_policy_tree(char* string, hwloc_topology_t tree)
                     PolicyProfile_t pp = vals->policies[vals->cur_policy];
                     if (pp->cur_profile > 0 && pp->cur_profile <= pp->num_profiles && !vals->done && pp->cur_profile_iters == 0)
                     {
-                        if (loop_adapt_debug)
-                            printf("Analyse %s %d\n", loop_adapt_type_name( p->scope), i);
                         loop_adapt_exec_policies(tree, obj);
-                    }
-                    else if (pp->cur_profile == 0)
-                    {
-                        loop_adapt_init_parameter(obj, p);
                     }
                     if (pp->cur_profile == pp->num_profiles)
                     {
@@ -809,23 +805,27 @@ static int _loop_adapt_end_cpu(hwloc_topology_t tree, int cpuid)
         if (cpu_vals)
         {
             PolicyProfile_t p = cpu_vals->policies[cpu_vals->cur_policy];
-
-            if (p->cur_profile_iters < p->profile_iters-1 && p->cur_profile < p->num_profiles)
+            int update_profile = p->cur_profile;
+            if (p->cur_profile < p->num_profiles)
             {
-                /* More iterations are required for the profile */
-                p->cur_profile_iters++;
-            }
-            else if (p->cur_profile_iters == p->profile_iters-1 && p->cur_profile < p->num_profiles)
-            {
-                /* Stop the loop measurements */
-                loop_adapt_end_policies(cpuid, tree, cpu_obj);
-                int update_profile = p->cur_profile;
-                p->cur_profile++;
-                p->cur_profile_iters = 0;
-                /* Update results in the whole tree */
+                if (p->cur_profile_iters < p->profile_iters-1)
+                {
+                    /* More iterations are required for the profile */
+                    p->cur_profile_iters++;
+                }
+                else
+                {
+                    /* Stop the loop measurements */
+                    loop_adapt_end_policies(cpuid, tree, cpu_obj);
+                    p->cur_profile++;
+                    if (p->cur_profile == 0)
+                        loop_adapt_init_parameter(cpu_obj, pol);
+                    p->cur_profile_iters = 0;
+                    /* Update results in the whole tree */
+                }
                 update_tree(cpu_obj, update_profile);
             }
-            if (p->cur_profile == p->num_profiles)
+            else if (p->cur_profile == p->num_profiles)
             {
                 // Mark the policy as done if we measured num_profiles profiles
                 pol->done = 1;

@@ -204,15 +204,7 @@ static int combine_pol_profiles(PolicyProfile_t in, PolicyProfile_t inout, int p
         inprofile = in->base_profile;
         outprofile = inout->base_profile;
     }
-/*    if (inout->cur_profile >= 0)*/
-/*    {*/
-/*        outprofile = inout->profiles[inout->cur_profile];*/
-/*    }*/
-/*    else*/
-/*    {*/
-/*        outprofile = inout->base_profile;*/
-/*    }*/
-    inout->cur_profile_iters = MAX(inout->cur_profile_iters, in->cur_profile_iters);
+    inout->cur_profile_iters = in->cur_profile_iters;
     inout->num_profiles = MAX(inout->num_profiles, in->num_profiles);
     inout->profile_iters = MAX(inout->profile_iters, in->profile_iters);
     inout->cur_profile = MAX(inout->cur_profile, in->cur_profile);
@@ -262,6 +254,7 @@ _allocate_nodevalues(hwloc_topology_t tree, hwloc_obj_type_t type, int polidx, i
             pp->profiles[i]->id = i;
         }
         pp->base_profile = new_profile();
+        pp->base_profile->id = -1;
 
         v->policies[polidx] = pp;
         v->num_policies = polidx+1;

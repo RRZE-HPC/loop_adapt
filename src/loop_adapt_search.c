@@ -22,6 +22,8 @@ int basic_search_init(Nodeparameter_t np)
 int basic_search_next(Nodeparameter_t np)
 {
     Value old;
+    if (np->change == 0)
+        np->change = 1;
     switch (np->type)
     {
         case NODEPARAMETER_INT:
@@ -32,7 +34,7 @@ int basic_search_next(Nodeparameter_t np)
                     double min = (double)np->min.ival;
                     double max = (double)np->max.ival;
                     double s = ceil(abs(max-min+1) / (np->steps+1));
-                    np->cur.ival = MIN((int)(np->change > 0 ? np->cur.ival + s : np->min.ival), np->max.ival);
+                    np->cur.ival = MIN((int)(np->change >= 0 ? np->min.ival + (s*np->change) : np->min.ival), np->max.ival);
                 }
                 else if (np->has_best)
                 {
@@ -52,7 +54,7 @@ int basic_search_next(Nodeparameter_t np)
                     double min = (double)np->min.dval;
                     double max = (double)np->max.dval;
                     double s = ceil(abs(max-min+1) / (np->steps+1));
-                    np->cur.dval = MIN((int)(np->change > 0 ? np->cur.dval + s : np->min.dval), np->max.dval);
+                    np->cur.dval = MIN((int)(np->change >= 0 ? np->min.ival + (s*np->change) : np->min.dval), np->max.dval);
                 }
                 else if (np->has_best)
                 {
@@ -94,6 +96,7 @@ int basic_search_reset(Nodeparameter_t np)
             np->cur.dval = (!np->has_best ? np->start.dval : np->best.dval);
             break;
     }
+    np->change = np->steps+1;
 }
 
 /* Or use the dlopen method to be prepared to load various search algorithms
@@ -182,10 +185,22 @@ int loop_adapt_search_param_reset(SearchAlgorithm_t s, Nodeparameter_t np)
     {
         Value old = np->cur;
         s->reset(np);
-        if (np->old_vals[np->num_old_vals-1].ival != old.ival)
+        switch (np->type)
         {
-            np->old_vals[np->num_old_vals] = old;
-            np->num_old_vals++;
+            case NODEPARAMETER_INT:
+                if (np->old_vals[np->num_old_vals-1].ival != old.ival)
+                {
+                    np->old_vals[np->num_old_vals] = old;
+                    np->num_old_vals++;
+                }
+                break;
+            case NODEPARAMETER_DOUBLE:
+                if (np->old_vals[np->num_old_vals-1].dval != old.dval)
+                {
+                    np->old_vals[np->num_old_vals] = old;
+                    np->num_old_vals++;
+                }
+                break;
         }
     }
     return 0;

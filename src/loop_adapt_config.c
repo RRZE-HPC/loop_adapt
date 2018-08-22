@@ -303,7 +303,7 @@ static int _loop_adapt_read_parameters(char* fileprefix, hwloc_topology_t tree, 
                         strncpy(val, &buff[s], strlen(buff)-s-1);
                     }
                     printf("'%s' : '%s'    : %s\n", key, val, &buff[c+1]);
-                    else if (strncmp(key, "Max", 3) == 0)
+                    if (strncmp(key, "Max", 3) == 0)
                     {
                         read_value(val, &p->max.ival, &p->max.dval);
                     }
@@ -332,11 +332,11 @@ static int _loop_adapt_read_parameters(char* fileprefix, hwloc_topology_t tree, 
                     }
                     else if (!p->desc && strncmp(key, "Description", 11) == 0 && strlen(val) > 0 && strncmp(val, "(null)", 6) != 0)
                     {
-                        asprintf(&p->desc, "%s", val);
+                        ret = asprintf(&p->desc, "%s", val);
                     }
                     else if (!p->name && strncmp(key, "Steps", 5) != 0 && strlen(val) == 0)
                     {
-                        asprintf(&p->name, "%s", key);
+                        ret = asprintf(&p->name, "%s", key);
                     }
                 }
             }

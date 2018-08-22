@@ -25,7 +25,7 @@ STATIC int NAME(hwloc_obj_t obj, Policy_t policy) \
             ret = loop_adapt_location(obj, loc, 1024); \
             if (ret > 0) \
             { \
-                for (int i = 0; i < policy->num_parameters; i++) \
+                for (int i = 0; i < policy->num_parameters && vals->param_hash; i++) \
                 { \
                     Nodeparameter_t param = g_hash_table_lookup(vals->param_hash, policy->parameters[i].name); \
                     if (param) \
@@ -55,10 +55,6 @@ STATIC int NAME(hwloc_obj_t obj, Policy_t policy) \
             { \
                 fprintf(stderr, "ERROR: Cannot create location string\n"); \
             } \
-        } \
-        else \
-        { \
-            fprintf(stderr, "ERROR: Tree node %s %d without node values\n", loop_adapt_type_name(walker->type), walker->os_index); \
         } \
         walker = walker->parent; \
     } \
@@ -341,10 +337,6 @@ int loop_adapt_exec_policies(hwloc_topology_t tree, hwloc_obj_t obj)
                 pp->opt_profile = pp->cur_profile-1;
                 loop_adapt_best_parameter(obj, cur_p);
                 loop_adapt_next_parameter(obj, cur_p);
-            }
-            else if (pp->cur_profile < 0)
-            {
-                loop_adapt_init_parameter(obj, cur_p);
             }
             else if (pp->cur_profile <= pp->num_profiles-1)
             {
