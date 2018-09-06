@@ -51,33 +51,48 @@ static void parse_avail_freqs(char* s)
     
 }
 
-int loop_adapt_policy_ompthreads_post_param_cpu(char* location, Nodeparameter_t param)
+int loop_adapt_policy_dvfs_post_param_cpu(char* location, Nodeparameter_t param)
 {
-    if (strncmp(location, "T", 1) == 0)
+    if (strncmp(location, "S", 1) == 0)
     {
+        int socketid = 0;
         int threadid = 0;
-        int ret = sscanf(location, "T%d", &threadid);
-        if (ret == 1 && threadid >= 0 && threadid < dvfs_num_cpus )
+        int f_valid = 0;
+        double f = param->cur.dval;
+        printf("%f\n", f);
+        CpuTopology_t topo = get_cpuTopology();
+        if (f > 0)
         {
-            double f = param->cur.dval;
-            if (f > 0)
+            for (int i = 0; i < num_freqs; i++)
             {
-                for (int i = 0; i < num_freqs; i++)
+                if (freqs[i] == f)
                 {
-                    if (freqs[i] == f)
-                    {
-                        freq_setCpuClockMin(threadid, (uint64_t)(f*1E6));
-                        freq_setCpuClockMax(threadid, (uint64_t)(f*1E6));
-                        freq_setCpuClockMin(threadid, (uint64_t)(f*1E6));
-                        freq_setCpuClockMax(threadid, (uint64_t)(f*1E6));
-                        break;
-                    }
+                    
+                    f_valid = 1;
+                    break;
                 }
             }
-            else
+        }
+        if (f <= 0 || !f_valid)
+        {
+            fprintf(stderr, "ERROR POL_DVFS: Given frequency %f not available or not valid\n", f);
+            return -EINVAL;
+        }
+        int ret = sscanf(location, "S%d", &socketid);
+        if (ret == 1 && socketid >= 0 && socketid < topo->numSockets )
+        {
+            for (int i=0; i < topo->numHWThreads; i++)
             {
-                fprintf(stderr, "ERROR POL_DVFS: Given frequency %f not available\n", f);
+                if (topo->threadPool[i].packageId == socketid && topo->threadPool[i].inCpuSet)
+                {
+                    freq_setCpuClockMin(topo->threadPool[i].apicId, (uint64_t)(f*1E6));
+                    freq_setCpuClockMax(topo->threadPool[i].apicId, (uint64_t)(f*1E6));
+                    freq_setCpuClockMin(topo->threadPool[i].apicId, (uint64_t)(f*1E6));
+                    freq_setCpuClockMax(topo->threadPool[i].apicId, (uint64_t)(f*1E6));
+                    fprintf(stdout, "Pinning frequency to %f for CPU %d\n", f, topo->threadPool[i].apicId);
+                }
             }
+            return 0;
         }
         else
         {
@@ -86,12 +101,12 @@ int loop_adapt_policy_ompthreads_post_param_cpu(char* location, Nodeparameter_t 
     }
     else
     {
-        fprintf(stderr, "ERROR POL_DVFS: Location argument for post function invalid. Accepts just 'Tx' where x is the thread ID.\n");
+        fprintf(stderr, "ERROR POL_DVFS: Location argument %s for post function invalid. Accepts just 'Sx' where x is the socket ID.\n", location);
     }
     return -EINVAL;
 }
 
-int loop_adapt_policy_ompthreads_post_param_uncore(char* location, Nodeparameter_t param)
+int loop_adapt_policy_dvfs_post_param_uncore(char* location, Nodeparameter_t param)
 {
     topology_init();
     if (strncmp(location, "S", 1) == 0)
@@ -119,7 +134,7 @@ int loop_adapt_policy_ompthreads_post_param_uncore(char* location, Nodeparameter
     }
     else
     {
-        fprintf(stderr, "ERROR POL_DVFS: Location argument for post function invalid. Accepts just 'Sx' where x is the socket ID.\n");
+        fprintf(stderr, "ERROR POL_DVFS: Location argument %s for post function invalid. Accepts just 'Sx' where x is the socket ID.\n", location);
     }
     return -EINVAL;
 }

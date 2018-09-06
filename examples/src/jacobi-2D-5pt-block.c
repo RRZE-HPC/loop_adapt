@@ -45,9 +45,10 @@ int main()
     REGISTER_THREAD_COUNT_FUNC(omp_get_num_threads);
     REGISTER_THREAD_ID_FUNC(sched_getcpu);
     REGISTER_LOOP("SWEEP");
-    REGISTER_POLICY("SWEEP", "POL_BLOCKSIZE", NUM_PROFILES, 10);
-    REGISTER_SEARCHALGO("SWEEP", "POL_BLOCKSIZE", "SEARCH_BASIC");
-    //REGISTER_POLICY("SWEEP", "POL_DVFS", NUM_PROFILES, 1);
+/*    REGISTER_POLICY("SWEEP", "POL_BLOCKSIZE", NUM_PROFILES, 10);*/
+/*    REGISTER_SEARCHALGO("SWEEP", "POL_BLOCKSIZE", "SEARCH_BASIC");*/
+    REGISTER_POLICY("SWEEP", "POL_DVFS", NUM_PROFILES, 10);
+    REGISTER_SEARCHALGO("SWEEP", "POL_DVFS", "SEARCH_BASIC");
 
 
     int Size = 10000;
@@ -65,11 +66,11 @@ int main()
 /*    {*/
 
     int cpu = sched_getcpu();
-    REGISTER_PARAMETER("SWEEP", "blksize", LOOP_ADAPT_SCOPE_MACHINE, cpu, NODEPARAMETER_INT, (cacheSize/(3.0*8*2)), (cacheSize/(3.0*8*3)), (cacheSize/(3.0*8)));
+/*    REGISTER_PARAMETER("SWEEP", "blksize", LOOP_ADAPT_SCOPE_MACHINE, cpu, NODEPARAMETER_INT, (cacheSize/(3.0*8*2)), (cacheSize/(3.0*8*3)), (cacheSize/(3.0*8)));*/
 #pragma omp parallel
 {
-/*    REGISTER_PARAMETER("SWEEP", LOOP_ADAPT_SCOPE_SOCKET, "cfreq", cpu, NODEPARAMETER_DOUBLE, 0, 0, 0);*/
-/*    REGISTER_PARAMETER("SWEEP", LOOP_ADAPT_SCOPE_SOCKET, "ufreq", cpu, NODEPARAMETER_DOUBLE, 0, 0, 0);*/
+    REGISTER_PARAMETER("SWEEP", "cfreq", LOOP_ADAPT_SCOPE_SOCKET, cpu, NODEPARAMETER_DOUBLE, 0.8, 0.8, 3.4);
+    //REGISTER_PARAMETER("SWEEP", "ufreq", LOOP_ADAPT_SCOPE_SOCKET, cpu, NODEPARAMETER_DOUBLE, 0, 0, 0);
 
 
 
@@ -99,8 +100,8 @@ int main()
             {
                 //printf("Iter %d\n", iter);
                 int blockSize = 5123;
-                int cpu = sched_getcpu();
-                GET_INT_PARAMETER("SWEEP", "blksize", blockSize, LOOP_ADAPT_SCOPE_MACHINE, cpu);
+                //int cpu = sched_getcpu();
+                //GET_INT_PARAMETER("SWEEP", "blksize", blockSize, LOOP_ADAPT_SCOPE_MACHINE, cpu);
 #pragma omp parallel
 {
                 int nBlocks = (int) (Size/((double)blockSize));

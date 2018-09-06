@@ -70,7 +70,7 @@ Shortcut for loop_adapt_register_getcpu_func if compiled with -DLOOP_ADAPT_ACTIV
 /** \addtogroup LA_API loop_adapt API
 *  @{
 */
-static int loop_adapt_debug = 1; /*! \brief  Debug level */
+static int loop_adapt_debug = 2; /*! \brief  Debug level */
 static int loop_adapt_active = 1; /*! \brief Internal variable whether loop_adapt is active */
 
 /*! \brief  List of topology entities where policies and parameters can be associated to */

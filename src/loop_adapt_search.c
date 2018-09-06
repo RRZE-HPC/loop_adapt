@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <math.h>
 
-
+#include <loop_adapt.h>
 #include <loop_adapt_search.h>
 #include <loop_adapt_helper.h>
 
@@ -11,9 +11,13 @@ int basic_search_init(Nodeparameter_t np)
     switch (np->type)
     {
         case NODEPARAMETER_INT:
+            if (loop_adapt_debug > 1)
+                fprintf(stderr, "Init parameter %s to %d\n", np->name, np->min.ival);
             np->cur.ival = np->min.ival;
             break;
         case NODEPARAMETER_DOUBLE:
+            if (loop_adapt_debug > 1)
+                fprintf(stderr, "Init parameter %s to %f\n", np->name, np->min.dval);
             np->cur.dval = np->min.dval;
             break;
     }
@@ -35,14 +39,20 @@ int basic_search_next(Nodeparameter_t np)
                     double max = (double)np->max.ival;
                     double s = ceil(abs(max-min+1) / (np->steps+1));
                     np->cur.ival = MIN((int)(np->change >= 0 ? np->min.ival + (s*np->change) : np->min.ival), np->max.ival);
+                    if (loop_adapt_debug > 1)
+                        fprintf(stderr, "Next parameter %s to %d\n", np->name, np->cur.ival);
                 }
                 else if (np->has_best)
                 {
                     np->cur.ival = np->best.ival;
+                    if (loop_adapt_debug > 1)
+                        fprintf(stderr, "Next parameter %s to %d (best)\n", np->name, np->cur.ival);
                 }
                 else
                 {
                     np->cur.ival = np->start.ival;
+                    if (loop_adapt_debug > 1)
+                        fprintf(stderr, "Next parameter %s to %d (start)\n", np->name, np->cur.ival);
                 }
             }
             break;
@@ -53,16 +63,25 @@ int basic_search_next(Nodeparameter_t np)
                     old.dval = np->cur.dval;
                     double min = (double)np->min.dval;
                     double max = (double)np->max.dval;
-                    double s = ceil(abs(max-min+1) / (np->steps+1));
+                    double s = abs(max-min+1) / (np->steps+1);
                     np->cur.dval = MIN((int)(np->change >= 0 ? np->min.ival + (s*np->change) : np->min.dval), np->max.dval);
+                    if (loop_adapt_debug > 1)
+                    {
+                        printf("Min %f Max %f Step %f Abs %f\n", min, max, s, abs(max-min+1));
+                        fprintf(stderr, "Next parameter %s to %f\n", np->name, np->cur.dval);
+                    }
                 }
                 else if (np->has_best)
                 {
                     np->cur.ival = np->best.ival;
+                    if (loop_adapt_debug > 1)
+                        fprintf(stderr, "Next parameter %s to %f (best)\n", np->name, np->cur.dval);
                 }
                 else
                 {
                     np->cur.ival = np->start.ival;
+                    if (loop_adapt_debug > 1)
+                        fprintf(stderr, "Next parameter %s to %f (start)\n", np->name, np->cur.dval);
                 }
             }
             break;
@@ -77,9 +96,13 @@ int basic_search_markbest(Nodeparameter_t np)
     {
         case NODEPARAMETER_INT:
             np->best.ival = np->cur.ival;
+            if (loop_adapt_debug > 1)
+                fprintf(stderr, "Best parameter %s to %d\n", np->name, np->best.ival);
             break;
         case NODEPARAMETER_DOUBLE:
             np->best.dval = np->cur.dval;
+            if (loop_adapt_debug > 1)
+                fprintf(stderr, "Best parameter %s to %f\n", np->name, np->best.dval);
             break;
     }
     np->has_best = 1;
@@ -91,9 +114,13 @@ int basic_search_reset(Nodeparameter_t np)
     {
         case NODEPARAMETER_INT:
             np->cur.ival = (!np->has_best ? np->start.ival : np->best.ival);
+            if (loop_adapt_debug > 1)
+                fprintf(stderr, "Reset parameter %s to %d\n", np->name, np->cur.ival);
             break;
         case NODEPARAMETER_DOUBLE:
             np->cur.dval = (!np->has_best ? np->start.dval : np->best.dval);
+            if (loop_adapt_debug > 1)
+                fprintf(stderr, "Reset parameter %s to %f\n", np->name, np->cur.dval);
             break;
     }
     np->change = np->steps+1;

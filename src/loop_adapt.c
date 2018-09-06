@@ -819,7 +819,14 @@ static int _loop_adapt_end_cpu(hwloc_topology_t tree, int cpuid)
                     loop_adapt_end_policies(cpuid, tree, cpu_obj);
                     p->cur_profile++;
                     if (p->cur_profile == 0)
-                        loop_adapt_init_parameter(cpu_obj, pol);
+                    {
+                        hwloc_obj_t walker = cpu_obj;
+                        while (walker && walker->type != pol->scope)
+                        {
+                            walker = walker->parent;
+                        }
+                        loop_adapt_init_parameter(walker, pol);
+                    }
                     p->cur_profile_iters = 0;
                     /* Update results in the whole tree */
                 }

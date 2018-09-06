@@ -33,18 +33,18 @@ STATIC int NAME(hwloc_obj_t obj, Policy_t policy) \
                         if (policy->parameters[i].pre) \
                         { \
                             ret = policy->parameters[i].pre(loc, param); \
-                            if (ret) \
+                            if (ret != 0) \
                             { \
-                                fprintf(stderr, "ERROR: Pre-setting function for parameter %s failed\n", policy->parameters[i].name); \
+                                fprintf(stderr, "ERROR: Pre-setting function for parameter %s failed (%d)\n", policy->parameters[i].name, ret); \
                             } \
                         } \
                         FUNC(policy->search, param); \
                         if (policy->parameters[i].post) \
                         { \
-                            policy->parameters[i].post(loc, param); \
-                            if (ret) \
+                            ret = policy->parameters[i].post(loc, param); \
+                            if (ret != 0) \
                             { \
-                                fprintf(stderr, "ERROR: Post-setting function for parameter %s failed\n", policy->parameters[i].name); \
+                                fprintf(stderr, "ERROR: Post-setting function for parameter %s failed (%d)\n", policy->parameters[i].name, ret); \
                             } \
                         } \
                         count++; \

@@ -10,6 +10,7 @@ int loop_adapt_policy_ompthreads_post_param(char* location, Nodeparameter_t para
 
 Policy POL_OMPTHREADS = {
     .likwid_group = "ENERGY",
+    .internalname = "POL_OMPTHREADS",
     .name = "OMPTHREADS",
     .desc = "This policy tries to adapt number of OpenMP threads.",
     STR_POL_FUNCS(ompthreads)
