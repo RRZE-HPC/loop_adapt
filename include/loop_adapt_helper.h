@@ -9,6 +9,7 @@
 #define MIN(a,b) ( (a) < (b) ? (a) : (b))
 #define MAX(a,b) ( (a) >= (b) ? (a) : (b))
 #define gettid() syscall(SYS_gettid)
+#define str(x) #x
 
 void *realloc_buffer(void *ptrmem, size_t size);
 

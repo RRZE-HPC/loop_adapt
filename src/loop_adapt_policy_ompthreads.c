@@ -147,7 +147,7 @@ int loop_adapt_policy_ompthreads_eval(hwloc_topology_t tree, hwloc_obj_t obj)
             walker->type == HWLOC_OBJ_MACHINE ||
             walker->type == HWLOC_OBJ_PU)
         {
-            eval = loop_adapt_policy_ompthreads_eval(tree, walker);
+            eval += loop_adapt_policy_ompthreads_eval(tree, walker);
             walker = walker->parent;
         }
         else
@@ -177,21 +177,22 @@ int loop_adapt_policy_ompthreads_begin(int cpuid, hwloc_topology_t tree, hwloc_o
         }
         if (!likwid_configured)
         {
+            Policy_t p = tdata->cur_policy;
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG POL_OMPTHREADS: Adding group %s to LIKWID\n", POL_OMPTHREADS.likwid_group);
-            likwid_gid = perfmon_addEventSet(POL_OMPTHREADS.likwid_group);
+                fprintf(stderr, "DEBUG POL_OMPTHREADS: Adding group %s to LIKWID\n", p->likwid_group);
+            likwid_gid = perfmon_addEventSet(p->likwid_group);
             if (likwid_gid >= 0)
             {
                 // We store which indicies we need later for evaluation. We can also use
                 // special performance groups that offer only the required metrics but
                 // with this way we can use default performance groups.
-                for (int m = 0; m < POL_OMPTHREADS.num_metrics; m++)
+                for (int m = 0; m < p->num_metrics; m++)
                 {
                     for (int i = 0; i < perfmon_getNumberOfMetrics(likwid_gid); i++)
                     {
-                        if (strcmp(POL_OMPTHREADS.metrics[m].name, perfmon_getMetricName(likwid_gid, i)) == 0)
+                        if (strcmp(p->metrics[m].name, perfmon_getMetricName(likwid_gid, i)) == 0)
                         {
-                            POL_OMPTHREADS.metric_idx[m] = i;
+                            p->metric_idx[m] = i;
                             if (loop_adapt_debug == 2)
                                 fprintf(stderr, "DEBUG POL_OMPTHREADS: Using metric with ID %d\n", i);
                         }

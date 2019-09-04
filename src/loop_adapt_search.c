@@ -6,19 +6,30 @@
 #include <loop_adapt_search.h>
 #include <loop_adapt_helper.h>
 
+#define IABS(a) ((a) < 0 ? -(a) : (a) )
+#define FABS(a) IABS(a)
+
 int basic_search_init(Nodeparameter_t np)
 {
     switch (np->type)
     {
         case NODEPARAMETER_INT:
             if (loop_adapt_debug > 1)
-                fprintf(stderr, "Init parameter %s to %d\n", np->name, np->min.ival);
-            np->cur.ival = np->min.ival;
+                fprintf(stderr, "Init parameter %s to %d\n", np->name, np->test_vals[0].ival);
+            //np->cur.ival = np->min.ival;
+            np->cur.ival = np->test_vals[0].ival;
             break;
         case NODEPARAMETER_DOUBLE:
             if (loop_adapt_debug > 1)
-                fprintf(stderr, "Init parameter %s to %f\n", np->name, np->min.dval);
-            np->cur.dval = np->min.dval;
+                fprintf(stderr, "Init parameter %s to %f\n", np->name, np->test_vals[0].dval);
+            //np->cur.dval = np->min.dval;
+            np->cur.dval = np->test_vals[0].dval;
+            break;
+        case NODEPARAMETER_VOIDPTR:
+            if (loop_adapt_debug > 1)
+                fprintf(stderr, "Init parameter %s to %p\n", np->name, np->test_vals[0].pval);
+            //np->cur.dval = np->min.dval;
+            np->cur.pval = np->test_vals[0].pval;
             break;
     }
 }
@@ -35,12 +46,16 @@ int basic_search_next(Nodeparameter_t np)
                 if (np->change <= np->steps+1)
                 {
                     old.ival = np->cur.ival;
-                    double min = (double)np->min.ival;
-                    double max = (double)np->max.ival;
-                    double s = ceil(abs(max-min+1) / (np->steps+1));
-                    np->cur.ival = MIN((int)(np->change >= 0 ? np->min.ival + (s*np->change) : np->min.ival), np->max.ival);
+                    np->cur.ival = np->test_vals[np->change].ival;
+/*                    old.ival = np->cur.ival;*/
+/*                    double min = (double)np->min.ival;*/
+/*                    double max = (double)np->max.ival;*/
+/*                    double s = IABS(max-min+1) / (np->steps);*/
+/*                    np->cur.ival = MIN((int)(np->change >= 0 ? np->min.ival + (s*np->change) : np->min.ival), np->max.ival);*/
                     if (loop_adapt_debug > 1)
+                    {
                         fprintf(stderr, "Next parameter %s to %d\n", np->name, np->cur.ival);
+                    }
                 }
                 else if (np->has_best)
                 {
@@ -61,27 +76,48 @@ int basic_search_next(Nodeparameter_t np)
                 if (np->change <= np->steps+1)
                 {
                     old.dval = np->cur.dval;
-                    double min = (double)np->min.dval;
-                    double max = (double)np->max.dval;
-                    double s = abs(max-min+1) / (np->steps+1);
-                    np->cur.dval = MIN((int)(np->change >= 0 ? np->min.ival + (s*np->change) : np->min.dval), np->max.dval);
+                    np->cur.dval = np->test_vals[np->change].dval;
                     if (loop_adapt_debug > 1)
                     {
-                        printf("Min %f Max %f Step %f Abs %f\n", min, max, s, abs(max-min+1));
                         fprintf(stderr, "Next parameter %s to %f\n", np->name, np->cur.dval);
                     }
                 }
                 else if (np->has_best)
                 {
-                    np->cur.ival = np->best.ival;
+                    np->cur.dval = np->best.dval;
                     if (loop_adapt_debug > 1)
                         fprintf(stderr, "Next parameter %s to %f (best)\n", np->name, np->cur.dval);
                 }
                 else
                 {
-                    np->cur.ival = np->start.ival;
+                    np->cur.dval = np->start.dval;
                     if (loop_adapt_debug > 1)
                         fprintf(stderr, "Next parameter %s to %f (start)\n", np->name, np->cur.dval);
+                }
+            }
+            break;
+        case NODEPARAMETER_VOIDPTR:
+            {
+                if (np->change <= np->steps+1)
+                {
+                    old.pval = np->cur.pval;
+                    np->cur.pval = np->test_vals[np->change].pval;
+                    if (loop_adapt_debug > 1)
+                    {
+                        fprintf(stderr, "Next parameter %s to %p\n", np->name, np->cur.pval);
+                    }
+                }
+                else if (np->has_best)
+                {
+                    np->cur.pval = np->best.pval;
+                    if (loop_adapt_debug > 1)
+                        fprintf(stderr, "Next parameter %s to %p (best)\n", np->name, np->cur.pval);
+                }
+                else
+                {
+                    np->cur.pval = np->start.pval;
+                    if (loop_adapt_debug > 1)
+                        fprintf(stderr, "Next parameter %s to %p (start)\n", np->name, np->cur.pval);
                 }
             }
             break;
@@ -96,13 +132,18 @@ int basic_search_markbest(Nodeparameter_t np)
     {
         case NODEPARAMETER_INT:
             np->best.ival = np->cur.ival;
-            if (loop_adapt_debug > 1)
+            //if (loop_adapt_debug)
                 fprintf(stderr, "Best parameter %s to %d\n", np->name, np->best.ival);
             break;
         case NODEPARAMETER_DOUBLE:
             np->best.dval = np->cur.dval;
-            if (loop_adapt_debug > 1)
+            if (loop_adapt_debug)
                 fprintf(stderr, "Best parameter %s to %f\n", np->name, np->best.dval);
+            break;
+        case NODEPARAMETER_VOIDPTR:
+            np->best.pval = np->cur.pval;
+            if (loop_adapt_debug)
+                fprintf(stderr, "Best parameter %s to %p\n", np->name, np->best.pval);
             break;
     }
     np->has_best = 1;
@@ -121,6 +162,11 @@ int basic_search_reset(Nodeparameter_t np)
             np->cur.dval = (!np->has_best ? np->start.dval : np->best.dval);
             if (loop_adapt_debug > 1)
                 fprintf(stderr, "Reset parameter %s to %f\n", np->name, np->cur.dval);
+            break;
+        case NODEPARAMETER_VOIDPTR:
+            np->cur.pval = (!np->has_best ? np->start.pval : np->best.pval);
+            if (loop_adapt_debug > 1)
+                fprintf(stderr, "Reset parameter %s to %p\n", np->name, np->cur.pval);
             break;
     }
     np->change = np->steps+1;
@@ -146,7 +192,7 @@ SearchAlgorithm_t loop_adapt_search_select(char *algoname)
                 s->name = search_algos[i].name;
                 s->init = search_algos[i].init;
                 s->next = search_algos[i].next;
-                s->best = search_algos[i].next;
+                s->best = search_algos[i].best;
                 s->reset = search_algos[i].reset;
             }
             return s;
@@ -223,6 +269,13 @@ int loop_adapt_search_param_reset(SearchAlgorithm_t s, Nodeparameter_t np)
                 break;
             case NODEPARAMETER_DOUBLE:
                 if (np->old_vals[np->num_old_vals-1].dval != old.dval)
+                {
+                    np->old_vals[np->num_old_vals] = old;
+                    np->num_old_vals++;
+                }
+                break;
+            case NODEPARAMETER_VOIDPTR:
+                if (np->old_vals[np->num_old_vals-1].pval != old.pval)
                 {
                     np->old_vals[np->num_old_vals] = old;
                     np->num_old_vals++;

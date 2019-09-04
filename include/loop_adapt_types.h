@@ -55,6 +55,8 @@ typedef struct {
     Value max; /**< \brief Maximal value (maximum at registration) */
     int num_old_vals; /**< \brief Number of recorded (tried) parameter values (should be same as change) */
     Value* old_vals; /**< \brief Storage of recorded (tried) parameter values */
+    int num_test_vals;
+    Value* test_vals;
 } Nodeparameter;
 /*! \brief Pointer to a Nodeparameter structure */
 typedef Nodeparameter* Nodeparameter_t;

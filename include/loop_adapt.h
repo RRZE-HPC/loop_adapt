@@ -70,8 +70,8 @@ Shortcut for loop_adapt_register_getcpu_func if compiled with -DLOOP_ADAPT_ACTIV
 /** \addtogroup LA_API loop_adapt API
 *  @{
 */
-static int loop_adapt_debug = 2; /*! \brief  Debug level */
-static int loop_adapt_active = 1; /*! \brief Internal variable whether loop_adapt is active */
+int loop_adapt_debug; /*! \brief  Debug level */
+int loop_adapt_active; /*! \brief Internal variable whether loop_adapt is active */
 
 /*! \brief  List of topology entities where policies and parameters can be associated to */
 typedef enum {
@@ -107,10 +107,9 @@ Currently only integer and double parameters are supported. Internal values
 can also take pointers.
 */
 typedef enum {
-    /*! \brief  Integer parameter */
-    NODEPARAMETER_INT = 0,
-    /*! \brief  Double parameter */
-    NODEPARAMETER_DOUBLE,
+    NODEPARAMETER_INT = 0, /**< \brief Integer parameter */
+    NODEPARAMETER_DOUBLE, /**< \brief Double parameter */
+    NODEPARAMETER_VOIDPTR, /**< \brief Double parameter */
 } Nodeparametertype;
 /** @}*/
 
@@ -128,11 +127,22 @@ typedef enum {
     else if (type == NODEPARAMETER_DOUBLE) \
         loop_adapt_register_double_param(string, name, scope, cpu, NULL, cur, min, max);
 
+#define REGISTER_PARAMETER_LIST(string, name, scope, cpu, type, num_values, values) \
+    if (type == NODEPARAMETER_INT) \
+        loop_adapt_register_int_paramlist(string, name, scope, cpu, NULL, num_values, (int*)values); \
+    else if (type == NODEPARAMETER_DOUBLE) \
+        loop_adapt_register_double_paramlist(string, name, scope, cpu, NULL, num_values, (double*)values); \
+    else if (type == NODEPARAMETER_VOIDPTR) \
+        loop_adapt_register_voidptr_paramlist(string, name, scope, cpu, NULL, num_values, (void**)values);
+
 #define GET_INT_PARAMETER(string, name, orig, scope, cpu) \
     orig = loop_adapt_get_int_param(string, scope, cpu, name);
 
 #define GET_DBL_PARAMETER(string, name, orig, scope, cpu) \
     orig = loop_adapt_get_double_param(string, scope, cpu, name);
+    
+#define GET_VOIDPTR_PARAMETER(string, name, orig, scope, cpu) \
+    orig = loop_adapt_get_voidptr_param(string, scope, cpu, name);
 
 #define LOOP_BEGIN(string) loop_adapt_begin(string, __FILE__, __LINE__)
 #define LOOP_END(string) loop_adapt_end(string)
@@ -157,10 +167,13 @@ typedef enum {
     LOOP_BEGIN(name); do
 
 #define REGISTER_THREAD_COUNT_FUNC(func) \
-    loop_adapt_register_cpucount_func(func);
+    loop_adapt_register_tidcount_func(func);
 
 #define REGISTER_THREAD_ID_FUNC(func) \
-    loop_adapt_register_getcpu_func(func);
+    loop_adapt_register_gettid_func(func);
+
+#define REGISTER_CPU_ID_FUNC(func) \
+    loop_adapt_register_getcpuid_func(func);
 
 #define REGISTER_EVENT(s, scope, cpu, name, var, type, ptr) \
     loop_adapt_register_event(s, scope, cpu, name, var, type, ptr);
@@ -175,21 +188,31 @@ typedef enum {
 For OpenMP you can use omp_get_num_threads().
 @param handle function pointer (int(*)()) to a function returning the number of processing units
  */
-void loop_adapt_register_cpucount_func(int (*handle)());
+void loop_adapt_register_tidcount_func(int (*handle)());
 
 /*! \brief Register a function that return the ID of the calling processing unit
 (e.g. thread or task)
 
 @param handle function pointer (int(*)()) to a function returning the ID of the calling processing unit
 */
-void loop_adapt_register_getcpu_func(int (*handle)());
+void loop_adapt_register_gettid_func(int (*handle)());
+
+/*! \brief Register a function that return the ID of the current CPU
+
+@param handle function pointer (int(*)()) to a function returning the ID of the current CPU
+*/
+void loop_adapt_register_getcpuid_func(int (*handle)());
 
 /*! \brief Get the function pointer to retrieve the number of processing units */
-void loop_adapt_get_cpucount_func(int (**handle)());
+void loop_adapt_get_tidcount_func(int (**handle)());
 
 /*! \brief Get the function pointer to retrieve the identifier of a processing
 unit */
-void loop_adapt_get_getcpu_func(int (**handle)());
+void loop_adapt_get_gettid_func(int (**handle)());
+
+/*! \brief Get the function pointer to retrieve the identifier of a processing
+unit */
+void loop_adapt_get_getcpuid_func(int (**handle)());
 
 /*! \brief Register a new loop to loop_adapt
 
@@ -268,6 +291,14 @@ void loop_adapt_register_int_param( char* string,
                                     int min,
                                     int max);
 
+void loop_adapt_register_int_paramlist( char* string,
+                                        char* name,
+                                        AdaptScope scope,
+                                        int cpu,
+                                        char* desc,
+                                        int num_values,
+                                        int* values);
+
 /*! \brief Get an integer parameter from the loop tree
 
 This function searches for the parameter of the current CPU (or other scope if
@@ -297,6 +328,15 @@ void loop_adapt_register_double_param( char* string,
                                        double min,
                                        double max);
 
+void loop_adapt_register_double_paramlist( char* string,
+                                        char* name,
+                                        AdaptScope scope,
+                                        int cpu,
+                                        char* desc,
+                                        int num_values,
+                                        double* values);
+                                        
+
 /*! \brief Get a double parameter from the loop tree
 
 This function searches for the parameter of the current CPU (or other scope if
@@ -309,6 +349,33 @@ look up the parameter name in the node's parameter hash and return the value.
 */
 double loop_adapt_get_double_param( char* string, AdaptScope scope, int cpu, char* name);
 
+/*! \brief Register a void* parameter in the loop's topology tree
+
+Register an void* parameter for later manipulation through a policy It is
+save to register also unused parameters. It is assumed that each thread is
+registering the parameter for itself. If the scope is not thread, it walks
+up the tree until it found the parent node of the CPU with the proper scope.
+ */
+void loop_adapt_register_voidptr_paramlist( char* string,
+                                            char* name,
+                                            AdaptScope scope,
+                                            int cpu,
+                                            char* desc,
+                                            int num_values,
+                                            void** values);
+
+
+/*! \brief Get a void* parameter from the loop tree
+
+This function searches for the parameter of the current CPU (or other scope if
+known) and returns the current value of the paramter. At first it resolves the
+loop name to the loop's topology tree. Afterwards it gets the tree node id to
+access the right node. If the scope it thread, just look up the id in the
+cpu-to-id mapping. If not, use the current tree node as starting point to walk
+up the tree until you find the appropriate tree node of scope. When found,
+look up the parameter name in the node's parameter hash and return the value.
+*/
+void* loop_adapt_get_voidptr_param( char* string, AdaptScope scope, int cpu, char* name);
 
 
 //int loop_adapt_list_policy();

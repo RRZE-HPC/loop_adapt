@@ -82,21 +82,22 @@ int loop_adapt_policy_blocksize_begin(int cpuid, hwloc_topology_t tree, hwloc_ob
         }
         if (!likwid_configured)
         {
+            Policy_t p = tdata->cur_policy;
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Adding group %s to LIKWID\n", POL_BLOCKSIZE.likwid_group);
-            likwid_gid = perfmon_addEventSet(POL_BLOCKSIZE.likwid_group);
+                fprintf(stderr, "DEBUG POL_BLOCKSIZE: Adding group %s to LIKWID\n", p->likwid_group);
+            likwid_gid = perfmon_addEventSet(p->likwid_group);
             if (likwid_gid >= 0)
             {
                 // We store which indicies we need later for evaluation. We can also use
                 // special performance groups that offer only the required metrics but
                 // with this way we can use default performance groups.
-                for (int m = 0; m < POL_BLOCKSIZE.num_metrics; m++)
+                for (int m = 0; m < p->num_metrics; m++)
                 {
                     for (int i = 0; i < perfmon_getNumberOfMetrics(likwid_gid); i++)
                     {
-                        if (strcmp(POL_BLOCKSIZE.metrics[m].name, perfmon_getMetricName(likwid_gid, i)) == 0)
+                        if (strcmp(p->metrics[m].name, perfmon_getMetricName(likwid_gid, i)) == 0)
                         {
-                            POL_BLOCKSIZE.metric_idx[m] = i;
+                            p->metric_idx[m] = i;
                             if (loop_adapt_debug == 2)
                                 fprintf(stderr, "DEBUG POL_BLOCKSIZE: Using metric with ID %d\n", i);
                         }
@@ -161,6 +162,7 @@ int loop_adapt_policy_blocksize_end(int cpuid, hwloc_topology_t tree, hwloc_obj_
             if (t)
                 timer_stop(t);
             runtime = loop_adapt_policy_profile_get_runtime(pp);
+            
             pdata = loop_adapt_policy_profile_get_values(pp);
 
 
@@ -217,11 +219,11 @@ int loop_adapt_policy_blocksize_eval(hwloc_topology_t tree, hwloc_obj_t obj)
             for (int i = 0; i < p->num_parameters; i++)
             {
                 PolicyParameter_t pparam = &p->parameters[i];
-                if (loop_adapt_debug == 2)
+                //if (loop_adapt_debug == 2)
                     fprintf(stderr, "DEBUG POL_BLOCKSIZE: Evaluate param %s for %s with idx %d (opt:%d, cur:%d)\n", pparam->name, loop_adapt_type_name((AdaptScope)obj->type), obj->logical_index, pp->opt_profile, pp->cur_profile-1);
 
                 eval = la_calc_evaluate(p, pparam, opt_values, opt_runtime, cur_values, cur_runtime);
-                if (loop_adapt_debug == 2)
+                //if (loop_adapt_debug == 2)
                     fprintf(stderr, "DEBUG POL_BLOCKSIZE: Evaluation %s = %d\n", pparam->eval, eval);
             }
         }
@@ -238,7 +240,7 @@ int loop_adapt_policy_blocksize_eval(hwloc_topology_t tree, hwloc_obj_t obj)
             walker->type == HWLOC_OBJ_MACHINE ||
             walker->type == HWLOC_OBJ_PU)
         {
-            eval = loop_adapt_policy_blocksize_eval(tree, walker);
+            eval += loop_adapt_policy_blocksize_eval(tree, walker);
             walker = walker->parent;
         }
         else

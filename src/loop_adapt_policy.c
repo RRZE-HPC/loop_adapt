@@ -17,6 +17,7 @@ STATIC int NAME(hwloc_obj_t obj, Policy_t policy) \
     int count = 0; \
     char loc[1024]; \
     hwloc_obj_t walker = obj; \
+    printf("%s\n", str(NAME)); \
     while (walker && !count) \
     { \
         Nodevalues_t vals = (Nodevalues_t)walker->userdata; \
@@ -61,62 +62,6 @@ STATIC int NAME(hwloc_obj_t obj, Policy_t policy) \
     return count; \
 }
 
-/*#define LOOP_ADAPT_PARAMETER_FUNC(NAME, FUNC, STATIC) \*/
-/*    STATIC int NAME(hwloc_obj_t obj, Policy_t policy) \*/
-/*    { \*/
-/*        int ret = 0; \*/
-/*        int count = 0; \*/
-/*        char loc[1024]; \*/
-/*        Nodevalues_t vals = (Nodevalues_t)obj->userdata; \*/
-/*        if (vals) \*/
-/*        { \*/
-/*            ret = snprintf(loc, 1023, "%s%d", loop_adapt_type_name(obj->type), obj->os_index); \*/
-/*            for (int i = 0; i < policy->num_parameters; i++) \*/
-/*            { \*/
-/*                Nodeparameter_t param = g_hash_table_lookup(vals->param_hash, policy->parameters[i].name); \*/
-/*                if (param) \*/
-/*                { \*/
-/*                    if (policy->parameters[i].pre) \*/
-/*                    { \*/
-/*                        policy->parameters[i].pre(loc, param); \*/
-/*                    } \*/
-/*                    FUNC(policy->search, param); \*/
-/*                    if (policy->parameters[i].post) \*/
-/*                    { \*/
-/*                        policy->parameters[i].post(loc, param); \*/
-/*                    } \*/
-/*                    count++; \*/
-/*                } \*/
-/*            } \*/
-/*        } \*/
-/*        hwloc_obj_t walker = obj->parent; \*/
-/*        while (walker && !count) \*/
-/*        { \*/
-/*            vals = (Nodevalues_t)walker->userdata; \*/
-/*            if (vals) \*/
-/*            { \*/
-/*                ret = snprintf(loc, 1023, "%s%d", loop_adapt_type_name(walker->type), walker->os_index); \*/
-/*                for (int i = 0; i < policy->num_parameters; i++) \*/
-/*                { \*/
-/*                    Nodeparameter_t param = g_hash_table_lookup(vals->param_hash, policy->parameters[i].name); \*/
-/*                    if (param) \*/
-/*                    { \*/
-/*                        if (policy->parameters[i].pre) \*/
-/*                        { \*/
-/*                            policy->parameters[i].pre(loc, param); \*/
-/*                        } \*/
-/*                        FUNC(policy->search, param); \*/
-/*                        if (policy->parameters[i].post) \*/
-/*                        { \*/
-/*                            policy->parameters[i].post(loc, param); \*/
-/*                        } \*/
-/*                        count++; \*/
-/*                    } \*/
-/*                } \*/
-/*            } \*/
-/*        } \*/
-/*        return count; \*/
-/*    }*/
 /* Generate the four parameter functions */
 LOOP_ADAPT_PARAMETER_FUNC(loop_adapt_next_parameter, loop_adapt_search_param_next, static)
 LOOP_ADAPT_PARAMETER_FUNC(loop_adapt_reset_parameter, loop_adapt_search_param_reset, static)
@@ -177,13 +122,13 @@ int loop_adapt_add_policy(hwloc_topology_t tree, Policy *p, int num_cpus, int *c
             if (loop_adapt_debug)
                 fprintf(stderr, "Starting with policy %s (%d)\n", p->name, polidx);
         }
-        ret = populate_tree(tree, polidx, num_profiles, iters_per_profile);
+        ret = populate_tree(tree, polidx, num_profiles+1, iters_per_profile);
         if (tdata->cur_policy_id < 0)
         {
             printf("Update tree with polidx %d\n", polidx);
             update_cur_policy_in_tree(tree, polidx);
         }
-        p->loop_adapt_policy_init(num_cpus, cpulist, num_profiles);
+        p->loop_adapt_policy_init(num_cpus, cpulist, num_profiles+1);
     }
 loop_adapt_add_policy_out:
     return ret;
@@ -191,6 +136,61 @@ loop_adapt_add_policy_out:
 
 
 
+
+
+
+int loop_adapt_add_int_parameter_list(hwloc_obj_t obj, char* name, char* desc, int num_values, int *values)
+{
+    Nodeparameter_t np = NULL;
+    Nodevalues_t nv = NULL;
+    Nodeparameter_t *tmp = NULL;
+    PolicyProfile_t pp = NULL;
+
+    if (!obj || !name)
+    {
+        fprintf(stderr, "No obj or no name\n");
+        return -EINVAL;
+    }
+    nv = (Nodevalues_t)obj->userdata;
+    if (nv)
+    {
+        pp = nv->policies[nv->cur_policy];
+        if (pp->num_profiles > num_values)
+        {
+            fprintf(stderr, "Only %d values supplied but loop_adapt should measure %d profiles\n", num_values, pp->num_profiles);
+            pp->num_profiles = num_values;
+        }
+        if (!nv->param_hash)
+        {
+            nv->param_hash = g_hash_table_new(g_str_hash, g_str_equal);
+        }
+        if (_parameter_exists(nv, name))
+        {
+            fprintf(stderr, "Parameter already exists for %s %d\n", loop_adapt_type_name(obj->type), obj->os_index);
+            return 1;
+        }
+        np = _parameter_malloc(name, desc);
+        if (np)
+        {
+            np->type = NODEPARAMETER_INT;
+            np->best.ival = -1;
+            np->has_best = 0;
+            np->steps = pp->num_profiles-1;
+            np->old_vals = (Value*)malloc((pp->num_profiles+1) * sizeof(Value));
+            np->num_old_vals = 0;
+            np->test_vals = (Value*) malloc(num_values * sizeof(Value));
+            for (int i = 0; i < num_values; i++)
+            {
+                np->test_vals[i].ival = values[i];
+            }
+            np->num_test_vals = num_values;
+            np->start.ival = np->test_vals[0].ival;
+            // Add the parameter to the parameter hash table of the node
+            g_hash_table_insert(nv->param_hash, (gpointer) g_strdup(name), (gpointer) np);
+        }
+    }
+    return 0;
+}
 
 int loop_adapt_add_int_parameter(hwloc_obj_t obj, char* name, char* desc, int cur, int min, int max)
 {
@@ -208,6 +208,52 @@ int loop_adapt_add_int_parameter(hwloc_obj_t obj, char* name, char* desc, int cu
     if (nv)
     {
         pp = nv->policies[nv->cur_policy];
+if (!nv->param_hash)
+        {
+            nv->param_hash = g_hash_table_new(g_str_hash, g_str_equal);
+        }
+        if (_parameter_exists(nv, name))
+        {
+            fprintf(stderr, "Parameter already exists for %s %d\n", loop_adapt_type_name(obj->type), obj->os_index);
+            return 1;
+        }
+        int* values = malloc((pp->num_profiles+1)*sizeof(int));
+        if (values)
+        {
+            values[0] = cur;
+            int step = abs(max-min)/(pp->num_profiles-1);
+            for (int i = 0; i < pp->num_profiles; i++)
+            {
+                values[i+1] = min+(i*step);
+            }
+            loop_adapt_add_int_parameter_list(obj, name, desc, pp->num_profiles, values);
+        }
+        free(values);
+    }
+    return 0;
+}
+
+int loop_adapt_add_double_parameter_list(hwloc_obj_t obj, char* name, char* desc, int num_values, double *values)
+{
+    Nodeparameter_t np = NULL;
+    Nodevalues_t nv = NULL;
+    Nodeparameter_t *tmp = NULL;
+    PolicyProfile_t pp = NULL;
+
+    if (!obj || !name)
+    {
+        fprintf(stderr, "No obj or no name\n");
+        return -EINVAL;
+    }
+    nv = (Nodevalues_t)obj->userdata;
+    if (nv)
+    {
+        pp = nv->policies[nv->cur_policy];
+        if (pp->num_profiles > num_values)
+        {
+            fprintf(stderr, "Only %d values supplied but loop_adapt should measure %d profiles\n", num_values, pp->num_profiles);
+            pp->num_profiles = num_values;
+        }
         if (!nv->param_hash)
         {
             nv->param_hash = g_hash_table_new(g_str_hash, g_str_equal);
@@ -220,18 +266,20 @@ int loop_adapt_add_int_parameter(hwloc_obj_t obj, char* name, char* desc, int cu
         np = _parameter_malloc(name, desc);
         if (np)
         {
-            np->type = NODEPARAMETER_INT;
+            np->type = NODEPARAMETER_DOUBLE;
             np->best.ival = -1;
-            np->min.ival = min;
-            np->max.ival = max;
-            np->cur.ival = cur;
-            np->start.ival = cur;
             np->has_best = 0;
             np->steps = pp->num_profiles-1;
             np->old_vals = (Value*)malloc((pp->num_profiles+1) * sizeof(Value));
             np->num_old_vals = 0;
-            np->old_vals[0].ival = np->start.ival;
-            np->num_old_vals++;
+            np->test_vals = (Value*) malloc(num_values * sizeof(Value));
+            for (int i = 0; i < num_values; i++)
+            {
+                np->test_vals[i].dval = values[i];
+            }
+            np->num_test_vals = num_values;
+            np->start.dval = np->test_vals[0].dval;
+            np->cur.dval = np->test_vals[0].dval;
             // Add the parameter to the parameter hash table of the node
             g_hash_table_insert(nv->param_hash, (gpointer) g_strdup(name), (gpointer) np);
         }
@@ -261,24 +309,73 @@ int loop_adapt_add_double_parameter(hwloc_obj_t obj, char* name, char* desc, dou
         }
         if (_parameter_exists(nv, name))
         {
-            fprintf(stderr, "ERROR: Parameter already exists\n");
+            fprintf(stderr, "Parameter already exists for %s %d\n", loop_adapt_type_name(obj->type), obj->os_index);
+            return 1;
+        }
+        double* values = malloc((pp->num_profiles+1)*sizeof(double));
+        if (values)
+        {
+            values[0] = cur;
+            double step = (double)abs(max-min)/((double)pp->num_profiles-1);
+            for (int i = 0; i < pp->num_profiles; i++)
+            {
+                values[i+1] = min+(i*step);
+            }
+            loop_adapt_add_double_parameter_list(obj, name, desc, pp->num_profiles, values);
+        }
+        free(values);
+    }
+    return 0;
+}
+
+
+int loop_adapt_add_voidptr_parameter_list(hwloc_obj_t obj, char* name, char* desc, int num_values, void **values)
+{
+    Nodeparameter_t np = NULL;
+    Nodevalues_t nv = NULL;
+    Nodeparameter_t *tmp = NULL;
+    PolicyProfile_t pp = NULL;
+
+    if (!obj || !name)
+    {
+        fprintf(stderr, "No obj or no name\n");
+        return -EINVAL;
+    }
+    nv = (Nodevalues_t)obj->userdata;
+    if (nv)
+    {
+        pp = nv->policies[nv->cur_policy];
+        if (pp->num_profiles > num_values)
+        {
+            fprintf(stderr, "Only %d values supplied but loop_adapt should measure %d profiles\n", num_values, pp->num_profiles);
+            pp->num_profiles = num_values;
+        }
+        if (!nv->param_hash)
+        {
+            nv->param_hash = g_hash_table_new(g_str_hash, g_str_equal);
+        }
+        if (_parameter_exists(nv, name))
+        {
+            fprintf(stderr, "Parameter already exists for %s %d\n", loop_adapt_type_name(obj->type), obj->os_index);
             return 1;
         }
         np = _parameter_malloc(name, desc);
         if (np)
         {
-            np->type = NODEPARAMETER_DOUBLE;
-            np->best.dval = -1.0;
-            np->min.dval = min;
-            np->max.dval = max;
-            np->cur.dval = cur;
+            np->type = NODEPARAMETER_VOIDPTR;
+            np->best.ival = -1;
             np->has_best = 0;
-            np->start.dval = cur;
             np->steps = pp->num_profiles-1;
             np->old_vals = (Value*)malloc((pp->num_profiles+1) * sizeof(Value));
             np->num_old_vals = 0;
-            np->old_vals[0].dval = np->cur.dval;
-            np->num_old_vals++;
+            np->test_vals = (Value*) malloc(num_values * sizeof(Value));
+            for (int i = 0; i < num_values; i++)
+            {
+                np->test_vals[i].pval = values[i];
+            }
+            np->num_test_vals = num_values;
+            np->start.pval = np->test_vals[0].pval;
+            np->cur.pval = np->test_vals[0].pval;
             // Add the parameter to the parameter hash table of the node
             g_hash_table_insert(nv->param_hash, (gpointer) g_strdup(name), (gpointer) np);
         }
@@ -332,6 +429,7 @@ int loop_adapt_exec_policies(hwloc_topology_t tree, hwloc_obj_t obj)
             if (loop_adapt_debug)
                 printf("Executing policy %s for %s %d for profile %d\n", cur_p->name, loop_adapt_type_name(obj->type), obj->logical_index, pp->cur_profile-1);
             ret = cur_p->loop_adapt_policy_eval(tree, obj);
+            printf("Eval %d\n", ret);
             if (ret)
             {
                 pp->opt_profile = pp->cur_profile-1;

@@ -24,8 +24,13 @@ int loop_adapt_add_policy(hwloc_topology_t tree, Policy *p, int num_cpus, int *c
 int loop_adapt_begin_policies(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj);
 int loop_adapt_end_policies(int cpuid, hwloc_topology_t tree, hwloc_obj_t obj);
 int loop_adapt_exec_policies(hwloc_topology_t tree, hwloc_obj_t obj);
+
 int loop_adapt_add_int_parameter(hwloc_obj_t obj, char* name, char* desc, int cur, int min, int max);
+int loop_adapt_add_int_parameter_list(hwloc_obj_t obj, char* name, char* desc, int num_values, int *values);
 int loop_adapt_add_double_parameter(hwloc_obj_t obj, char* name, char* desc, double cur, double min, double max);
+int loop_adapt_add_double_parameter_list(hwloc_obj_t obj, char* name, char* desc, int num_values, double *values);
+
+int loop_adapt_add_voidptr_parameter_list(hwloc_obj_t obj, char* name, char* desc, int num_values, void **values);
 
 int loop_adapt_init_parameter(hwloc_obj_t obj, Policy_t policy);
 

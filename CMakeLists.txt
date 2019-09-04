@@ -19,11 +19,14 @@ endif()
 
 set (SOURCES
     src/ghash.c
+    src/bstrlib.c
+    src/bstrlib_helper.c
     src/loop_adapt.c
     src/loop_adapt_policy.c
     src/loop_adapt_policy_blocksize.c
     src/loop_adapt_policy_dvfs.c
     src/loop_adapt_policy_ompthreads.c
+    src/loop_adapt_policy_funcptr.c
     src/loop_adapt_helper.c
     src/loop_adapt_config.c
     src/loop_adapt_search.c

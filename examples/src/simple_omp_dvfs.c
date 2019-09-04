@@ -9,7 +9,7 @@
 #include <likwid.h>
 
 #define ARRAY_SIZE 80000000
-#define ITERATIONS 15
+#define ITERATIONS 20
 
 #define TEST_LOOP(s, var, start, cond, inc) \
     for (var = (start); cond; var += inc)
@@ -21,7 +21,7 @@ void dummy(void)
 
 int main(int argc, char* argv[])
 {
-    int i, j, k;
+    int i, j;
     double *a, *b, *c;
     double s = 0;
     int blockSize = 0;
@@ -44,39 +44,31 @@ int main(int argc, char* argv[])
     REGISTER_THREAD_COUNT_FUNC(omp_get_num_threads);
     REGISTER_THREAD_ID_FUNC(omp_get_thread_num);
     REGISTER_CPU_ID_FUNC(sched_getcpu);
-    REGISTER_LOOP("LOOP");
-    REGISTER_POLICY("LOOP", "POL_BLOCKSIZE", 9, 1);
-    REGISTER_SEARCHALGO("LOOP", "POL_BLOCKSIZE", "SEARCH_BASIC");
-    
-    //REGISTER_NEW("LOOP", "POL_BLOCKSIZE", "SEARCH_BASIC", 1)
-    //REGISTER_NEW("LOOP", "POL_OMPTHREADS", "SEARCH_BASIC", 2)
-    //REGISTER_POLICY("LOOP", "POL_OMPTHREADS", 7, 1);
-    //REGISTER_EVENT("LOOP", LOOP_ADAPT_SCOPE_MACHINE, sched_getcpu(), "edata", "edata", NODEPARAMETER_INT, &edata);
+    REGISTER_LOOP("DVFS");
+    REGISTER_POLICY("DVFS", "POL_DVFS", 5, 2);
+    REGISTER_SEARCHALGO("DVFS", "POL_DVFS", "SEARCH_BASIC");
 
 #pragma omp parallel
 {
     max_threads = omp_get_num_threads();
-    //REGISTER_PARAMETER("LOOP", "blksize", LOOP_ADAPT_SCOPE_MACHINE, sched_getcpu(), NODEPARAMETER_INT, 5, 1, 20);
-    int tmp[10] = {1,4,6,10,50,100,200,300,500,1000};
-    REGISTER_PARAMETER_LIST("LOOP", "blksize", LOOP_ADAPT_SCOPE_MACHINE, sched_getcpu(), NODEPARAMETER_INT, 10, tmp);
+    double tmp[8] = { 0.8, 1.2, 1.5, 1.9, 2.3, 2.7, 3, 3.4};
+    REGISTER_PARAMETER_LIST("DVFS", "cfreq", LOOP_ADAPT_SCOPE_MACHINE, sched_getcpu(), NODEPARAMETER_DOUBLE, 8, tmp);
 }
-    //REGISTER_PARAMETER("LOOP", LOOP_ADAPT_SCOPE_MACHINE, "nthreads", 0, NODEPARAMETER_INT, 1, 1, max_threads);
-    //nr_threads = max_threads;
+
 
     timer_start(&t);
-    LA_FOR("LOOP", j = 0, j < ITERATIONS, j++)
+    LA_FOR("DVFS", j = 0, j < ITERATIONS, j++)
     {
         printf("Loop Body Begin\n");
-        //GET_INT_PARAMETER("LOOP", nr_threads, LOOP_ADAPT_SCOPE_MACHINE, "nthreads", 0);
-        GET_INT_PARAMETER("LOOP", "blksize", blockSize, LOOP_ADAPT_SCOPE_MACHINE, sched_getcpu());
+        GET_INT_PARAMETER("DVFS", "cfreq", blockSize, LOOP_ADAPT_SCOPE_MACHINE, sched_getcpu());
 #pragma omp parallel private(i) num_threads(max_threads)
 {
+        //int cpu = sched_getcpu();
 
-#pragma omp for
+#pragma omp for 
         for (i = 0; i < ARRAY_SIZE; i++)
         {
-            for (k = 0; k < blockSize; k++)
-                a[i] =+ (b[i]*b[i])+(0.5*b[i])+(c[i]*c[i])+(0.5*c[i]);
+            a[i] = (b[i]*b[i])+(0.5*b[i])+(c[i]*c[i])+(0.5*c[i]);
             if (a[i] < 0)
                 dummy();
         }

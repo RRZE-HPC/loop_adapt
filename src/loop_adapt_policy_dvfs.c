@@ -3,6 +3,9 @@
 #include <loop_adapt_helper.h>
 #include <loop_adapt_calc.h>
 
+#include <bstrlib.h>
+#include <bstrlib_helper.h>
+
 static int likwid_initialized = 0;
 static int likwid_configured = 0;
 static int likwid_started = 0;
@@ -23,32 +26,25 @@ static double* freqs = NULL;
 
 static void parse_avail_freqs(char* s)
 {
-    int num_f = 0;
-    const char split[2] = " ";
-    char *token, *eptr;
-    
-    for (int i = 0; i < strlen(s); i++)
+    struct bstrList* flist;
+    bstring bs = bfromcstr(s);
+    flist = bsplit(bs, ' ');
+    freqs = malloc(flist->qty * sizeof(double));
+    memset(freqs, 0.0, flist->qty * sizeof(double));
+    for (int i = 0; i < flist->qty; i++)
     {
-        if (s[i] == '.')
-            num_f++;
+        double f = atof(bdata(flist->entry[i]));
+        freqs[i] = f;
     }
-    num_freqs = num_f;
-    freqs = malloc(num_f * sizeof(double));
-    memset(freqs, 0, num_f * sizeof(double));
-    num_f = 0;
-    token = strtok(s, split);
-    while(token)
+    num_freqs = flist->qty;
+    bstrListPrint(flist);
+    for (int i = 0; i < num_freqs; i++)
     {
-        double f = strtod(token, &eptr);
-        if (token != eptr)
-        {
-            freqs[num_f] = f;
-            printf("%d -> %f MHz\n", num_f, freqs[num_f]);
-            num_f++;
-        }
-        token = strtok(NULL, split);
+        printf("%f ", freqs[i]);
     }
-    
+    printf("\n");
+    bdestroy(bs);
+    bstrListDestroy(flist);
 }
 
 int loop_adapt_policy_dvfs_post_param_cpu(char* location, Nodeparameter_t param)
@@ -59,7 +55,7 @@ int loop_adapt_policy_dvfs_post_param_cpu(char* location, Nodeparameter_t param)
         int threadid = 0;
         int f_valid = 0;
         double f = param->cur.dval;
-        printf("%f\n", f);
+        printf("%s %f\n", location, f);
         CpuTopology_t topo = get_cpuTopology();
         if (f > 0)
         {
@@ -67,7 +63,6 @@ int loop_adapt_policy_dvfs_post_param_cpu(char* location, Nodeparameter_t param)
             {
                 if (freqs[i] == f)
                 {
-                    
                     f_valid = 1;
                     break;
                 }
@@ -78,18 +73,36 @@ int loop_adapt_policy_dvfs_post_param_cpu(char* location, Nodeparameter_t param)
             fprintf(stderr, "ERROR POL_DVFS: Given frequency %f not available or not valid\n", f);
             return -EINVAL;
         }
+
         int ret = sscanf(location, "S%d", &socketid);
+        uint64_t ufreq = (uint64_t)(f*1E6);
+        uint64_t testfreq = (uint64_t)(f*1E9);
         if (ret == 1 && socketid >= 0 && socketid < topo->numSockets )
         {
             for (int i=0; i < topo->numHWThreads; i++)
             {
                 if (topo->threadPool[i].packageId == socketid && topo->threadPool[i].inCpuSet)
                 {
-                    freq_setCpuClockMin(topo->threadPool[i].apicId, (uint64_t)(f*1E6));
-                    freq_setCpuClockMax(topo->threadPool[i].apicId, (uint64_t)(f*1E6));
-                    freq_setCpuClockMin(topo->threadPool[i].apicId, (uint64_t)(f*1E6));
-                    freq_setCpuClockMax(topo->threadPool[i].apicId, (uint64_t)(f*1E6));
-                    fprintf(stdout, "Pinning frequency to %f for CPU %d\n", f, topo->threadPool[i].apicId);
+                    int done_any = 0;
+                    //printf("%lu -> %lu %lu\n", testfreq, freq_getCpuClockMin(topo->threadPool[i].apicId), freq_getCpuClockMax(topo->threadPool[i].apicId));
+                    if (freq_getCpuClockMin(topo->threadPool[i].apicId) != testfreq)
+                    {
+                        freq_setCpuClockMin(topo->threadPool[i].apicId, ufreq);
+                    }
+                    if (freq_getCpuClockMax(topo->threadPool[i].apicId) != testfreq)
+                    {
+                        freq_setCpuClockMax(topo->threadPool[i].apicId, ufreq);
+                    }
+                    if (freq_getCpuClockMin(topo->threadPool[i].apicId) != testfreq)
+                    {
+                        freq_setCpuClockMin(topo->threadPool[i].apicId, ufreq);
+                    }
+                    if (freq_getCpuClockMax(topo->threadPool[i].apicId) != testfreq)
+                    {
+                        freq_setCpuClockMax(topo->threadPool[i].apicId, ufreq);
+                    }
+                    if (loop_adapt_debug)
+                        fprintf(stdout, "Pinning frequency to %f for CPU %d\n", f, topo->threadPool[i].apicId);
                 }
             }
             return 0;
@@ -155,8 +168,6 @@ int loop_adapt_policy_dvfs_init(int num_cpus, int* cpulist, int num_profiles)
     char maxuclock[20];
     snprintf(minclock, 19, "MIN_CPUFREQ");
     snprintf(maxclock, 19, "MAX_CPUFREQ");
-    snprintf(minuclock, 19, "MIN_UNCOREFREQ");
-    snprintf(maxuclock, 19, "MAX_UNCOREFREQ");
     CpuTopology_t cputopo = get_cpuTopology();
     
     parse_avail_freqs(freq_getAvailFreq(cpulist[0]));
@@ -167,13 +178,9 @@ int loop_adapt_policy_dvfs_init(int num_cpus, int* cpulist, int num_profiles)
         {
             fprintf(stderr, "DEBUG: Add define %s = %f for CPU %d\n", minclock, freqs[0],  cpulist[c]);
             fprintf(stderr, "DEBUG: Add define %s = %f for CPU %d\n", maxclock, freqs[num_freqs-1],  cpulist[c]);
-            fprintf(stderr, "DEBUG: Add define %s = %f for CPU %d\n", minuclock, freqs[0],  cpulist[c]);
-            fprintf(stderr, "DEBUG: Add define %s = %f for CPU %d\n", maxuclock, freqs[num_freqs-1],  cpulist[c]);
         }
         la_calc_add_def(minclock, freqs[0], cpulist[c]);
         la_calc_add_def(maxclock, freqs[num_freqs-1], cpulist[c]);
-        la_calc_add_def(minuclock, freqs[0], cpulist[c]);
-        la_calc_add_def(maxuclock, freqs[num_freqs-1], cpulist[c]);
     }
     
     dvfs_num_cpus = num_cpus;
@@ -228,7 +235,7 @@ int loop_adapt_policy_dvfs_eval(hwloc_topology_t tree, hwloc_obj_t obj)
                     fprintf(stderr, "DEBUG POL_DVFS: Evaluate param %s for %s with idx %d (opt:%d, cur:%d)\n", pparam->name, loop_adapt_type_name((AdaptScope)obj->type), obj->logical_index, pp->opt_profile, pp->cur_profile-1);
 
                 eval = la_calc_evaluate(p, pparam, opt_values, opt_runtime, cur_values, cur_runtime);
-                if (loop_adapt_debug == 2)
+                //if (loop_adapt_debug == 2)
                     fprintf(stderr, "DEBUG POL_DVFS: Evaluation %s = %d\n", pparam->eval, eval);
             }
         }
@@ -245,7 +252,7 @@ int loop_adapt_policy_dvfs_eval(hwloc_topology_t tree, hwloc_obj_t obj)
             walker->type == HWLOC_OBJ_MACHINE ||
             walker->type == HWLOC_OBJ_PU)
         {
-            eval = loop_adapt_policy_dvfs_eval(tree, walker);
+            eval += loop_adapt_policy_dvfs_eval(tree, walker);
             walker = walker->parent;
         }
         else
@@ -274,21 +281,22 @@ int loop_adapt_policy_dvfs_begin(int cpuid, hwloc_topology_t tree, hwloc_obj_t o
         }
         if (!likwid_configured)
         {
+            Policy_t p = tdata->cur_policy;
             if (loop_adapt_debug == 2)
-                fprintf(stderr, "DEBUG POL_DVFS: Adding group %s to LIKWID\n", POL_DVFS.likwid_group);
-            likwid_gid = perfmon_addEventSet(POL_DVFS.likwid_group);
+                fprintf(stderr, "DEBUG POL_DVFS: Adding group %s to LIKWID\n", p->likwid_group);
+            likwid_gid = perfmon_addEventSet(p->likwid_group);
             if (likwid_gid >= 0)
             {
                 // We store which indicies we need later for evaluation. We can also use
                 // special performance groups that offer only the required metrics but
                 // with this way we can use default performance groups.
-                for (int m = 0; m < POL_DVFS.num_metrics; m++)
+                for (int m = 0; m < p->num_metrics; m++)
                 {
                     for (int i = 0; i < perfmon_getNumberOfMetrics(likwid_gid); i++)
                     {
-                        if (strcmp(POL_DVFS.metrics[m].name, perfmon_getMetricName(likwid_gid, i)) == 0)
+                        if (strcmp(p->metrics[m].name, perfmon_getMetricName(likwid_gid, i)) == 0)
                         {
-                            POL_DVFS.metric_idx[m] = i;
+                            p->metric_idx[m] = i;
                             if (loop_adapt_debug == 2)
                                 fprintf(stderr, "DEBUG POL_DVFS: Using metric with ID %d\n", i);
                         }

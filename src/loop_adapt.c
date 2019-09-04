@@ -41,6 +41,8 @@ static int max_num_values = 0;
 int (*_tcount_func)() = NULL;
 /*! \brief Function pointer for a function returning the current thread ID */
 int (*_tid_func)() = NULL;
+/*! \brief Function pointer for a function returning the current CPU ID */
+int (*_cid_func)() = NULL;
 
 /*! \brief  Taskset of the application */
 cpu_set_t loop_adapt_cpuset;
@@ -49,6 +51,9 @@ cpu_set_t loop_adapt_cpuset_master;
 
 /*! \brief Basic lock securing the loop_adapt data structures */
 static pthread_mutex_t loop_adapt_lock = PTHREAD_MUTEX_INITIALIZER;
+
+int loop_adapt_active = 1;
+int loop_adapt_debug = 2;
 
 
 /*! \brief  The constructor loop_adapt_init()
@@ -115,7 +120,7 @@ int _loop_adapt_get_cpucount()
 
 For OpenMP you can use omp_get_num_threads().
  */
-void loop_adapt_register_cpucount_func(int (*handle)())
+void loop_adapt_register_tidcount_func(int (*handle)())
 {
     if (handle)
     {
@@ -126,7 +131,7 @@ void loop_adapt_register_cpucount_func(int (*handle)())
 /* \brief Register a function that return the ID of the calling processing unit
 (e.g. thread or task)
 */
-void loop_adapt_register_getcpu_func(int (*handle)())
+void loop_adapt_register_gettid_func(int (*handle)())
 {
     if (handle)
     {
@@ -134,8 +139,18 @@ void loop_adapt_register_getcpu_func(int (*handle)())
     }
 }
 
+/* \brief Register a function that return the ID of the current CPU
+*/
+void loop_adapt_register_getcpuid_func(int (*handle)())
+{
+    if (handle)
+    {
+        _cid_func = handle;
+    }
+}
+
 /* \brief Get the function pointer to retrieve the number of processing units */
-void loop_adapt_get_cpucount_func(int (**handle)())
+void loop_adapt_get_tidcount_func(int (**handle)())
 {
     *handle = NULL;
     int val = 0;
@@ -152,12 +167,23 @@ void loop_adapt_get_cpucount_func(int (**handle)())
 
 /* \brief Get the function pointer to retrieve the identifier of a processing
 unit */
-void loop_adapt_get_getcpu_func(int (**handle)())
+void loop_adapt_get_gettid_func(int (**handle)())
 {
     *handle = NULL;
     if (_tid_func)
     {
         *handle = _tid_func;
+    }
+}
+
+/* \brief Get the function pointer to retrieve the identifier of a processing
+unit */
+void loop_adapt_get_getcpuid_func(int (**handle)())
+{
+    *handle = NULL;
+    if (_cid_func)
+    {
+        *handle = _cid_func;
     }
 }
 
@@ -416,6 +442,59 @@ void loop_adapt_register_int_param( char* string,
 }
 
 
+void loop_adapt_register_int_paramlist( char* string,
+                                        char* name,
+                                        AdaptScope scope,
+                                        int cpu,
+                                        char* desc,
+                                        int num_values,
+                                        int* values)
+{
+    int objidx;
+    hwloc_topology_t tree = NULL;
+    Treedata_t tdata = NULL;
+    if (!string || cpu < 0 || !name || scope <= LOOP_ADAPT_SCOPE_NONE || scope >= LOOP_ADAPT_SCOPE_MAX)
+    {
+        fprintf(stderr, "ERROR: Invalid argument to loop_adapt_register_int_param\n");
+        return;
+    }
+    // Check whether the loop was registered (Not sure whether we need this lock)
+    //pthread_mutex_lock(&loop_adapt_global_hash_lock);
+    tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
+    //pthread_mutex_unlock(&loop_adapt_global_hash_lock);
+    if (tree && cpu >= 0 && cpu < num_cpus)
+    {
+        tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
+        int len = hwloc_get_nbobjs_by_type(tree, scope);
+        // Resolve object index based on the scope
+        if (scope == LOOP_ADAPT_SCOPE_THREAD)
+        {
+            objidx = cpus_to_objidx[cpu];
+        }
+        else
+        {
+            // Walk up the tree starting with own CPU until we find an object
+            // with type == scope
+            objidx = get_objidx_above_cpuidx(tree, scope, cpus_to_objidx[cpu]);
+        }
+        if (objidx >= 0 && objidx < len)
+        {
+            // We found an object index, so get the object and add the parameter
+            // for the scope
+            hwloc_obj_t obj = hwloc_get_obj_by_type(tree, scope, objidx);
+            Nodevalues_t vals = (Nodevalues_t)obj->userdata;
+            if (obj)
+            {
+                if (loop_adapt_debug)
+                    fprintf(stderr, "DEBUG: Parameter %s: %d...%d at %s %d\n", name, values[0], values[num_values-1], loop_adapt_type_name(obj->type), obj->logical_index);
+                // Add the parameter to the object's parameter hash
+                loop_adapt_add_int_parameter_list(obj, name, desc, num_values, values);
+
+            }
+        }
+    }
+}
+
 /*! \brief Get an integer parameter from the loop tree
 
 This function searches for the parameter of the current CPU (or other scope if
@@ -430,7 +509,6 @@ int loop_adapt_get_int_param( char* string, AdaptScope scope, int cpu, char* nam
 {
     int ret = 0;
     int objidx;
-    TimerData t;
     hwloc_topology_t tree = NULL;
     // Check whether the loop was registered
     pthread_mutex_lock(&loop_adapt_global_hash_lock);
@@ -482,6 +560,7 @@ int loop_adapt_get_int_param( char* string, AdaptScope scope, int cpu, char* nam
     pthread_mutex_unlock(&loop_adapt_global_hash_lock);
     return ret;
 }
+
 
 /*! \brief Register a double parameter in the loop's topology tree
 
@@ -542,6 +621,59 @@ void loop_adapt_register_double_param( char* string,
     }
 }
 
+void loop_adapt_register_double_paramlist( char* string,
+                                        char* name,
+                                        AdaptScope scope,
+                                        int cpu,
+                                        char* desc,
+                                        int num_values,
+                                        double* values)
+{
+    int objidx;
+    hwloc_topology_t tree = NULL;
+    Treedata_t tdata = NULL;
+    if (!string || cpu < 0 || !name || scope <= LOOP_ADAPT_SCOPE_NONE || scope >= LOOP_ADAPT_SCOPE_MAX)
+    {
+        fprintf(stderr, "ERROR: Invalid argument to loop_adapt_register_double_paramlist\n");
+        return;
+    }
+    // Check whether the loop was registered (Not sure whether we need this lock)
+    //pthread_mutex_lock(&loop_adapt_global_hash_lock);
+    tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
+    //pthread_mutex_unlock(&loop_adapt_global_hash_lock);
+    if (tree && cpu >= 0 && cpu < num_cpus)
+    {
+        tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
+        int len = hwloc_get_nbobjs_by_type(tree, scope);
+        // Resolve object index based on the scope
+        if (scope == LOOP_ADAPT_SCOPE_THREAD)
+        {
+            objidx = cpus_to_objidx[cpu];
+        }
+        else
+        {
+            // Walk up the tree starting with own CPU until we find an object
+            // with type == scope
+            objidx = get_objidx_above_cpuidx(tree, scope, cpus_to_objidx[cpu]);
+        }
+        if (objidx >= 0 && objidx < len)
+        {
+            // We found an object index, so get the object and add the parameter
+            // for the scope
+            hwloc_obj_t obj = hwloc_get_obj_by_type(tree, scope, objidx);
+            Nodevalues_t vals = (Nodevalues_t)obj->userdata;
+            if (obj)
+            {
+                if (loop_adapt_debug)
+                    fprintf(stderr, "DEBUG: Parameter %s: %d...%d at %s %d\n", name, values[0], values[num_values-1], loop_adapt_type_name(obj->type), obj->logical_index);
+                // Add the parameter to the object's parameter hash
+                loop_adapt_add_double_parameter_list(obj, name, desc, num_values, values);
+
+            }
+        }
+    }
+}
+
 /*! \brief Get a double parameter from the loop tree
 
 This function searches for the parameter of the current CPU (or other scope if
@@ -552,7 +684,7 @@ cpu-to-id mapping. If not, use the current tree node as starting point to walk
 up the tree until you find the appropriate tree node of scope. When found,
 look up the parameter name in the node's parameter hash and return the value.
 */
-double loop_adapt_get_double_param_param( char* string, AdaptScope scope, int cpu, char* name)
+double loop_adapt_get_double_param( char* string, AdaptScope scope, int cpu, char* name)
 {
     int objidx = 0;
     double ret = 0;
@@ -583,6 +715,92 @@ double loop_adapt_get_double_param_param( char* string, AdaptScope scope, int cp
         }
     }
     return 0;
+}
+
+void loop_adapt_register_voidptr_paramlist( char* string,
+                                            char* name,
+                                            AdaptScope scope,
+                                            int cpu,
+                                            char* desc,
+                                            int num_values,
+                                            void** values)
+{
+    int objidx;
+    hwloc_topology_t tree = NULL;
+    Treedata_t tdata = NULL;
+    if (!string || cpu < 0 || !name || scope <= LOOP_ADAPT_SCOPE_NONE || scope >= LOOP_ADAPT_SCOPE_MAX)
+    {
+        fprintf(stderr, "ERROR: Invalid argument to loop_adapt_register_voidptr_paramlist\n");
+        return;
+    }
+    // Check whether the loop was registered (Not sure whether we need this lock)
+    //pthread_mutex_lock(&loop_adapt_global_hash_lock);
+    tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
+    //pthread_mutex_unlock(&loop_adapt_global_hash_lock);
+    if (tree && cpu >= 0 && cpu < num_cpus)
+    {
+        tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
+        int len = hwloc_get_nbobjs_by_type(tree, scope);
+        // Resolve object index based on the scope
+        if (scope == LOOP_ADAPT_SCOPE_THREAD)
+        {
+            objidx = cpus_to_objidx[cpu];
+        }
+        else
+        {
+            // Walk up the tree starting with own CPU until we find an object
+            // with type == scope
+            objidx = get_objidx_above_cpuidx(tree, scope, cpus_to_objidx[cpu]);
+        }
+        if (objidx >= 0 && objidx < len)
+        {
+            // We found an object index, so get the object and add the parameter
+            // for the scope
+            hwloc_obj_t obj = hwloc_get_obj_by_type(tree, scope, objidx);
+            Nodevalues_t vals = (Nodevalues_t)obj->userdata;
+            if (obj)
+            {
+                if (loop_adapt_debug)
+                    fprintf(stderr, "DEBUG: Parameter %s: %p...%p at %s %d\n", name, values[0], values[num_values-1], loop_adapt_type_name(obj->type), obj->logical_index);
+                // Add the parameter to the object's parameter hash
+                loop_adapt_add_voidptr_parameter_list(obj, name, desc, num_values, values);
+
+            }
+        }
+    }
+}
+
+void* loop_adapt_get_voidptr_param( char* string, AdaptScope scope, int cpu, char* name)
+{
+    int objidx = 0;
+    void* ret = NULL;
+    hwloc_topology_t tree = NULL;
+
+    tree = g_hash_table_lookup(loop_adapt_global_hash, (gpointer) string);
+
+    if (cpu >= 0 && cpu < num_cpus)
+    {
+        int len = hwloc_get_nbobjs_by_type(tree, scope);
+        Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
+        if (scope == LOOP_ADAPT_SCOPE_THREAD)
+            objidx = cpus_to_objidx[cpu];
+        else
+            objidx = get_objidx_above_cpuidx(tree, scope, cpus_to_objidx[cpu]);
+        hwloc_obj_t obj = hwloc_get_obj_by_type(tree, scope, objidx);
+        Nodevalues_t v = (Nodevalues_t)obj->userdata;
+        PolicyProfile_t p = v->policies[v->cur_policy];
+        if (v)
+        {
+            Nodeparameter_t np = g_hash_table_lookup(v->param_hash, (gpointer) name);
+            if (np)
+            {
+                if (loop_adapt_debug)
+                    fprintf(stderr, "%s = %p\n", name, np->cur.pval);
+                ret = np->cur.pval;
+            }
+        }
+    }
+    return ret;
 }
 
 /*void loop_adapt_register_event(char* string, AdaptScope scope, int cpu, char* name, char* var, Nodeparametertype type, void* ptr)*/
@@ -670,7 +888,7 @@ static ThreadData_t _loop_adapt_get_thread(Treedata_t tdata)
         t->state = LOOP_ADAPT_THREAD_RUN;
         // Read current CPU affinity of thread
         int ret = sched_getaffinity(system_tid, sizeof(cpu_set_t), &t->cpuset);
-        loop_adapt_get_getcpu_func(&tid_func);
+        loop_adapt_get_gettid_func(&tid_func);
         if (tid_func)
         {
             // If a function to get a thread ID was registered, store that ID
@@ -825,12 +1043,53 @@ static int _loop_adapt_end_cpu(hwloc_topology_t tree, int cpuid)
                         {
                             walker = walker->parent;
                         }
-                        loop_adapt_init_parameter(walker, pol);
+                        if (walker->type != cpu_obj->type && cpu_obj->sibling_rank == 0)
+                        {
+                            printf("Calling loop_adapt_init_parameter for %s %d\n", loop_adapt_type_name(walker->type), walker->os_index);
+                            loop_adapt_init_parameter(walker, pol);
+                        }
                     }
                     p->cur_profile_iters = 0;
                     /* Update results in the whole tree */
                 }
                 update_tree(cpu_obj, update_profile);
+            }
+            else if (p->cur_profile == p->num_profiles)
+            {
+                // Mark the policy as done if we measured num_profiles profiles
+                pol->done = 1;
+            }
+        }
+    }
+    return 0;
+}
+
+static int _loop_adapt_end_obj(hwloc_topology_t tree, int cpuid, hwloc_obj_t obj)
+{
+    Treedata_t tdata = (Treedata_t)hwloc_topology_get_userdata(tree);
+    Policy_t pol = tdata->cur_policy;
+    if (obj)
+    {
+        Nodevalues_t vals = (Nodevalues_t)obj->userdata;
+        if (vals)
+        {
+            PolicyProfile_t p = vals->policies[vals->cur_policy];
+            int update_profile = p->cur_profile;
+            if (p->cur_profile < p->num_profiles)
+            {
+                if (p->cur_profile_iters < p->profile_iters-1)
+                {
+                    /* More iterations are required for the profile */
+                    p->cur_profile_iters++;
+                }
+                else
+                {
+                    /* Stop the loop measurements */
+                    loop_adapt_end_policies(cpuid, tree, obj);
+                    p->cur_profile++;
+                    p->cur_profile_iters = 0;
+                }
+                update_tree(obj, update_profile);
             }
             else if (p->cur_profile == p->num_profiles)
             {
@@ -894,7 +1153,7 @@ int loop_adapt_begin(char* string, char* filename, int linenumber)
                  */
                 int cpucount = 0;
                 int (*tcount_func)() = NULL;
-                loop_adapt_get_cpucount_func(&tcount_func);
+                loop_adapt_get_tidcount_func(&tcount_func);
                 if (tcount_func)
                 {
                     cpucount = tcount_func();
@@ -911,7 +1170,7 @@ int loop_adapt_begin(char* string, char* filename, int linenumber)
                 // completely serial (no cpucount function registered)
                 if (!tcount_func || cpucount > 1)
                 {
-                    loop_adapt_get_getcpu_func(&tid_func);
+                    loop_adapt_get_getcpuid_func(&tid_func);
                     cpuid = (tid_func != NULL ? tid_func() : sched_getcpu());
 
                     _loop_adapt_begin_cpu(tree, cpuid);
@@ -1027,7 +1286,7 @@ int loop_adapt_end(char* string)
                  */
                 int cpucount = 0;
                 int (*tcount_func)() = NULL;
-                loop_adapt_get_cpucount_func(&tcount_func);
+                loop_adapt_get_tidcount_func(&tcount_func);
                 if (tcount_func)
                 {
                     cpucount = tcount_func();
@@ -1037,7 +1296,7 @@ int loop_adapt_end(char* string)
                 if (!tcount_func || cpucount > 1)
                 {
                     int (*tid_func)() = NULL;
-                    loop_adapt_get_getcpu_func(&tid_func);
+                    loop_adapt_get_getcpuid_func(&tid_func);
                     int cpuid = (tid_func != NULL ? tid_func() : sched_getcpu());
                     /* Call the subfunction for the current CPU */
                     int finalize = _loop_adapt_end_cpu(tree, cpuid);
@@ -1052,12 +1311,13 @@ int loop_adapt_end(char* string)
                 // tcount_func and therefore cpucount == 0
                 else if (cpucount == 1)
                 {
-                    
                     for (int c = 0; c < num_cpus; c++)
                     {
                         int cpuid = cpulist[c];
                         if (CPU_ISSET(cpuid, &loop_adapt_cpuset))
                         {
+/*                            int objidx = cpus_to_objidx[cpuid];*/
+/*                            hwloc_obj_t obj = hwloc_get_obj_by_type(tree, HWLOC_OBJ_PU, objidx);*/
                             /* Call the subfunction for all CPUs in the current CPUset */
                             int finalize = _loop_adapt_end_cpu(tree, cpuid);
                             if (finalize > 0)
@@ -1071,8 +1331,8 @@ int loop_adapt_end(char* string)
                             }
                         }
                     }
+                    
                 }
-                
 
                 /* Mark loop as stopped */
                 tdata->status = LOOP_STOPPED;
