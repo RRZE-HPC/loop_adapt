@@ -1,7 +1,5 @@
 # loop_adapt
 
-New version of loop_adapt (https://github.com/RRZE-HPC/loop_adapt).
-
 *loop_adapt* is a runtime system for controlling system parameters and measuring the performance for timestep based applications. It monitors (using timers or [LIKWID](https://github.com/RRZE-HPC/likwid)) the timestep loop with controllable settings like CPU frequency. The measurements are not directly evaluated by loop_adapt but written back to a central control instance like OnSite.
 
 # Description:
