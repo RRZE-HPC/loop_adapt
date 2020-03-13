@@ -1,0 +1,23 @@
+---
+Parameters:
+    HW_PREFETCHER:
+        - [0, 1]
+        - [0, 1]
+        - [0, 1]
+        - [0, 1]
+        - [0, 1]
+        - [0, 1]
+        - [0, 1]
+        - [0, 1]
+    CL_PREFETCHER:
+        - [0, 1]
+        - [0, 1]
+        - [0, 1]
+        - [0, 1]
+        - [0, 1]
+        - [0, 1]
+        - [0, 1]
+        - [0, 1]
+Measurements:
+    LIKWID:
+        L3: L3 bandwidth
