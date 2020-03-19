@@ -267,3 +267,70 @@ int loop_adapt_param_limit_tolist(ParameterValueLimit in, ParameterValueLimit *o
     }
     return -1;
 }
+
+
+int loop_adapt_check_param_limit(ParameterValue p, ParameterValueLimit l)
+{
+    int i = 0;
+    if (p.type < LOOP_ADAPT_PARAMETER_VALUE_TYPE_MIN || p.type >= LOOP_ADAPT_PARAMETER_TYPE_MAX)
+    {
+        return -EINVAL;
+    }
+    if (l.type < LOOP_ADAPT_PARAMETER_LIMIT_TYPE_MIN || l.type >= LOOP_ADAPT_PARAMETER_LIMIT_TYPE_MAX)
+    {
+        return -EINVAL;
+    }
+    if (l.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_LIST)
+    {
+        for (i = 0; i < l.limit.list.num_values; i++)
+        {
+            if (loop_adapt_equal_param_value(p, l.limit.list.values[i]))
+            {
+                return 1;
+            }
+        }
+    }
+    else if (l.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_RANGE)
+    {
+        if (loop_adapt_less_param_value(l.limit.range.start, l.limit.range.end))
+        {
+            if (l.limit.range.step.type == LOOP_ADAPT_PARAMETER_TYPE_INVALID)
+            {
+                if (loop_adapt_less_param_value(p, l.limit.range.end) ||
+                    loop_adapt_greater_param_value(p, l.limit.range.start))
+                {
+                    return 0;
+                }
+                return 1;
+            }
+            else
+            {
+                // case where we have a step parameter
+            }
+        }
+        else if (loop_adapt_greater_param_value(l.limit.range.start, l.limit.range.end))
+        {
+            if (l.limit.range.step.type == LOOP_ADAPT_PARAMETER_TYPE_INVALID)
+            {
+                if (loop_adapt_less_param_value(p, l.limit.range.start) ||
+                    loop_adapt_greater_param_value(p, l.limit.range.end))
+                {
+                    return 0;
+                }
+                return 1;
+            }
+            else
+            {
+                // case where we have a step parameter
+            }
+        }
+        else
+        {
+            if (loop_adapt_equal_param_value(l.limit.range.start, p))
+            {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}

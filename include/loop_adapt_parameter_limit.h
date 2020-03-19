@@ -13,6 +13,8 @@ void loop_adapt_destroy_param_limit(ParameterValueLimit l);
 int loop_adapt_next_limit_value(ParameterValueLimit *l, ParameterValue* v);
 int loop_adapt_param_limit_tolist(ParameterValueLimit in, ParameterValueLimit *out);
 
+int loop_adapt_check_param_limit(ParameterValue p, ParameterValueLimit l);
+
 #define DEC_NEW_INTRANGE_PARAM_LIMIT(START, END, STEP) \
     { \
         .type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_RANGE, \

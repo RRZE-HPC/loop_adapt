@@ -310,6 +310,53 @@ int loop_adapt_add_param_value(ParameterValue a, ParameterValue b, ParameterValu
     return -EINVAL;
 }
 
+int loop_adapt_mult_param_value(ParameterValue a, ParameterValue b, ParameterValue *result)
+{
+    if (a.type == b.type)
+    {
+        switch(a.type)
+        {
+            case LOOP_ADAPT_PARAMETER_TYPE_INT:
+                result->value.ival = a.value.ival * b.value.ival;
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_UINT:
+                result->value.uval = a.value.uval * b.value.uval;
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_LONG:
+                result->value.lval = a.value.lval * b.value.lval;
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_ULONG:
+                result->value.ulval = a.value.ulval * b.value.ulval;
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_DOUBLE:
+                result->value.dval = a.value.dval * b.value.dval;
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_FLOAT:
+                result->value.fval = a.value.fval * b.value.fval;
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_BOOL:
+                result->value.bval = (a.value.bval * b.value.bval > 0 ? TRUE : FALSE);
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_CHAR:
+                result->value.cval = a.value.cval * b.value.cval;
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_STR:
+                //result->value.ival = a.value.ival + b.value.ival;
+                fprintf(stderr, "TYPE ERROR: Multiplication of strings not possible\n");
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_PTR:
+                //result->value.ival = a.value.ival + b.value.ival;
+                fprintf(stderr, "TYPE ERROR: Multiplication of pointers not possible\n");
+                break;
+            default:
+                fprintf(stderr, "TYPE ERROR: Multiplication of invalid values not possible\n");
+                break;
+        }
+        result->type = a.type;
+    }
+    return -EINVAL;
+}
+
 int loop_adapt_equal_param_value(ParameterValue a, ParameterValue b)
 {
     if (a.type == b.type)
@@ -392,6 +439,50 @@ int loop_adapt_less_param_value(ParameterValue a, ParameterValue b)
                 break;
             default:
                 fprintf(stderr, "TYPE ERROR: Less check of invalid values not possible\n");
+                break;
+        }
+    }
+    return -EINVAL;
+}
+
+int loop_adapt_greater_param_value(ParameterValue a, ParameterValue b)
+{
+    if (a.type == b.type)
+    {
+        switch(a.type)
+        {
+            case LOOP_ADAPT_PARAMETER_TYPE_INT:
+                return a.value.ival > b.value.ival;
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_UINT:
+                return a.value.uval > b.value.uval;
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_LONG:
+                return a.value.lval > b.value.lval;
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_ULONG:
+                return a.value.ulval > b.value.ulval;
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_DOUBLE:
+                return a.value.dval > b.value.dval;
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_FLOAT:
+                return a.value.fval > b.value.fval;
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_BOOL:
+                return a.value.bval > b.value.bval;
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_CHAR:
+                return a.value.cval > b.value.cval;
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_STR:
+                fprintf(stderr, "TYPE ERROR: Greater check of strings not possible\n");
+                break;
+            case LOOP_ADAPT_PARAMETER_TYPE_PTR:
+                return a.value.pval > b.value.pval;
+                break;
+            default:
+                fprintf(stderr, "TYPE ERROR: Greater check of invalid values not possible\n");
                 break;
         }
     }

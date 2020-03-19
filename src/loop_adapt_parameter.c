@@ -138,6 +138,7 @@ static int _loop_adapt_add_parameter_to_tree(ParameterDefinition* def, int idx_i
             {
                 p->param_list_idx = idx_in_list;
                 p->instance = i;
+                p->limit.type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID;
                 loop_adapt_copy_param_value(def->value, &p->value);
 
                 DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Adding parameter '%s' to %s %d, def->name, hwloc_obj_type_string(def->scope), i);
@@ -451,6 +452,14 @@ int loop_adapt_parameter_set(ThreadData_t thread, char* parameter, ParameterValu
             {
                 if (value.type == p->value.type)
                 {
+                    if (p->limit.type != LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID)
+                    {
+                        if (!loop_adapt_check_param_limit(value, p->limit))
+                        {
+                            ERROR_PRINT(Value not in limits of parameter);
+                            return -1;
+                        }
+                    }
                     DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Setting parameter %s, parameter);
                     loop_adapt_copy_param_value(value, &p->value);
                     parameter_set_function f = loop_adapt_active_parameters[p->param_list_idx].set;
