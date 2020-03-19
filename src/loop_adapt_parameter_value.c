@@ -528,10 +528,12 @@ int loop_adapt_greater_param_value(ParameterValue a, ParameterValue b)
 
 int loop_adapt_cast_param_value(ParameterValue* a, ParameterValueType_t type)
 {
+    int ret = -EINVAL;
     if (a && type >= LOOP_ADAPT_PARAMETER_VALUE_TYPE_MIN && type < LOOP_ADAPT_PARAMETER_TYPE_MAX )
     {
         if (type != a->type)
         {
+            ret = 0;
             switch(type)
             {
                 case LOOP_ADAPT_PARAMETER_TYPE_INT:
@@ -560,17 +562,20 @@ int loop_adapt_cast_param_value(ParameterValue* a, ParameterValueType_t type)
                     break;
                 case LOOP_ADAPT_PARAMETER_TYPE_PTR:
                     fprintf(stderr, "TYPE ERROR: Casting to pointer values not possible\n");
+                    ret = -1;
                     break;
                 case LOOP_ADAPT_PARAMETER_TYPE_STR:
                     fprintf(stderr, "TYPE ERROR: Casting to string values not possible\n");
+                    ret = -1;
                     break;
                 default:
                     fprintf(stderr, "TYPE ERROR: Casting of invalid values not possible\n");
+                    ret = -1;
                     break;
             }
         }
     }
-    return -EINVAL;
+    return ret;
 }
 
 int loop_adapt_parse_param_value(char* string, ParameterValueType_t type, ParameterValue* value)

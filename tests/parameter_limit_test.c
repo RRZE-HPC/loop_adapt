@@ -20,6 +20,8 @@ int main(int argc, char* argv[])
     int i = 0;
     ParameterValueLimit ir = DEC_NEW_INTRANGE_PARAM_LIMIT(0, 10, 2);
     test_limit(ir);
+    ParameterValueLimit ir_rev = DEC_NEW_INTRANGE_PARAM_LIMIT(10, 0, -2);
+    test_limit(ir_rev);
     ParameterValueLimit dr = DEC_NEW_DOUBLERANGE_PARAM_LIMIT(0, 10, 2);
     test_limit(dr);
     ParameterValueLimit il = DEC_NEW_LIST_PARAM_LIMIT();
@@ -44,6 +46,27 @@ int main(int argc, char* argv[])
     ParameterValueLimit tolist;
     loop_adapt_param_limit_tolist(ir, &tolist);
     test_limit(tolist);
+
+    ParameterValue p = DEC_NEW_INT_PARAM_VALUE(4);
+    if (loop_adapt_check_param_limit(p, il) == 1)
+    {
+        printf("In range\n");
+    }
+    if (loop_adapt_check_param_limit(p, ir) == 1)
+    {
+        printf("In range\n");
+    }
+    if (loop_adapt_check_param_limit(p, ir_rev) == 1)
+    {
+        printf("In range\n");
+    }
+    loop_adapt_destroy_param_value(p);
+    ParameterValue d = DEC_NEW_DOUBLE_PARAM_VALUE(2.0);
+    if (loop_adapt_check_param_limit(d, ir) == 1)
+    {
+        printf("Cast + In range\n");
+    }
+    loop_adapt_destroy_param_value(d);
 
     loop_adapt_destroy_param_limit(ir);
     loop_adapt_destroy_param_limit(dr);

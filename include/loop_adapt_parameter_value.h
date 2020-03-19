@@ -5,6 +5,7 @@
 
 ParameterValue loop_adapt_new_param_value(ParameterValueType_t type);
 int loop_adapt_copy_param_value(ParameterValue in, ParameterValue *out);
+int loop_adapt_cast_param_value(ParameterValue* a, ParameterValueType_t type);
 
 int loop_adapt_less_param_value(ParameterValue a, ParameterValue b);
 int loop_adapt_greater_param_value(ParameterValue a, ParameterValue b);
