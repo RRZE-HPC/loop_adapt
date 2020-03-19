@@ -15,7 +15,7 @@ CPPFLAGS   = -g -O2 -Wno-format -fPIC
 SHARED_CFLAGS = -fPIC
 SHARED_LFLAGS = -shared -L$(LIKWID_LIBDIR)
 DYNAMIC_TARGET_LIB = libloop_adapt.so
-LIBS =  -llikwid -lhwloc
+LIBS =  -llikwid -lhwloc -lstdc++
 
 
 all: $(DYNAMIC_TARGET_LIB)
