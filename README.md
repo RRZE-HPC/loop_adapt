@@ -91,8 +91,8 @@ The scope can be (type `LoopAdaptScope_t`):
 ## Builtin system parameters
 *loop_adapt* ships with a set of builtin system parameters that can be used by configurations to manipulate the system state for different measurements. Currently the provided parameters are:
 
-|Name | Scope|Type|Description|
-|-----|------|-----------|
+|  Name  |  Scope  |  Type  | Description |
+|:------:|:-------:|:------:|-------------|
 |`HW_PREFETCHER`|`LOOP_ADAPT_SCOPE_THREAD`| `boolean` ||
 |`CL_PREFETCHER`|`LOOP_ADAPT_SCOPE_THREAD`| `boolean` ||
 |`DCU_PREFETCHER`|`LOOP_ADAPT_SCOPE_THREAD`| `boolean`||
