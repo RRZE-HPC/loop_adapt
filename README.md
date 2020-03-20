@@ -62,9 +62,18 @@ int main(int argc, char* argv)
 }
 ```
 
-## How does it work (optional stuff)
+Before you start the application, you configure the configuration system with environment variables. Each backend might require additional environment variables:
 
-Optinally, the user can register own application parameters (`LA_NEW_<INT|BOOL|DOUBLE|...>_PARAMETER(parametername, scope, init_value)`). This parameter can also be adjusted by a configuration later. Examples for application parameters are sizes for loop-blocking, loop-tiling or grid cells. The user can get the current value with `LA_GET_<INT|BOOL|DOUBLE|...>_PARAMETER(parametername)` and manually modified with `LA_SET_<INT|BOOL|DOUBLE|...>_PARAMETER(parametername, value)`.
+- `LA_CONFIG_INPUT_TYPE`: Specifiy the input backend for configurations.
+  - `0`: Text file input reading line by line of format `<parameter0>:<id0>:<value0>;<parameter1>:<id1>:<value1>;...|<measurement0>:<config0>:<metrics0>;<measurement1>:<config1>:<metrics1>;...`. The filename is `<loopname>.txt` like `TIMESTEPLOOP.txt` for loop in above example.
+  - `1`: (Not usable!) Example backend to a C++ class
+  - `2`: (Work in progress) Receiving configurations over a TCP socket
+- `LA_CONFIG_OUTPUT_TYPE`: Specifiy the output backend for configurations.
+  - `0`: Test file output writing line by line of format `<parameter0>:<id0>:<value0>;<parameter1>:<id1>:<value1>;...|<measurement0>:<config0>:<metrics0>:<value0>;<measurement1>:<config1>:<metrics1>:<value1>,...`. The output folder is defined through the environment variable `LA_CONFIG_TXT_OUTPUT` and creates files name `<loopname>.txt` like `TIMESTEPLOOP.txt` for loop in above example.
+  - `1`: Output to stdout or stderr line by line of format `<parameter0>:<id0>:<value0>;<parameter1>:<id1>:<value1>;...|<measurement0>:<config0>:<metrics0>:<value0>;<measurement1>:<config1>:<metrics1>:<value1>;...`. The default is output to stdout. The output can be explicitly set with `LA_CONFIG_STDOUT_OUTPUT=(stdout|stderr)` environment variable.
+  - `2`: (Not usable!) Example backend to a C++ class
+  - `3`: (Work in progress) Sending configuration results over a TCP socket
+
 
 # Parameter space
 ## Introduction
@@ -82,80 +91,59 @@ The scope can be (type `LoopAdaptScope_t`):
 ## Builtin system parameters
 *loop_adapt* ships with a set of builtin system parameters that can be used by configurations to manipulate the system state for different measurements. Currently the provided parameters are:
 
-|Name | Scope|Description|
+|Name | Scope|Type|Description|
 |-----|------|-----------|
-|`HW_PREFETCHER`|`LOOP_ADAPT_SCOPE_THREAD`| |
-|`CL_PREFETCHER`|`LOOP_ADAPT_SCOPE_THREAD`| |
-|`DCU_PREFETCHER`|`LOOP_ADAPT_SCOPE_THREAD`| |
-|`IP_PREFETCHER`|`LOOP_ADAPT_SCOPE_THREAD`| |
-|`CPU_FREQUENCY`|`LOOP_ADAPT_SCOPE_THREAD`| The CPU frequency of a CPU core. |
-|`UNCORE_FREQUENCY`|`LOOP_ADAPT_SCOPE_SOCKET`| The Uncore frequency of a  CPU socket. |
-|`OMP_NUM_THREADS` |`LOOP_ADAPT_SCOPE_SYSTEM` | The max. number of OpenMP threads.
+|`HW_PREFETCHER`|`LOOP_ADAPT_SCOPE_THREAD`| `boolean` ||
+|`CL_PREFETCHER`|`LOOP_ADAPT_SCOPE_THREAD`| `boolean` ||
+|`DCU_PREFETCHER`|`LOOP_ADAPT_SCOPE_THREAD`| `boolean`||
+|`IP_PREFETCHER`|`LOOP_ADAPT_SCOPE_THREAD`| `boolean` ||
+|`CPU_FREQUENCY`|`LOOP_ADAPT_SCOPE_THREAD`| `int` |The CPU frequency of a CPU core. |
+|`UNCORE_FREQUENCY`|`LOOP_ADAPT_SCOPE_SOCKET`| `int` |The Uncore frequency of a  CPU socket. |
+|`OMP_NUM_THREADS` |`LOOP_ADAPT_SCOPE_SYSTEM` | `int` |The max. number of OpenMP threads.|
 
-## User-provided parameters
+With `boolean` = `unsigned int:1`.
 
-### Parameter Value
-Parameter values are containers for C data types to simplify the handling internally, the application API consists of a range of functions/macros for each data type.
+## User defined parameters
 
-The supported types are:
+Users can register their own parameters in the system topology tree. Like the builtin parameters, they are identified by a name and attached to the topology tree according to the given scope. The parameter is initialized with a given value.
 
-- `boolean`: `unsigned int` single bit
-- `int`
-- `uint`: `unsigned int`
-- `long`
-- `ulong`: `unsigned long`
-- `double`
-- `float`
-- `char`
-- `string`: `char *`
-- `ptr` : `void *`
+There exists one distinct creation macro/function per supported data type:
 
-You can declare an integer parameter like:
+- `int LA_NEW_BOOL_PARAMETER(name, scope, boolean value)` =
+- `int LA_NEW_CHAR_PARAMETER(name, scope, char value)`
+- `int LA_NEW_INT_PARAMETER(name, scope, int value)`
+- `int LA_NEW_UINT_PARAMETER(name, scope, unsigned int value)`
+- `int LA_NEW_LONG_PARAMETER(name, scope, long value)`
+- `int LA_NEW_ULONG_PARAMETER(name, scope, unsigned long value)`
+- `int LA_NEW_DOUBLE_PARAMETER(name, scope, double value)`
+- `int LA_NEW_FLOAT_PARAMETER(name, scope, float value)`
+- `int LA_NEW_STRING_PARAMETER(name, scope, char* value)`
+- `int LA_NEW_PTR_PARAMETER(name, scope, void* value)`
 
-```
-ParameterValue v = DEC_NEW_INT_PARAM_VALUE(2);
-```
+## Getting and setting of parameters
+For retrieval of the current parameter's value and its manipulation exist getter and setter macros/functions:
 
+- `LA_GET_<TYPE>_PARAMETER(name, <TYPE> variable)`
+- `LA_SET_<TYPE>_PARAMETER(name, <TYPE> value)`
 
+With `<TYPE>` like in above section.
 
-### Parameter Limit
-A parameter limit defines bounds for parameters used in *loop_adapt*. There are two types of parameter limits:
-
-- ranges defined by start, end and optionally step parameter value. At range checks the start is inclusive while the end is exclusive. If there is a step value, loop_adapt checks at range checks whether the value is a valid one respecting the step factor. Ranges can be declared like:
-```
-ParameterValueLimit limit = DEC_NEW_INTRANGE_PARAM_LIMIT(start, end, step)
-[...]
-loop_adapt_destroy_param_limit(limit);
-```
-- lists of parameter values. Lists are created empty and can be filled with by function calls:
-```
-ParameterValueLimit limit = DEC_NEW_LIST_PARAM_LIMIT();
-for (i = 0; i < 5; i++)
-{
-    ParameterValue v = DEC_NEW_DOUBLE_PARAM_VALUE(i);
-    loop_adapt_add_param_limit_list(&limit, v);
-    loop_adapt_destroy_param_value(v);
-}
-[...]
-loop_adapt_destroy_param_limit(limit);
-```
-
-
-## Application usage of parameters
-For the application, there exist the basic three parameter functions:
-
-- `int loop_adapt_new_<TYPE>_parameter(char* name, LoopAdaptScope_t scope, <TYPE> value)`
-- `TYPE loop_adapt_new_get_parameter(char* name)`
-- `int loop_adapt_set_<TYPE>_parameter(char* name, <TYPE> value)`
-
-
-
+If it is builtin system parameter, the setter macro also triggers the manipulation of the system state like activating deallocating a hardware prefetcher. User defined parameters don't have such a functionality, the state is only kept internally.
 
 
 # Measurement system
+There are currently two measurement systems available. There are only builtin measurement systems, it is not possible for users to add their own.
 
-# Configuration system
+- `TIMER`: A simple timer for runtime measurements. The `configuration` selects the used timer:
+  - `LIKWID`: LIKWID' rdtsc based timer
+  - `REALTIME`: Uses `clock_gettime` with `TIMER_MEASUREMENT_REALTIME`
+  - `MONOTONIC`: Uses `clock_gettime` with `TIMER_MEASUREMENT_MONOTONIC`
+  - `PROCESS_CPUTIME`: Uses `clock_gettime` with `TIMER_MEASUREMENT_PROCESS_CPUTIME`
+  - `THREAD_CPUTIME`: Uses `clock_gettime` with `TIMER_MEASUREMENT_THREAD_CPUTIME`
+- `LIKWID`: The `configuration` is a LIKWID eventset of performance group like `L3`. The `metrics` value specifies a match for a metric in that group. In order to get the read and write `L3 bandwidth [MByte/s]`, it is enough to write `L3 bandwidth` (first match get selected).
 
+# Documentation of internals
+The documentation of the internals can be found [here](INTERNALS.md).
 
 
 # What's missing
@@ -163,3 +151,7 @@ For the application, there exist the basic three parameter functions:
 - Own application parameters don't have any background effents. With background effects I mean that they don't call any further functions. Other predefined parameters like `HW_PREFETCHER` call a function in the background that actually manipulates the hardware prefetcher at system level. For application parameters this might be useful as well.
 
 - Already implemented but not yet added anywhere are `Parameter` limits. These limits allow to specify a valid set of values for a parameter. This is e.g. needed for a parameter that reflects a function pointer which points to different code variants. The function pointers to the code variants need to be known and are the only valid values for the parameter.
+
+- Multiplexing user defined parameters with configurations received from the backend
+
+- Announing of loops, parameters and measurement backends to configuration output backend. If there is some application producing configurations like a network daemon, it needs to know the available backends and knobs to work like what's the range of a user defined paramters, its scope and what type the parameters value is.
