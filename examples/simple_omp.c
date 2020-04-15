@@ -37,13 +37,14 @@ int main(int argc, char* argv[])
     }
     //timer_init();
 
-    setenv("LA_CONFIG_TXT_INPUT", "../config/LOOP.txt", 1);
+    setenv("LA_CONFIG_TXT_INPUT", "../config", 1);
     setenv("LA_CONFIG_INPUT_TYPE", "0", 1);
     setenv("LA_CONFIG_OUTPUT_TYPE", "1", 1);
 
     loop_adapt_debug_level(2);
 
     LA_INIT;
+    LA_REGISTER_INPARALLEL_FUNC(omp_in_parallel);
 
     LA_REGISTER("LOOP", 5);
     LA_NEW_INT_PARAMETER("blksize", LOOP_ADAPT_SCOPE_SYSTEM, 1);
@@ -51,7 +52,7 @@ int main(int argc, char* argv[])
 #pragma omp parallel
 {
     max_threads = omp_get_num_threads();
-    //LA_REGISTER_THREAD(omp_get_thread_num());
+    LA_REGISTER_THREAD(omp_get_thread_num());
     //REGISTER_PARAMETER("LOOP", "blksize", LOOP_ADAPT_SCOPE_MACHINE, sched_getcpu(), NODEPARAMETER_INT, 5, 1, 20);
 /*    int tmp[10] = {1,4,6,10,50,100,200,300,500,1000};*/
 /*    REGISTER_PARAMETER_LIST("LOOP", "blksize", LOOP_ADAPT_SCOPE_MACHINE, sched_getcpu(), NODEPARAMETER_INT, 10, tmp);*/
