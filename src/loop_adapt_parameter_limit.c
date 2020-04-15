@@ -269,119 +269,38 @@ int loop_adapt_param_limit_tolist(ParameterValueLimit in, ParameterValueLimit *o
 }
 
 
-int loop_adapt_check_param_limit(ParameterValue p, ParameterValueLimit l)
+int loop_adapt_copy_param_value_limit(ParameterValueLimit in, ParameterValueLimit *out)
 {
-    int err = 0;
     int i = 0;
-    if (p.type < LOOP_ADAPT_PARAMETER_VALUE_TYPE_MIN || p.type >= LOOP_ADAPT_PARAMETER_TYPE_MAX)
+    if (out && in.type >= LOOP_ADAPT_PARAMETER_LIMIT_TYPE_MIN && in.type < LOOP_ADAPT_PARAMETER_LIMIT_TYPE_MAX)
     {
-        return -EINVAL;
+        out->type = in.type;
+        switch(in.type)
+        {
+            case LOOP_ADAPT_PARAMETER_LIMIT_TYPE_RANGE:
+                loop_adapt_copy_param_value(in.limit.range.start, &out->limit.range.start);
+                loop_adapt_copy_param_value(in.limit.range.end, &out->limit.range.end);
+                if (in.limit.range.step.type != LOOP_ADAPT_PARAMETER_TYPE_INVALID)
+                {
+                    loop_adapt_copy_param_value(in.limit.range.step, &out->limit.range.step);
+                }
+                if (in.limit.range.current.type != LOOP_ADAPT_PARAMETER_TYPE_INVALID)
+                {
+                    loop_adapt_copy_param_value(in.limit.range.current, &out->limit.range.current);
+                }
+                break;
+            case LOOP_ADAPT_PARAMETER_LIMIT_TYPE_LIST:
+                out->type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_LIST;
+                out->limit.list.num_values = 0;
+                out->limit.list.value_idx = -1;
+                out->limit.list.values = NULL;
+                for (i = 0; i < in.limit.list.num_values; i++)
+                {
+                    loop_adapt_add_param_limit_list(out, in.limit.list.values[i]);
+                }
+                break;
+        }
+        return 0;
     }
-    if (l.type < LOOP_ADAPT_PARAMETER_LIMIT_TYPE_MIN || l.type >= LOOP_ADAPT_PARAMETER_LIMIT_TYPE_MAX)
-    {
-        return -EINVAL;
-    }
-    ParameterValue p_copy;
-    loop_adapt_copy_param_value(p, &p_copy);
-    if (l.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_LIST)
-    {
-        if (l.limit.list.num_values > 0)
-        {
-            if (p_copy.type != l.limit.list.values[0].type)
-            {
-                err = loop_adapt_cast_param_value(&p_copy, l.limit.list.values[0].type);
-                if (err < 0)
-                {
-                    return err;
-                }
-            }
-            for (i = 0; i < l.limit.list.num_values; i++)
-            {
-                if (loop_adapt_equal_param_value(p_copy, l.limit.list.values[i]))
-                {
-                    return 1;
-                }
-            }
-        }
-    }
-    else if (l.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_RANGE)
-    {
-
-        if (p_copy.type != l.limit.range.start.type)
-        {
-            err = loop_adapt_cast_param_value(&p_copy, l.limit.range.start.type);
-            if (err < 0)
-            {
-                return err;
-            }
-        }
-        if (loop_adapt_less_param_value(l.limit.range.start, l.limit.range.end))
-        {
-            if (l.limit.range.step.type == LOOP_ADAPT_PARAMETER_TYPE_INVALID)
-            {
-                if (loop_adapt_less_param_value(p_copy, l.limit.range.end) ||
-                    loop_adapt_greater_param_value(p_copy, l.limit.range.start))
-                {
-                    return 0;
-                }
-                return 1;
-            }
-            else
-            {
-                ParameterValue v, s;
-                loop_adapt_copy_param_value(l.limit.range.start, &v);
-                loop_adapt_copy_param_value(l.limit.range.step, &s);
-                while (loop_adapt_less_param_value(v, l.limit.range.end))
-                {
-                    if (loop_adapt_equal_param_value(v, p_copy))
-                    {
-                        return 1;
-                    }
-                    loop_adapt_add_param_value(v, s, &v);
-                }
-            }
-        }
-        else if (loop_adapt_greater_param_value(l.limit.range.start, l.limit.range.end))
-        {
-            if (l.limit.range.step.type == LOOP_ADAPT_PARAMETER_TYPE_INVALID)
-            {
-                if (loop_adapt_less_param_value(p_copy, l.limit.range.start) ||
-                    loop_adapt_greater_param_value(p_copy, l.limit.range.end))
-                {
-                    return 0;
-                }
-                return 1;
-            }
-            else
-            {
-                ParameterValue v, s;
-                loop_adapt_copy_param_value(l.limit.range.start, &v);
-                loop_adapt_copy_param_value(l.limit.range.step, &s);
-                while (loop_adapt_greater_param_value(v, l.limit.range.end))
-                {
-                    if (loop_adapt_equal_param_value(v, p_copy))
-                    {
-                        return 1;
-                    }
-                    loop_adapt_add_param_value(v, s, &v);
-                }
-            }
-        }
-        else
-        {
-            if (p_copy.type != l.limit.range.start.type)
-            {
-                err = loop_adapt_cast_param_value(&p_copy, l.limit.range.start.type);
-                if (err < 0)
-                {
-                    return err;
-                }
-            }
-            if (loop_adapt_equal_param_value(l.limit.range.start, p_copy))
-            {
-                return 1;
-            }
-        }
-    }
-    return 0;
+    return -EINVAL;
 }

@@ -315,107 +315,91 @@ int loop_adapt_register_thread(int threadid)
     return loop_adapt_threads_register(threadid);
 }
 
-static void loop_adapt_announce_destroy(LoopAdaptAnnounce_t announce)
-{
-    int i = 0;
-    int j = 0;
-    if (announce)
-    {
-        bdestroy(announce->loopname);
+// static void loop_adapt_announce_destroy(LoopAdaptAnnounce_t announce)
+// {
+//     int i = 0;
+//     int j = 0;
+//     if (announce)
+//     {
+//         bdestroy(announce->loopname);
 
-        if (announce->num_parameters > 0 && announce->parameters)
-        {
-            for (i = 0; i < announce->num_parameters; i++)
-            {
-                LoopAdaptConfigurationParameter* p = &announce->parameters[i];
-                for (j = 0; j < p->num_values; j++)
-                {
-                    loop_adapt_destroy_param_value(p->values[j]);
-                }
-                bdestroy(p->parameter);
-                p->type = LOOP_ADAPT_PARAMETER_TYPE_INVALID;
-                free(p->values);
-                p->values = NULL;
-                p->num_values = 0;
-            }
-            free(announce->parameters);
-            announce->parameters = NULL;
-            announce->num_parameters = 0;
-        }
-        if (announce->num_measurements > 0 && announce->measurements)
-        {
-            for (i = 0; i < announce->num_measurements; i++)
-            {
-                LoopAdaptConfigurationMeasurement* m = &announce->measurements[i];
-                bdestroy(m->measurement);
-                bdestroy(m->metric);
-                bdestroy(m->config);
-            }
-            free(announce->measurements);
-            announce->measurements = NULL;
-            announce->num_measurements = 0;
-        }
-    }
-    return;
-}
+//         if (announce->num_parameters > 0 && announce->parameters)
+//         {
+//             for (i = 0; i < announce->num_parameters; i++)
+//             {
+//                 LoopAdaptConfigurationParameter* p = &announce->parameters[i];
+//                 for (j = 0; j < p->num_values; j++)
+//                 {
+//                     loop_adapt_destroy_param_value(p->values[j]);
+//                 }
+//                 bdestroy(p->parameter);
+//                 p->type = LOOP_ADAPT_PARAMETER_TYPE_INVALID;
+//                 free(p->values);
+//                 p->values = NULL;
+//                 p->num_values = 0;
+//             }
+//             free(announce->parameters);
+//             announce->parameters = NULL;
+//             announce->num_parameters = 0;
+//         }
+//         if (announce->num_measurements > 0 && announce->measurements)
+//         {
+//             for (i = 0; i < announce->num_measurements; i++)
+//             {
+//                 LoopAdaptConfigurationMeasurement* m = &announce->measurements[i];
+//                 bdestroy(m->measurement);
+//                 bdestroy(m->metric);
+//                 bdestroy(m->config);
+//             }
+//             free(announce->measurements);
+//             announce->measurements = NULL;
+//             announce->num_measurements = 0;
+//         }
+//     }
+//     return;
+// }
 
-static int loop_adapt_announce(char* string)
-{
-    int err = 0;
-    hwloc_topology_t loop_tree = NULL;
-    if (loop_adapt_active)
-    {
-        if (get_smap_by_key(loop_adapt_global_hash, string, (void**)&loop_tree) == 0)
-        {
-            LoopAdaptAnnounce_t announce = NULL;
-            announce = malloc(sizeof(LoopAdaptAnnounce));
-            if (!announce)
-            {
-                return -ENOMEM;
-            }
-            announce->loopname = bfromcstr(string);
-            err = loop_adapt_parameters_announce(announce);
-            if (err)
-            {
-                loop_adapt_announce_destroy(announce);
-                return err;
-            }
-            err = loop_adapt_measurement_announce(announce);
-            if (err)
-            {
-                loop_adapt_announce_destroy(announce);
-                return err;
-            }
-            loop_adapt_configuration_announce(announce);
-        }
-    }
-}
+// static int loop_adapt_announce(char* string)
+// {
+//     int err = 0;
+//     hwloc_topology_t loop_tree = NULL;
+//     if (loop_adapt_active)
+//     {
+//         if (get_smap_by_key(loop_adapt_global_hash, string, (void**)&loop_tree) == 0)
+//         {
+//             LoopAdaptAnnounce_t announce = NULL;
+//             announce = malloc(sizeof(LoopAdaptAnnounce));
+//             if (!announce)
+//             {
+//                 return -ENOMEM;
+//             }
+//             announce->loopname = bfromcstr(string);
+//             err = loop_adapt_parameter_configs(announce);
+//             if (err)
+//             {
+//                 loop_adapt_announce_destroy(announce);
+//                 return err;
+//             }
+//             err = loop_adapt_parameter_configs(announce);
+//             if (err)
+//             {
+//                 loop_adapt_announce_destroy(announce);
+//                 return err;
+//             }
+//             loop_adapt_configuration_announce(announce);
+//         }
+//     }
+// }
 
-/*void loop_adapt_register_int_paramlist( char* string,*/
-/*                                        char* name,*/
-/*                                        ParameterScope_t scope,*/
-/*                                        int cpu,*/
-/*                                        int num_values,*/
-/*                                        int* values)*/
-/*{*/
-/*    hwloc_topology_t tree = NULL;*/
-/*    LoopData_t ldata = NULL;*/
-/*    if (loop_adapt_active)*/
-/*    {*/
-/*        if (get_smap_by_key(loop_adapt_global_hash, string, (void**)&tree) < 0)*/
-/*        {*/
-/*            fprintf(stderr, "ERROR: Loop string %s not registered\n", string);*/
-/*            return;*/
-/*        }*/
-/*        ldata = (LoopData_t)hwloc_topology_get_userdata(tree);*/
-/*        int len = hwloc_get_nbobjs_by_type(tree, scope);*/
-/*    }*/
-/*}*/
+
 
 
 /* This function is called when the loop starts and at the beginning of each loop iteration */
 int loop_adapt_start_loop( char* string, char* file, int linenumber )
 {
+    int i = 0;
+    int j = 0;
+    int err = 0;
     hwloc_topology_t tree = NULL;
     LoopData_t ldata = NULL;
     ThreadData_t thread = NULL;
@@ -439,68 +423,144 @@ int loop_adapt_start_loop( char* string, char* file, int linenumber )
                 }
                 else
                 {
-                    int i = 0;
-                    LoopAdaptConfiguration_t config = loop_adapt_get_current_configuration(string);
-                    if (config)
+                    LoopAdaptConfiguration_t config = NULL;
+                    err = loop_adapt_get_current_configuration(string, &config);
+                    if (err == 0 && config)
                     {
 /*                        if (config->configuration_id != ldata->current_config_id)*/
 /*                        {*/
 /*                            fprintf(stderr, "ERROR: Configuration mismatch (%d vs %d) for loop %s\n", config->configuration_id, ldata->current_config_id, string);*/
 /*                        }*/
-                        thread = loop_adapt_threads_get();
+                        if (loop_adapt_threads_in_parallel() == 0)
+                        {
+                            loop_adapt_measurement_stop_all();
+                            for (i = 0; i < loop_adapt_threads_get_count(); i++)
+                            {
+                                thread = loop_adapt_threads_getthread(i);
+                                int nmetrics = loop_adapt_measurement_num_metrics(thread);
+                                ParameterValue* v = malloc(nmetrics * sizeof(ParameterValue));
+                                if (v)
+                                {
+                                    int tmp = 0;
+
+                                    for (j = 0; j < config->num_measurements; j++)
+                                    {
+                                        LoopAdaptConfigurationMeasurement* cm = &config->measurements[j];
+                                        tmp += loop_adapt_measurement_result(thread, bdata(cm->measurement), nmetrics - tmp, &v[tmp]);
+                                    }
+                                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Write %d metrics for config with %d measurements, nmetrics, config->num_measurements);
+                                    loop_adapt_write_configuration_results(thread, string, config, nmetrics, v);
+                                    free(v);
+                                }
+                                loop_adapt_parameter_loop_end(thread);
+                            }
+                            
+
+                        }
+                        else
+                        {
+                            thread = loop_adapt_threads_get();
+                            for (j = 0; j < config->num_measurements; j++)
+                            {
+                                LoopAdaptConfigurationMeasurement* cm = &config->measurements[j];
+                                loop_adapt_measurement_stop(thread, bdata(cm->measurement));
+                            }
+                            int nmetrics = loop_adapt_measurement_num_metrics(thread);
+                            ParameterValue* v = malloc(nmetrics * sizeof(ParameterValue));
+                            if (v)
+                            {
+                                int tmp = 0;
+
+                                for (j = 0; j < config->num_measurements; j++)
+                                {
+                                    LoopAdaptConfigurationMeasurement* cm = &config->measurements[j];
+                                    tmp += loop_adapt_measurement_result(thread, bdata(cm->measurement), nmetrics - tmp, &v[tmp]);
+                                }
+                                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Write %d metrics for config with %d measurements, nmetrics, config->num_measurements);
+                                loop_adapt_write_configuration_results(thread, string, config, nmetrics, v);
+                                free(v);
+                            }
+                            loop_adapt_parameter_loop_end(thread);
+                        }
                         // stop profiling and send data
 /*                        loop_adapt_measurement_stop_all(thread);*/
-                        for (i = 0; i < config->num_measurements; i++)
-                        {
-                            LoopAdaptConfigurationMeasurement* cm = &config->measurements[i];
-                            loop_adapt_measurement_stop(thread, bdata(cm->measurement));
-                        }
-                        int nmetrics = loop_adapt_measurement_num_metrics(thread);
-                        ParameterValue* v = malloc(nmetrics * sizeof(ParameterValue));
-                        if (v)
-                        {
-                            int tmp = 0;
-
-                            for (i = 0; i < config->num_measurements; i++)
-                            {
-                                LoopAdaptConfigurationMeasurement* cm = &config->measurements[i];
-                                tmp += loop_adapt_measurement_result(thread, bdata(cm->measurement),nmetrics - tmp, &v[tmp]);
-                            }
-                            loop_adapt_write_configuration_results(config, nmetrics, v);
-                            free(v);
-                        }
-                        printf("LA: Stop measurement\n");
+                        
+                        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, loop_adapt stop measurements);
                     }
                     ldata->status = LOOP_STOPPED;
                     ldata->num_iterations = 0;
                     ldata->current_config_id = -1;
 
-                    LoopAdaptConfiguration_t new = loop_adapt_get_new_configuration(string);
-                    if (new)
+
+                    LoopAdaptConfiguration_t new = NULL;
+                    err = loop_adapt_get_new_configuration(string, &new);
+                    if (err == 0 && new)
                     {
                         // apply new parameter
                         // configure and start measurements
-                        thread = loop_adapt_threads_get();
-                        for (i = 0; i < new->num_parameters; i++)
+                        if (loop_adapt_threads_in_parallel() == 0)
                         {
-                            LoopAdaptConfigurationParameter* cp = &new->parameters[i];
-                            if (cp->num_values == 1)
+                            for (i = 0; i < loop_adapt_threads_get_count(); i++)
                             {
-                                loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[0]);
+                                thread = loop_adapt_threads_getthread(i);
+                                //_loop_adapt_set_setup_and_start(thread, new);
+                                for (j = 0; j < new->num_parameters; j++)
+                                {
+                                    LoopAdaptConfigurationParameter* cp = &new->parameters[j];
+                                    if (cp->num_values > 1 && thread->thread < cp->num_values)
+                                    {
+                                        loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[thread->thread]);
+                                    }
+                                    else if (cp->num_values == 1)
+                                    {
+                                        loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[0]);
+                                    }
+                                }
+                                for (j = 0; j < new->num_measurements; j++)
+                                {
+                                    LoopAdaptConfigurationMeasurement* cm = &new->measurements[j];
+                                    loop_adapt_measurement_setup(thread, bdata(cm->measurement), cm->config, cm->metric);
+                                }
+                            }
+                            loop_adapt_measurement_start_all();
+
+                            // for (i = 0; i < loop_adapt_threads_get_count(); i++)
+                            // {
+                            //     thread = loop_adapt_threads_getthread(i);
+                            //     for (i = 0; i < new->num_measurements; i++)
+                            //     {
+                            //         LoopAdaptConfigurationMeasurement* cm = &new->measurements[i];
+                            //         loop_adapt_measurement_start(thread, bdata(cm->measurement));
+                            //     }
+                            // }
+                        }
+                        else
+                        {
+                            thread = loop_adapt_threads_get();
+                            for (i = 0; i < new->num_parameters; i++)
+                            {
+                                LoopAdaptConfigurationParameter* cp = &new->parameters[i];
+                                if (cp->num_values > 1 && thread->thread < cp->num_values)
+                                {
+                                    loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[thread->thread]);
+                                }
+                                else if (cp->num_values == 1)
+                                {
+                                    loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[0]);
+                                }
+                            }
+                            for (i = 0; i < new->num_measurements; i++)
+                            {
+                                LoopAdaptConfigurationMeasurement* cm = &new->measurements[i];
+                                loop_adapt_measurement_setup(thread, bdata(cm->measurement), cm->config, cm->metric);
+                            }
+                            for (i = 0; i < new->num_measurements; i++)
+                            {
+                                LoopAdaptConfigurationMeasurement* cm = &new->measurements[i];
+                                loop_adapt_measurement_start(thread, bdata(cm->measurement));
                             }
                         }
-                        for (i = 0; i < new->num_measurements; i++)
-                        {
-                            LoopAdaptConfigurationMeasurement* cm = &new->measurements[i];
-                            loop_adapt_measurement_setup(thread, bdata(cm->measurement), cm->config, cm->metric);
-                        }
-/*                        loop_adapt_measurement_start_all(thread);*/
-                        for (i = 0; i < new->num_measurements; i++)
-                        {
-                            LoopAdaptConfigurationMeasurement* cm = &new->measurements[i];
-                            loop_adapt_measurement_start(thread, bdata(cm->measurement));
-                        }
-                        printf("LA: New parameter settings and start measurement\n");
+                        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, loop_adapt start measurements);
                         ldata->current_config_id = config->configuration_id;
                         ldata->status = LOOP_STARTED;
                         ldata->num_iterations = 1;
@@ -509,40 +569,75 @@ int loop_adapt_start_loop( char* string, char* file, int linenumber )
             }
             else
             {
-                LoopAdaptConfiguration_t config = loop_adapt_get_new_configuration(string);
-                if (config)
+                LoopAdaptConfiguration_t config = NULL;
+                err = loop_adapt_get_new_configuration(string, &config);
+                if (err == 0 && config)
                 {
-                    int i = 0;
                     // apply new parameter
                     // configure and start measurements
-                    thread = loop_adapt_threads_get();
-                    for (i = 0; i < config->num_parameters; i++)
+                    if (loop_adapt_threads_in_parallel() == 0)
                     {
-                        LoopAdaptConfigurationParameter* cp = &config->parameters[i];
-                        if (cp->num_values == 1)
+                        for (i = 0; i < loop_adapt_threads_get_count(); i++)
                         {
-                            loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[0]);
+                            thread = loop_adapt_threads_getthread(i);
+                            loop_adapt_parameter_loop_start(thread);
+                            //_loop_adapt_set_setup_and_start(thread, config);
+                            for (j = 0; j < config->num_parameters; j++)
+                            {
+                                LoopAdaptConfigurationParameter* cp = &config->parameters[j];
+                                if (cp->num_values > 1 && thread->thread < cp->num_values)
+                                {
+                                    loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[thread->thread]);
+                                }
+                                else if (cp->num_values == 1)
+                                {
+                                    loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[0]);
+                                }
+                            }
+                            for (j = 0; j < config->num_measurements; j++)
+                            {
+                                LoopAdaptConfigurationMeasurement* cm = &config->measurements[j];
+                                loop_adapt_measurement_setup(thread, bdata(cm->measurement), cm->config, cm->metric);
+                            }
                         }
+                        loop_adapt_measurement_start_all();
                     }
-                    for (i = 0; i < config->num_measurements; i++)
+                    else
                     {
-                        LoopAdaptConfigurationMeasurement* cm = &config->measurements[i];
-                        loop_adapt_measurement_setup(thread, bdata(cm->measurement), cm->config, cm->metric);
+                        thread = loop_adapt_threads_get();
+                        for (j = 0; j < config->num_parameters; j++)
+                        {
+                            LoopAdaptConfigurationParameter* cp = &config->parameters[j];
+                            if (cp->num_values > 1 && thread->thread < cp->num_values)
+                            {
+                                loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[thread->thread]);
+                            }
+                            else if (cp->num_values == 1)
+                            {
+                                loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[0]);
+                            }
+                        }
+                        for (j = 0; j < config->num_measurements; j++)
+                        {
+                            LoopAdaptConfigurationMeasurement* cm = &config->measurements[j];
+                            loop_adapt_measurement_setup(thread, bdata(cm->measurement), cm->config, cm->metric);
+                        }
+                        for (j = 0; j < config->num_measurements; j++)
+                        {
+                            LoopAdaptConfigurationMeasurement* cm = &config->measurements[j];
+                            loop_adapt_measurement_start(thread, bdata(cm->measurement));
+                        }
+                        loop_adapt_parameter_loop_start(thread);
                     }
-/*                    loop_adapt_measurement_start_all(thread);*/
-                    for (i = 0; i < config->num_measurements; i++)
-                    {
-                        LoopAdaptConfigurationMeasurement* cm = &config->measurements[i];
-                        loop_adapt_measurement_start(thread, bdata(cm->measurement));
-                    }
-                    printf("LA: New parameter settings and start measurement\n");
+                    
+                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, loop_adapt start measurements);
                     ldata->current_config_id = config->configuration_id;
                     ldata->status = LOOP_STARTED;
                     ldata->num_iterations = 1;
                 }
                 else
                 {
-                    fprintf(stderr, "No measurements for loop '%s': No new configuration\n", string);
+                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, loop_adapt received no new configuration);
                     return 1;
                 }
             }
@@ -552,6 +647,11 @@ int loop_adapt_start_loop( char* string, char* file, int linenumber )
     return 1;
 }
 
+int loop_adapt_end(char* name)
+{
+    fprintf(stderr, "loop_adapt_end\n");
+    return 1;
+}
 
 
 #define _LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(NAME, TYPE, VAR) \
@@ -645,7 +745,10 @@ int loop_adapt_set_string_parameter(char* string, char* value)
     }
 }
 
-/*int loop_adapt_new_parameter(char* string, LoopAdaptScope_t scope, ParameterValueType_t type)*/
-/*{*/
-/*    return loop_adapt_parameter_add_user(string, scope, type);*/
-/*}*/
+int loop_adapt_register_inparallel_function(int (*in_parallel)(void))
+{
+    if (in_parallel)
+    {
+        loop_adapt_threads_register_inparallel_func(in_parallel);
+    }
+}

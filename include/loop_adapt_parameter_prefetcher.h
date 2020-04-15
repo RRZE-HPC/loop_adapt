@@ -41,13 +41,13 @@ int loop_adapt_parameter_prefetcher_avail(int instance, ParameterValueLimit* lim
     {
         loop_adapt_destroy_param_limit(*limit);
     }
-    limit->type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_LIST;
+    *limit = loop_adapt_new_param_limit_list();
     ParameterValue t = DEC_NEW_BOOL_PARAM_VALUE(1);
     ParameterValue f = DEC_NEW_BOOL_PARAM_VALUE(0);
     loop_adapt_add_param_limit_list(limit, t);
     loop_adapt_add_param_limit_list(limit, f);
 
-    return 2;
+    return 0;
 }
 
 int loop_adapt_parameter_prefetcher_init()
@@ -104,6 +104,7 @@ void loop_adapt_parameter_prefetcher_finalize()
     { \
         if (!loop_adapt_parameter_prefetcher_initialized) \
         { \
+            ERROR_PRINT(Prefetcher parameter not initialized) \
             return -1; \
         } \
         int cpu = loop_adapt_threads_get_cpu(instance); \
@@ -112,11 +113,11 @@ void loop_adapt_parameter_prefetcher_finalize()
         { \
             if (value.value.bval == TRUE) \
             { \
-                cpuFeatures_enable(instance, PFNAME, 0); \
+                cpuFeatures_enable(cpu, PFNAME, 0); \
             } \
             else \
             { \
-                cpuFeatures_disable(instance, PFNAME, 0); \
+                cpuFeatures_disable(cpu, PFNAME, 0); \
             } \
             return 0; \
         } \
@@ -126,16 +127,21 @@ void loop_adapt_parameter_prefetcher_finalize()
     { \
         if (!loop_adapt_parameter_prefetcher_initialized) \
         { \
+            ERROR_PRINT(Prefetcher parameter not initialized) \
             return -1; \
         } \
         int cpu = loop_adapt_threads_get_cpu(instance); \
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Get current setting of PFNAME for CPU %d, cpu); \
         if (cpu >= 0) \
         { \
-            value->value.bval = cpuFeatures_get(instance, PFNAME); \
+            value->value.bval = cpuFeatures_get(cpu, PFNAME); \
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Get current setting of PFNAME for CPU %d: %u, cpu, value->value.bval); \
             value->type = LOOP_ADAPT_PARAMETER_TYPE_BOOL; \
             return 0; \
+        } \
+        else \
+        { \
+            ERROR_PRINT(Instance %d resolves to CPU %d, instance, cpu); \
         } \
         return -EINVAL; \
     }

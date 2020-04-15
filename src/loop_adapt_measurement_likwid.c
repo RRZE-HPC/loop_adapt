@@ -159,7 +159,7 @@ int loop_adapt_measurement_likwid_setup(int instance, bstring configuration, bst
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Specifying %d new LIKWID metric IDs for LIKWID group %d, count, gid);
 
             perfmon_setupCounters(gid);
-            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Start LIKWID group %d, gid);
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Start LIKWID group %d on CPU %d, gid, cpus[instance]);
             perfmon_startCounters();
             current_group = gid;
             bdestroy(current_group_str);
@@ -176,14 +176,23 @@ void loop_adapt_measurement_likwid_start(int instance)
         return;
     }
     int cpu = cpus[instance];
-    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Reading LIKWID counters for instance %d (CPU %d), instance, cpu);
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Reading (start) LIKWID counters for instance %d (CPU %d), instance, cpu);
     int err = perfmon_readCountersCpu(cpu);
     if (err)
     {
-        ERROR_PRINT(Failed to read LIKWID counters for instance %d (CPU %d), instance, cpu);
+        ERROR_PRINT(Failed to read (start) LIKWID counters for instance %d (CPU %d), instance, cpu);
     }
 }
 
+void loop_adapt_measurement_likwid_startall()
+{
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Reading (start) LIKWID counters for all instances);
+    int err = perfmon_readCounters();
+    if (err)
+    {
+        ERROR_PRINT(Failed to read (start) LIKWID counters for all instances);
+    }
+}
 void loop_adapt_measurement_likwid_stop(int instance)
 {
     if (instance < 0 || instance >= num_cpus)
@@ -191,14 +200,23 @@ void loop_adapt_measurement_likwid_stop(int instance)
         return;
     }
     int cpu = cpus[instance];
-    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Reading LIKWID counters for instance %d (CPU %d), instance, cpu);
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Reading (stop) LIKWID counters for instance %d (CPU %d), instance, cpu);
     int err = perfmon_readCountersCpu(cpu);
     if (err)
     {
-        ERROR_PRINT(Failed to read LIKWID counters for instance %d (CPU %d), instance, cpu);
+        ERROR_PRINT(Failed to read (stop) LIKWID counters for instance %d (CPU %d), instance, cpu);
     }
 }
 
+void loop_adapt_measurement_likwid_stopall()
+{
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Reading (stop) LIKWID counters for all instances);
+    int err = perfmon_readCounters();
+    if (err)
+    {
+        ERROR_PRINT(Failed to read (stop) LIKWID counters for all instances);
+    }
+}
 int loop_adapt_measurement_likwid_result(int instance, int num_values, ParameterValue* values)
 {
     int i = 0;
@@ -209,7 +227,6 @@ int loop_adapt_measurement_likwid_result(int instance, int num_values, Parameter
     {
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Get result for LIKWID group %d metric %d and thread %d, current_group, current_metric_ids[i], instance)
         double r = perfmon_getLastMetric(current_group, current_metric_ids[i], instance);
-        printf("%f\n", r);
         ParameterValue *v = &values[i];
         v->type = LOOP_ADAPT_PARAMETER_TYPE_DOUBLE;
         v->value.dval = r;

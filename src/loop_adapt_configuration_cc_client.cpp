@@ -159,7 +159,7 @@ extern "C" LoopAdaptConfiguration_t loop_adapt_get_current_config_cc_client(char
 }
 
 // Write out measurement results
-extern "C" int loop_adapt_config_cc_client_write(LoopAdaptConfiguration_t config, int num_results, ParameterValue* results)
+extern "C" int loop_adapt_config_cc_client_write(ThreadData_t thread, char* loopname, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results)
 {
     if (initialized)
     {

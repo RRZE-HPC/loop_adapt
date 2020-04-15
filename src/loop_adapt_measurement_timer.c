@@ -176,6 +176,16 @@ void loop_adapt_measurement_timer_start(int instance)
 
 }
 
+void loop_adapt_measurement_timer_startall_cb(mpointer key, mpointer value, mpointer userdata)
+{
+    int *instance = (int*)key;
+    loop_adapt_measurement_timer_start(*instance);
+}
+
+void loop_adapt_measurement_timer_startall()
+{
+    foreach_in_imap(timers, loop_adapt_measurement_timer_startall_cb, NULL);
+}
 void loop_adapt_measurement_timer_stop(int instance)
 {
     TimerMeasurement* timer = NULL;
@@ -208,6 +218,16 @@ void loop_adapt_measurement_timer_stop(int instance)
 
 }
 
+void loop_adapt_measurement_timer_stopall_cb(mpointer key, mpointer value, mpointer userdata)
+{
+    int *instance = (int*)key;
+    loop_adapt_measurement_timer_stop(*instance);
+}
+
+void loop_adapt_measurement_timer_stopall()
+{
+    foreach_in_imap(timers, loop_adapt_measurement_timer_stopall_cb, NULL);
+}
 int loop_adapt_measurement_timer_result(int instance, int num_values, ParameterValue* values)
 {
     TimerMeasurement* timer = NULL;

@@ -53,12 +53,15 @@ typedef struct {
     struct bstrList* lines;
     LoopAdaptConfiguration_t current;
 } ConfigurationFile;
+static Map_t loop_adapt_config_txt_input_hash = NULL;
+static char* dirname = NULL;
 
-static Map_t loop_adapt_config_txt_hash = NULL;
 
-static FILE* outputfile = NULL;
 
-void _loop_adapt_free_config_txt(gpointer val)
+static Map_t loop_adapt_config_txt_output_hash = NULL;
+static char* outputdir = NULL;
+
+void _loop_adapt_free_config_txt_input(gpointer val)
 {
     ConfigurationFile* cfile = (ConfigurationFile*) val;
     if (cfile)
@@ -78,36 +81,89 @@ void _loop_adapt_free_config_txt(gpointer val)
     }
 }
 
-int loop_adapt_config_txt_output_init()
+void _loop_adapt_free_config_txt_output(gpointer val)
 {
-    if (!outputfile)
-    {
-        char* outname = getenv("LA_CONFIG_TXT_OUTPUT");
-        if (outname)
-        {
-            outputfile = fopen(outname, "w");
-        }
-    }
+    FILE* fp = (FILE*)val;
+    fclose(fp);
 }
 
 int loop_adapt_config_txt_input_init()
 {
     int err = 0;
-    int i = 0;
-    char* filename = getenv("LA_CONFIG_TXT_INPUT");
+    char* dname = getenv("LA_CONFIG_TXT_INPUT");
 
 
-    ConfigurationFile* config = NULL;
-    if (!filename)
+    
+    if (!dname)
     {
-        ERROR_PRINT(Environment variable LA_CONFIG_TXT_INPUT not set. Need filename)
+        ERROR_PRINT(Environment variable LA_CONFIG_TXT_INPUT not set. Need directory name)
         return -EINVAL;
     }
-    if (access(filename, R_OK))
+    if (access(dname, X_OK|R_OK))
     {
-        ERROR_PRINT(File %s not readable, filename)
+        ERROR_PRINT(Directory %s not accessible, dname)
         return -ENOENT;
     }
+    dirname = dname;
+
+    if (!loop_adapt_config_txt_input_hash)
+    {
+        err = init_smap(&loop_adapt_config_txt_input_hash, _loop_adapt_free_config_txt_input);
+        if (err)
+        {
+            ERROR_PRINT(Failed to initialize hash table for loopname -> inputfile relation);
+        }
+    }
+
+    return 0;
+}
+
+
+void loop_adapt_config_txt_input_finalize()
+{
+    if (loop_adapt_config_txt_input_hash)
+    {
+        destroy_smap(loop_adapt_config_txt_input_hash);
+        loop_adapt_config_txt_input_hash = NULL;
+        dirname = NULL;
+    }
+    return;
+}
+
+
+
+static int _loop_adapt_get_new_config_txt_resize_values(LoopAdaptConfigurationParameter* parameter, int num_values)
+{
+    if (parameter && num_values > 0)
+    {
+        if (parameter->num_values < num_values)
+        {
+            int j = 0;
+            int old_num_values = parameter->num_values;
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Allocating space for %d parameter values of parameter %s, num_values, bdata(parameter->parameter));
+            ParameterValue* vtmp = realloc(parameter->values, num_values * sizeof(ParameterValue));
+            if (!vtmp)
+            {
+                return -ENOMEM;
+            }
+            parameter->values = vtmp;
+            parameter->num_values = num_values;
+            for (j = old_num_values; j < parameter->num_values; j++)
+            {
+                parameter->values[j].type = LOOP_ADAPT_PARAMETER_TYPE_INVALID;
+                parameter->values[j].value.sval = NULL;
+            }
+        }
+        return 0;
+    }
+    return -EINVAL;
+}
+
+static int  _loop_adapt_get_new_config_txt_read_file(char* filename)
+{
+    int err = 0;
+    int i = 0;
+    ConfigurationFile* config = NULL;
 
 
     bstring content = read_file(filename);
@@ -146,22 +202,16 @@ int loop_adapt_config_txt_input_init()
 
     config->line_idx = 0;
     config->filename = bfromcstr(filename);
-/*    printf("config->filename = %p\n", config->filename);*/
-/*    printf("File %s line %d of %d\n", bdata(config->filename), config->line_idx, config->lines->qty);*/
     config->current = NULL;
-/*    config->new = NULL;*/
 
-    if (!loop_adapt_config_txt_hash)
-    {
-        err = init_smap(&loop_adapt_config_txt_hash, _loop_adapt_free_config_txt);
-    }
+
 
     bstring t = bfromcstr(basename(filename));
     bstring loop = bmidstr(t, 0, blength(t)-4);
     bdestroy(t);
 
     DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Add file %s for loop %s, filename, bdata(loop));
-    add_smap(loop_adapt_config_txt_hash, bdata(loop), config);
+    add_smap(loop_adapt_config_txt_input_hash, bdata(loop), config);
 
     bdestroy(loop);
 
@@ -170,60 +220,25 @@ int loop_adapt_config_txt_input_init()
     return 0;
 }
 
-
-void loop_adapt_config_txt_finalize()
-{
-    if (loop_adapt_config_txt_hash)
-    {
-        destroy_smap(loop_adapt_config_txt_hash);
-    }
-    if (outputfile)
-    {
-        fflush(outputfile);
-        fclose(outputfile);
-    }
-    return;
-}
-
-static int _loop_adapt_get_new_config_txt_resize_values(LoopAdaptConfigurationParameter* parameter, int num_values)
-{
-    if (parameter && num_values > 0)
-    {
-        if (parameter->num_values < num_values)
-        {
-            int j = 0;
-            int old_num_values = parameter->num_values;
-            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Allocating space for %d parameter values of parameter %s, num_values, bdata(parameter->parameter));
-            ParameterValue* vtmp = realloc(parameter->values, num_values * sizeof(ParameterValue));
-            if (!vtmp)
-            {
-                return -ENOMEM;
-            }
-            parameter->values = vtmp;
-            parameter->num_values = num_values;
-            for (j = old_num_values; j < parameter->num_values; j++)
-            {
-                parameter->values[j].type = LOOP_ADAPT_PARAMETER_TYPE_INVALID;
-                parameter->values[j].value.sval = NULL;
-            }
-        }
-        return 0;
-    }
-    return -EINVAL;
-}
-
 LoopAdaptConfiguration_t loop_adapt_get_new_config_txt(char* string)
 {
     int i = 0;
     int j = 0;
     int err = 0;
     ConfigurationFile* cfile = 0;
-    if ((!string) || (!loop_adapt_config_txt_hash))
+    if ((!string) || (!loop_adapt_config_txt_input_hash))
     {
         return NULL;
     }
     DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Get new config for loop %s, string);
-    err = get_smap_by_key(loop_adapt_config_txt_hash, string, (void*)&cfile);
+    err = get_smap_by_key(loop_adapt_config_txt_input_hash, string, (void*)&cfile);
+    if (err != 0 && dirname)
+    {
+        bstring filename = bformat("%s/%s.txt", dirname, string);
+        _loop_adapt_get_new_config_txt_read_file(bdata(filename));
+        bdestroy(filename);
+        err = get_smap_by_key(loop_adapt_config_txt_input_hash, string, (void*)&cfile);
+    }
     if (err == 0)
     {
         if (cfile->line_idx == cfile->lines->qty)
@@ -301,14 +316,26 @@ LoopAdaptConfiguration_t loop_adapt_get_new_config_txt(char* string)
 /*                }*/
                 if (err == 0)
                 {
-                    int id = batoi(s);
-                    if (id < 0 || id >= p->num_values)
+                    if (strncmp(bdata(s), "ALL", 3) == 0)
                     {
-                        ERROR_PRINT(Faulty ID %d for parameter %s, id, bdata(f));
-                        continue;
+                        int id = 0;
+                        for (id = 0; id < p->num_values; id++)
+                        {
+                            ParameterValue* pv = &p->values[id];
+                            loop_adapt_parse_param_value(bdata(t), type, pv);
+                        }
                     }
-                    ParameterValue* pv = &p->values[id];
-                    loop_adapt_parse_param_value(bdata(t), type, pv);
+                    else
+                    {
+                        int id = batoi(s);
+                        if (id < 0 || id >= p->num_values)
+                        {
+                            ERROR_PRINT(Faulty ID %d for parameter %s, id, bdata(f));
+                            continue;
+                        }
+                        ParameterValue* pv = &p->values[id];
+                        loop_adapt_parse_param_value(bdata(t), type, pv);
+                    }
                     p->type = type;
                     pcount++;
                 }
@@ -360,9 +387,9 @@ LoopAdaptConfiguration_t loop_adapt_get_current_config_txt(char* string)
 {
     int err = 0;
     ConfigurationFile* cfile = 0;
-    if (string && loop_adapt_config_txt_hash)
+    if (string && loop_adapt_config_txt_input_hash)
     {
-        err = get_smap_by_key(loop_adapt_config_txt_hash, string, (void*)&cfile);
+        err = get_smap_by_key(loop_adapt_config_txt_input_hash, string, (void*)&cfile);
         if (err == 0)
         {
             return cfile->current;
@@ -371,128 +398,121 @@ LoopAdaptConfiguration_t loop_adapt_get_current_config_txt(char* string)
     return NULL;
 }
 
-int loop_adapt_config_txt_write(LoopAdaptConfiguration_t config, int num_results, ParameterValue* results)
+
+int loop_adapt_config_txt_output_init()
+{
+    if (!outputdir)
+    {
+        char* outdir = getenv("LA_CONFIG_TXT_OUTPUT");
+        if (outdir)
+        {
+            outputdir = outdir;
+        }
+    }
+    if (!loop_adapt_config_txt_output_hash)
+    {
+        int err = init_smap(&loop_adapt_config_txt_output_hash, _loop_adapt_free_config_txt_output);
+        if (err)
+        {
+            ERROR_PRINT(Failed to initialize hash table for loopname -> outputfile relation);
+        }
+    }
+}
+
+void loop_adapt_config_txt_output_finalize()
+{
+    if (loop_adapt_config_txt_output_hash)
+    {
+        destroy_smap(loop_adapt_config_txt_output_hash);
+        loop_adapt_config_txt_output_hash = NULL;
+        outputdir = NULL;
+    }
+    return;
+}
+
+int loop_adapt_config_txt_output_raw(char* loopname, char* rawstring)
+{
+    if (outputdir && loopname && rawstring)
+    {
+        FILE* outputfile = NULL;
+        int err = get_smap_by_key(loop_adapt_config_txt_output_hash, loopname, (void*)&outputfile);
+        if (err != 0)
+        {
+            bstring fname = bformat("%s/%s.txt", outputdir, loopname);
+            outputfile = fopen(bdata(fname), "w");
+            if (outputfile)
+            {
+                add_smap(loop_adapt_config_txt_output_hash, loopname, (void*)outputfile);
+            }
+        }
+        bstring line = bformat("LOOP=%s|%s\n", loopname, rawstring);
+        fwrite(bdata(line), sizeof(char), blength(line), outputfile);
+        bdestroy(line);
+        fflush(outputfile);
+    }
+}
+
+int loop_adapt_config_txt_output_write(ThreadData_t thread, char* loopname, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results)
 {
     int i = 0, j = 0;
-    if (outputfile && config && results)
+    int err = 0;
+    if (outputdir && config && results)
     {
-        bstring line = bfromcstr("");
+        FILE* outputfile = NULL;
+        err = get_smap_by_key(loop_adapt_config_txt_output_hash, loopname, (void*)&outputfile);
+        if (err != 0)
+        {
+            bstring fname = bformat("%s/%s.txt", outputdir, loopname);
+            outputfile = fopen(bdata(fname), "w");
+            if (outputfile)
+            {
+                add_smap(loop_adapt_config_txt_output_hash, loopname, (void*)outputfile);
+            }
+        }
+
+        bstring line = bformat("THREAD=%d:%d|", thread->thread, thread->cpu);
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Writing %d parameters and %d measurements, config->num_parameters, config->num_measurements);
         for (i = 0; i < config->num_parameters; i++)
         {
             LoopAdaptConfigurationParameter *p = &config->parameters[i];
             if (p)
             {
-                bconcat(line, p->parameter);
-                bconchar(line, '=');
-                if (p->num_values > 0)
+                for (j = 0; j < p->num_values; j++)
                 {
-                    char* c = loop_adapt_param_value_str(p->values[0]);
-                    bcatcstr(line, c);
-                    free(c);
-                    for (j = 1; j < p->num_values; j++)
+                    if (p->values[j].type != LOOP_ADAPT_PARAMETER_TYPE_INVALID)
                     {
-                        bconchar(line, ',');
-                        c = loop_adapt_param_value_str(p->values[j]);
-                        bcatcstr(line, c);
+                        char* c = loop_adapt_param_value_str(p->values[j]);
+                        bstring x = loop_adapt_config_parse_default_entry_bdc(p->parameter, j, c);
                         free(c);
+                        bconcat(line, x);
+                        bconchar(line, ';');
+                        bdestroy(x);
                     }
                 }
             }
-            bconchar(line, ';');
         }
-        //btrunc(line, blength(line)-1);
+        btrunc(line, blength(line) - 1);
         bconchar(line, '|');
-        if (config->num_measurements > 0)
+        for (i = 0; i < config->num_measurements; i++)
         {
-            LoopAdaptConfigurationMeasurement *m = &config->measurements[0];
+            LoopAdaptConfigurationMeasurement *m = &config->measurements[i];
             if (m)
             {
-                bconcat(line, m->measurement);
-                bconchar(line, '=');
-                bconcat(line, m->config);
-                bconchar(line, ':');
-                bconcat(line, m->metric);
-                bconchar(line, ':');
-                char* c = loop_adapt_param_value_str(results[0]);
-                bcatcstr(line, c);
+                char* c = loop_adapt_param_value_str(results[i]);
+                bstring x = loop_adapt_config_parse_default_entry_bbb(m->measurement, m->config, m->metric);
+                bconchar(x, ':');
+                bcatcstr(x, c);
                 free(c);
-            }
-            for (i = 1; i < config->num_measurements; i++)
-            {
-                m = &config->measurements[i];
-                if (m)
-                {
-                    bconchar(line, ';');
-                    bconcat(line, m->measurement);
-                    bconchar(line, '=');
-                    bconcat(line, m->config);
-                    bconchar(line, ':');
-                    bconcat(line, m->metric);
-                    bconchar(line, ':');
-                    char* c = loop_adapt_param_value_str(results[0]);
-                    bcatcstr(line, c);
-                    free(c);
-                }
+                bconcat(line, x);
+                bconchar(line, ';');
+                bdestroy(x);
             }
         }
+        btrunc(line, blength(line) - 1);
         bconchar(line, '\n');
-/*        bstring vsep = bfromcstr(",");*/
-/*        bstring psep = bfromcstr(";");*/
-/*        bstring gsep = bfromcstr("|");*/
-/*        bstring msep = bfromcstr(";");*/
-/*        struct bstrList* outline = bstrListCreate();*/
-/*        struct bstrList* plist = bstrListCreate();*/
-/*        for (i = 0; i < config->num_parameters; i++)*/
-/*        {*/
-/*            LoopAdaptConfigurationParameter *p = &config->parameters[i];*/
-/*            if (p)*/
-/*            {*/
-/*                struct bstrList* v = bstrListCreate();*/
-/*                for (j = 0; j < p->num_values; j++)*/
-/*                {*/
-/*                    bstrListAddChar(v, loop_adapt_param_value_str(p->values[j]));*/
-/*                }*/
-/*                bstring vjoin = bjoin(v, vsep);*/
-/*                bstrListDestroy(v);*/
 
-/*                bstring t = bformat("%s=%s", bdata(p->parameter), bdata(vjoin));*/
-/*                bstrListAdd(plist, t);*/
-/*                bdestroy(t);*/
-/*                bdestroy(vjoin);*/
-/*            }*/
-/*        }*/
-/*        bstring pstr = bjoin(plist, psep);*/
-/*        bstrListDestroy(plist);*/
-/*        bstrListAdd(outline, pstr);*/
-/*        bdestroy(pstr);*/
-
-/*        struct bstrList* mlist = bstrListCreate();*/
-/*        for (i = 0; i < config->num_measurements; i++)*/
-/*        {*/
-
-/*            LoopAdaptConfigurationMeasurement *m = &config->measurements[i];*/
-/*            if (m)*/
-/*            {*/
-/*                bstring t = bformat("%s=%s:%s:%s", bdata(m->measurement),*/
-/*                                                   bdata(m->config),*/
-/*                                                   bdata(m->metric),*/
-/*                                                   loop_adapt_param_value_str(results[i]));*/
-/*                bstrListAdd(mlist, t);*/
-/*                bdestroy(t);*/
-/*            }*/
-/*        }*/
-/*        bstring mstr = bjoin(mlist, msep);*/
-/*        bstrListDestroy(mlist);*/
-/*        bstrListAdd(outline, mstr);*/
-/*        bdestroy(mstr);*/
-
-/*        bstring line = bjoin(outline, gsep);*/
         fwrite(bdata(line), sizeof(char), blength(line), outputfile);
+        fflush(outputfile);
         bdestroy(line);
-
-/*        bdestroy(vsep);*/
-/*        bdestroy(psep);*/
-/*        bdestroy(gsep);*/
-/*        bdestroy(msep);*/
     }
 }

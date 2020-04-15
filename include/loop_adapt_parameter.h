@@ -19,13 +19,15 @@ int loop_adapt_parameter_add_user(char* name, LoopAdaptScope_t scope, ParameterV
 int loop_adapt_parameter_set(ThreadData_t thread, char* parameter, ParameterValue value);
 int loop_adapt_parameter_get(ThreadData_t thread, char* parameter, ParameterValue* value);
 int loop_adapt_parameter_getcurrent(ThreadData_t thread, char* parameter, ParameterValue* value);
-int loop_adapt_parameters_announce(LoopAdaptAnnounce_t announce);
+int loop_adapt_parameter_configs(struct bstrList* configs);
 
 
 ParameterValueType_t loop_adapt_parameter_type(char* name);
 LoopAdaptScope_t loop_adapt_parameter_scope(char* name);
 int loop_adapt_parameter_scope_count(char* name);
 
+int loop_adapt_parameter_loop_start(ThreadData_t thread);
+int loop_adapt_parameter_loop_end(ThreadData_t thread);
 void loop_adapt_parameter_finalize();
 
 #endif /* LOOP_ADAPT_PARAMETER_H */

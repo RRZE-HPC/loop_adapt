@@ -2,6 +2,7 @@
 #define LOOP_ADAPT_CONFIGURATION_TYPES_H
 
 #include <loop_adapt_parameter_value_types.h>
+#include <loop_adapt_threads_types.h>
 #include <bstrlib.h>
 
 
@@ -45,8 +46,8 @@ typedef struct {
 
 typedef struct {
     int (*init)();
-    int (*announce)(LoopAdaptAnnounce_t announce);
-    int (*write)(LoopAdaptConfiguration_t config, int num_results, ParameterValue* results);
+    int (*write)(ThreadData_t thread, char* loopname, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results);
+    int (*raw)(char* loopname, char* rawstring);
     void (*finalize)();
 } LoopAdaptOutputConfigurationFunctions;
 

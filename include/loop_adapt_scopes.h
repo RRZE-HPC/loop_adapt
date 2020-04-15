@@ -2,6 +2,7 @@
 #define LOOP_ADAPT_SCOPES_H
 
 #include <hwloc.h>
+#include <error.h>
 
 #define LOOP_ADAPT_SCOPE_THREAD_OFFSET 0
 #define LOOP_ADAPT_SCOPE_CORE_OFFSET 1

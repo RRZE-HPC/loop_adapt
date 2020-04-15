@@ -230,33 +230,37 @@ void loop_adapt_configuration_finalize()
 
 
 
-LoopAdaptConfiguration_t loop_adapt_get_new_configuration(char* string)
+int loop_adapt_get_new_configuration(char* string, LoopAdaptConfiguration_t *config)
 {
-    LoopAdaptConfiguration_t config = NULL;
+    int err = -EINVAL;
     if (   string
+        && config
         && loop_adapt_configuration_funcs_input
         && loop_adapt_configuration_funcs_input->getnew)
     {
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling getnew function of input backend);
-        config = loop_adapt_configuration_funcs_input->getnew(string);
+        *config = loop_adapt_configuration_funcs_input->getnew(string);
+        err = 0;
     }
-    return config;
+    return err;
 }
 
-LoopAdaptConfiguration_t loop_adapt_get_current_configuration(char* string)
+int loop_adapt_get_current_configuration(char* string, LoopAdaptConfiguration_t *config)
 {
-    LoopAdaptConfiguration_t config = NULL;
+    int err = -EINVAL;
     if (   string
+        && config
         && loop_adapt_configuration_funcs_input
         && loop_adapt_configuration_funcs_input->getcurrent)
     {
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling getcurrent function of input backend);
-        config = loop_adapt_configuration_funcs_input->getcurrent(string);
+        *config = loop_adapt_configuration_funcs_input->getcurrent(string);
+        err = 0;
     }
-    return config;
+    return err;
 }
 
-int loop_adapt_write_configuration_results(LoopAdaptConfiguration_t config, int num_results, ParameterValue* results)
+int loop_adapt_write_configuration_results(ThreadData_t thread, char* loopname, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results)
 {
     if (   config && results
         && num_results == config->num_measurements
@@ -264,7 +268,7 @@ int loop_adapt_write_configuration_results(LoopAdaptConfiguration_t config, int 
         && loop_adapt_configuration_funcs_output->write)
     {
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling write function of output backend);
-        return loop_adapt_configuration_funcs_output->write(config, num_results, results);
+        return loop_adapt_configuration_funcs_output->write(thread, loopname, config, num_results, results);
     }
     else
     {
@@ -275,13 +279,13 @@ int loop_adapt_write_configuration_results(LoopAdaptConfiguration_t config, int 
 
 int loop_adapt_configuration_announce(LoopAdaptAnnounce_t announce)
 {
-    if (   announce
-        && loop_adapt_configuration_funcs_output
-        && loop_adapt_configuration_funcs_output->announce)
-    {
-        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling announce function of output backend);
-        return loop_adapt_configuration_funcs_output->announce(announce);
-    }
+    // if (   announce
+    //     && loop_adapt_configuration_funcs_output
+    //     && loop_adapt_configuration_funcs_output->announce)
+    // {
+    //     DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling announce function of output backend);
+    //     return loop_adapt_configuration_funcs_output->announce(announce);
+    // }
     return -EINVAL;
 }
 

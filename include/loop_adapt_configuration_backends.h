@@ -25,7 +25,7 @@ typedef enum {
 
 static LoopAdaptInputConfigurationFunctions loop_adapt_configuration_input_list[LA_CONFIG_IN_MAX] = {
     [LA_CONFIG_IN_TXT] = {.init = loop_adapt_config_txt_input_init,
-                          .finalize = loop_adapt_config_txt_finalize,
+                          .finalize = loop_adapt_config_txt_input_finalize,
                           .getnew = loop_adapt_get_new_config_txt,
                           .getcurrent = loop_adapt_get_current_config_txt,
                          },
@@ -38,8 +38,9 @@ static LoopAdaptInputConfigurationFunctions loop_adapt_configuration_input_list[
 
 static LoopAdaptOutputConfigurationFunctions loop_adapt_configuration_output_list[LA_CONFIG_OUT_MAX] = {
     [LA_CONFIG_OUT_TXT] = {.init = loop_adapt_config_txt_output_init,
-                           .write = loop_adapt_config_txt_write,
-                           .finalize = NULL,
+                           .write = loop_adapt_config_txt_output_write,
+                           .raw = loop_adapt_config_txt_output_raw,
+                           .finalize = loop_adapt_config_txt_output_finalize,
                           },
     [LA_CONFIG_OUT_CC_CLIENT] = {.init = NULL,
                                  .write = loop_adapt_config_cc_client_write,
@@ -47,6 +48,7 @@ static LoopAdaptOutputConfigurationFunctions loop_adapt_configuration_output_lis
                                 },
     [LA_CONFIG_OUT_STDOUT] = {.init = loop_adapt_config_stdout_init,
                               .write = loop_adapt_config_stdout_write,
+                              .raw = loop_adapt_config_stdout_output_raw,
                               .finalize = NULL,
                              },
 };

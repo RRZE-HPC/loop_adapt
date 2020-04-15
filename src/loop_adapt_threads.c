@@ -26,6 +26,7 @@ static cpu_set_t loop_adapt_threads_cpuset_inuse;
 /*! \brief  Taskset of the master thread of the application */
 /*static cpu_set_t loop_adapt_cpuset_master;*/
 
+static int (*in_parallel)(void) = NULL;
 
 static ThreadData_t _loop_adapt_new_threaddata()
 {
@@ -110,11 +111,12 @@ int loop_adapt_threads_register(int threadid)
         tdata->tid = tid;
         CPU_ZERO(&tdata->cpuset);
         //tdata->cpu = sched_getcpu();
-        for (i = 0; i < CPU_COUNT(&loop_adapt_threads_cpuset); i++)
+        for (i = 0; i < hwloc_get_nbobjs_by_type(loop_adapt_threads_tree, HWLOC_OBJ_PU); i++)
         {
             if (CPU_ISSET(i, &loop_adapt_threads_cpuset) && (!CPU_ISSET(i, &loop_adapt_threads_cpuset_inuse)))
             {
                 CPU_SET(i, &loop_adapt_threads_cpuset_inuse);
+                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Using CPU %d for thread, i, threadid);
                 tdata->cpu = i;
                 break;
             }
@@ -124,7 +126,7 @@ int loop_adapt_threads_register(int threadid)
         if (get_smap_size(loop_adapt_threads) > 0)
         {
             //TODO_PRINT(Ensure pinning to distinct CPUs);
-            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Pinning thread %d to CPU %d, threadid, i);
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Pinning thread %d to CPU %d, threadid, tdata->cpu);
             CPU_SET(tdata->cpu, &tdata->cpuset);
             err = sched_setaffinity(tid, sizeof(cpu_set_t), &tdata->cpuset);
             if (err < 0)
@@ -147,23 +149,30 @@ int loop_adapt_threads_register(int threadid)
         {
             tdata->scopeOffsets[i] = -1;
         }
-        for (i = 0; i < LOOP_ADAPT_NUM_SCOPES; i++)
+        for (i = 0; i < hwloc_get_nbobjs_by_type(loop_adapt_threads_tree, HWLOC_OBJ_PU); i++)
+        {
+            hwloc_obj_t obj = hwloc_get_obj_by_type(loop_adapt_threads_tree, HWLOC_OBJ_PU, i);
+            if (obj->os_index == tdata->cpu)
+            {
+                tdata->objidx = obj->logical_index;
+                tdata->scopeOffsets[0] = obj->logical_index;
+                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, PU offset %d for thread %d, tdata->objidx, threadid);
+                break;
+            }
+        }
+        for (i = 1; i < LOOP_ADAPT_NUM_SCOPES; i++)
         {
             LoopAdaptScope_t scope = LoopAdaptScopeList[i];
-            //DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Searching for hwloc object with type %s for thread %d, hwloc_obj_type_string(scope), threadid);
+            
             scope_count = hwloc_get_nbobjs_by_type(loop_adapt_threads_tree, scope);
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Searching for hwloc object with type %s for thread %d in %d objects, hwloc_obj_type_string(scope), threadid, scope_count);
             for (j = 0; j < scope_count; j++)
             {
                 hwloc_obj_t obj = hwloc_get_obj_by_type(loop_adapt_threads_tree, scope, j);
-                if (obj->type == LOOP_ADAPT_SCOPE_THREAD && obj->os_index == tdata->cpu)
+                if (hwloc_bitmap_isset(obj->cpuset, tdata->cpu))
                 {
-                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, PU offset %d for thread %d, j, threadid);
-                    tdata->objidx = j;
-                }
-                if (hwloc_bitmap_isset(obj->cpuset, obj->logical_index))
-                {
-                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Scope %s offset %d/%d for thread %d, hwloc_obj_type_string(scope), j, obj->logical_index, threadid);
-                    tdata->scopeOffsets[i] = j;
+                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Scope %s offset %d/%d for thread %d (objidx %d), hwloc_obj_type_string(scope), j, obj->logical_index, threadid, tdata->objidx);
+                    tdata->scopeOffsets[i] = obj->logical_index;
                     break;
                 }
             }
@@ -197,6 +206,20 @@ ThreadData_t loop_adapt_threads_get()
         if (get_imap_by_key(loop_adapt_threads, (uint64_t)pt, (void**)&tdata) != 0)
         {
             ERROR_PRINT(Failed to get data for thread %lu, (uint64_t)pt);
+        }
+    }
+    return tdata;
+}
+
+ThreadData_t loop_adapt_threads_getthread(int id)
+{
+    ThreadData_t tdata = NULL;
+    if (loop_adapt_threads)
+    {
+        int err = get_imap_by_idx(loop_adapt_threads, id, (void**)&tdata);
+        if (err != 0)
+        {
+            ERROR_PRINT(Failed to get data for thread id %d, id);
         }
     }
     return tdata;
@@ -280,3 +303,30 @@ int loop_adapt_threads_get_socket(int instance)
     return socket;
 }
 
+int loop_adapt_threads_register_inparallel_func(int(*pf)(void))
+{
+    if (pf && (!in_parallel))
+    {
+        in_parallel = pf;
+        return 0;
+    }
+    return -EINVAL;
+}
+
+int loop_adapt_threads_in_parallel()
+{
+    if (in_parallel)
+    {
+        int ret = in_parallel();
+        printf("in Parallel %d\n", ret);
+        return ret;
+    }
+    return -1;
+}
+
+int loop_adapt_threads_get_count()
+{
+    if (loop_adapt_threads)
+        return get_imap_size(loop_adapt_threads);
+    return 0;
+}

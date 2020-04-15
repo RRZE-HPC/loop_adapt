@@ -97,7 +97,7 @@ void _loop_adapt_free_parameter(mpointer val)
     }
 }
 
-static int _loop_adapt_add_parameter_to_tree(ParameterDefinition* def, int idx_in_list)
+static int _loop_adapt_add_parameter_to_tree(ParameterDefinition* def, int idx_in_list, ParameterValueLimit limit)
 {
     int err = 0;
     int i = 0;
@@ -110,7 +110,7 @@ static int _loop_adapt_add_parameter_to_tree(ParameterDefinition* def, int idx_i
             Map_t params = (Map_t)obj->userdata;
             if (!params)
             {
-                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Creating parameter map for %s %d, hwloc_obj_type_string(def->scope), i);
+                //DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Creating parameter map for %s %d, hwloc_obj_type_string(def->scope), i);
                 err = init_smap(&params, _loop_adapt_free_parameter);
                 if (err != 0)
                 {
@@ -124,7 +124,7 @@ static int _loop_adapt_add_parameter_to_tree(ParameterDefinition* def, int idx_i
             }
             else
             {
-                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Parameter map for %s %d already exists, hwloc_obj_type_string(def->scope), i);
+                //DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Parameter map for %s %d already exists, hwloc_obj_type_string(def->scope), i);
             }
             Parameter_t p = NULL;
             err = get_smap_by_key(params, def->name, (void**)&p);
@@ -138,10 +138,13 @@ static int _loop_adapt_add_parameter_to_tree(ParameterDefinition* def, int idx_i
             {
                 p->param_list_idx = idx_in_list;
                 p->instance = i;
-                p->limit.type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID;
                 loop_adapt_copy_param_value(def->value, &p->value);
+                if (limit.type >= LOOP_ADAPT_PARAMETER_LIMIT_TYPE_MIN && limit.type < LOOP_ADAPT_PARAMETER_LIMIT_TYPE_MAX)
+                {
+                    loop_adapt_copy_param_value_limit(limit, &p->limit);
+                }
 
-                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Adding parameter '%s' to %s %d, def->name, hwloc_obj_type_string(def->scope), i);
+                //DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Adding parameter '%s' to %s %d, def->name, hwloc_obj_type_string(def->scope), i);
                 err = add_smap(params, def->name,(void*) p);
                 if (err < 0)
                 {
@@ -167,6 +170,8 @@ int loop_adapt_parameter_initialize()
         }
     }
     int pd_idx = 0;
+    ParameterValueLimit limit;
+    limit.type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID;
     ParameterDefinition* pd = &loop_adapt_parameter_list[pd_idx];
     while (pd->name != NULL)
     {
@@ -196,20 +201,29 @@ int loop_adapt_parameter_initialize()
             int err = pd->init();
             if (err)
             {
-                ERROR_PRINT(Initializing parameter %s for scope %s failed, in->name, hwloc_obj_type_string(in->scope));
+                ERROR_PRINT(Initializing parameter %s for scope %s failed: %d, in->name, hwloc_obj_type_string(in->scope), err);
             }
         }
-        if (pd->get)
+        // if (pd->get)
+        // {
+        //     DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Get current value for parameter %s for scope %s, in->name, hwloc_obj_type_string(in->scope));
+        //     int err = pd->get(0, &pd->value);
+        //     if (err)
+        //     {
+        //         ERROR_PRINT(Getting current value for parameter %s for scope %s failed: %d, in->name, hwloc_obj_type_string(in->scope), err);
+        //     }
+        //     loop_adapt_print_param_value(pd->value);
+        // }
+        if (pd->avail)
         {
-            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Get current value for parameter %s for scope %s, in->name, hwloc_obj_type_string(in->scope));
-            int err = pd->get(0, &pd->value);
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Get limits for parameter %s for scope %s, in->name, hwloc_obj_type_string(in->scope));
+            int err = pd->avail(0, &limit);
             if (err)
             {
-                ERROR_PRINT(Getting current value for parameter %s for scope %s failed, in->name, hwloc_obj_type_string(in->scope));
+                ERROR_PRINT(Get limits for parameter %s for scope %s failed: %d, in->name, hwloc_obj_type_string(in->scope), err);
             }
-            loop_adapt_print_param_value(pd->value);
         }
-        _loop_adapt_add_parameter_to_tree(pd, loop_adapt_num_active_parameters);
+        _loop_adapt_add_parameter_to_tree(pd, loop_adapt_num_active_parameters, limit);
         loop_adapt_num_active_parameters++;
     }
 /*    loop_adapt_parameter_names = bstrListCreate();*/
@@ -222,6 +236,8 @@ int loop_adapt_parameter_add(char* name, LoopAdaptScope_t scope,
                              parameter_available_function avail)
 {
     int strlength = 0;
+    ParameterValueLimit limit;
+    limit.type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID;
     ParameterDefinition* def = realloc(loop_adapt_active_parameters, (loop_adapt_num_active_parameters+1)*sizeof(ParameterDefinition));
     if (!def)
     {
@@ -263,12 +279,50 @@ int loop_adapt_parameter_add(char* name, LoopAdaptScope_t scope,
     loop_adapt_copy_param_value(value, &def->value);
 
 
-    _loop_adapt_add_parameter_to_tree(def, loop_adapt_num_active_parameters);
+    _loop_adapt_add_parameter_to_tree(def, loop_adapt_num_active_parameters, limit);
 /*    bstrListAddChar(loop_adapt_parameter_names, name);*/
     loop_adapt_num_active_parameters++;
 }
 
 int loop_adapt_parameter_add_user(char* name, LoopAdaptScope_t scope, ParameterValue value)
+{
+    int err = 0;
+    int strlength = 0;
+    ParameterValueLimit limit;
+    limit.type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID;
+    ParameterDefinition* def = realloc(loop_adapt_active_parameters, (loop_adapt_num_active_parameters+1)*sizeof(ParameterDefinition));
+    if (!def)
+    {
+        fprintf(stderr, "Failed to extend list of active parameters\n");
+        return -1;
+    }
+    loop_adapt_active_parameters = def;
+    def = &loop_adapt_active_parameters[loop_adapt_num_active_parameters];
+    def->name = malloc(sizeof(char) * (strlen(name)+2));
+    if (def->name)
+    {
+        err = snprintf(def->name, strlen(name)+1, "%s", name);
+        if (err > 0)
+        {
+            def->name[err] = '\0';
+        }
+    }
+    def->scope = scope;
+
+    def->user = 1;
+    loop_adapt_copy_param_value(value, &def->value);
+
+    def->set = NULL;
+    def->get = NULL;
+    def->avail = NULL;
+    printf("Adding user parameter %s of type %s\n", def->name, loop_adapt_print_param_valuetype(def->value.type));
+
+    _loop_adapt_add_parameter_to_tree(def, loop_adapt_num_active_parameters, limit);
+/*    bstrListAddChar(loop_adapt_parameter_names, name);*/
+    loop_adapt_num_active_parameters++;
+}
+
+int loop_adapt_parameter_add_user_with_limit(char* name, LoopAdaptScope_t scope, ParameterValue value, ParameterValueLimit limit)
 {
     int err = 0;
     int strlength = 0;
@@ -299,7 +353,7 @@ int loop_adapt_parameter_add_user(char* name, LoopAdaptScope_t scope, ParameterV
     def->avail = NULL;
     printf("Adding user parameter %s of type %s\n", def->name, loop_adapt_print_param_valuetype(def->value.type));
 
-    _loop_adapt_add_parameter_to_tree(def, loop_adapt_num_active_parameters);
+    _loop_adapt_add_parameter_to_tree(def, loop_adapt_num_active_parameters, limit);
 /*    bstrListAddChar(loop_adapt_parameter_names, name);*/
     loop_adapt_num_active_parameters++;
 }
@@ -378,7 +432,7 @@ void loop_adapt_parameter_finalize()
                     err = get_smap_by_key(params, pd->name, (void**)&p);
                     if (err == 0)
                     {
-                        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Delete parameter %s from map at %s %d/%d, pd->name, hwloc_obj_type_string(pd->scope), obj->logical_index, j);
+                        //DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Delete parameter %s from map at %s %d/%d, pd->name, hwloc_obj_type_string(pd->scope), obj->logical_index, j);
                         del_smap(params, pd->name);
                         if (get_smap_size(params) == 0)
                         {
@@ -540,6 +594,7 @@ int loop_adapt_parameter_getcurrent(ThreadData_t thread, char* parameter, Parame
                 if (f)
                 {
                     f(thread->objidx, &v);
+                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Getting current parameter %s, parameter);
                     loop_adapt_copy_param_value(v, &p->value);
                     loop_adapt_copy_param_value(v, value);
                     value->type = p->value.type;
@@ -619,4 +674,78 @@ int loop_adapt_parameter_configs(struct bstrList* configs)
         }
     }
     return count;
+}int loop_adapt_parameter_loop_start(ThreadData_t thread)
+{
+    if ((!thread))
+    {
+        return -EINVAL;
+    }
+    int i = 0;
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Save parameter values at start);
+    for (i = 0; i < loop_adapt_num_active_parameters; i++)
+    {
+        for (int s = 0; s < LOOP_ADAPT_NUM_SCOPES; s++)
+        {
+            if (thread->scopeOffsets[s] < 0) continue;
+            hwloc_obj_t obj = hwloc_get_obj_by_type(loop_adapt_parameter_tree, LoopAdaptScopeList[s], thread->scopeOffsets[s]);
+            if (obj)
+            {
+                Parameter_t p = NULL;
+                Map_t params = (Map_t)obj->userdata;
+                if (!params)
+                {
+                    continue;
+                }
+                int err = get_smap_by_key(params, loop_adapt_active_parameters[i].name, (void**)&p);
+                if (err == 0)
+                {
+                    ParameterValue v;
+                    parameter_get_function f = loop_adapt_active_parameters[p->param_list_idx].get;
+                    if (f)
+                    {
+                        f(thread->objidx, &v);
+                        loop_adapt_copy_param_value(v, &p->init);
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+int loop_adapt_parameter_loop_end(ThreadData_t thread)
+{
+    if ((!thread))
+    {
+        return -EINVAL;
+    }
+    int i = 0;
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Restore parameter values at end);
+    for (i = 0; i < loop_adapt_num_active_parameters; i++)
+    {
+        for (int s = 0; s < LOOP_ADAPT_NUM_SCOPES; s++)
+        {
+            if (thread->scopeOffsets[s] < 0) continue;
+            hwloc_obj_t obj = hwloc_get_obj_by_type(loop_adapt_parameter_tree, LoopAdaptScopeList[s], thread->scopeOffsets[s]);
+            if (obj)
+            {
+                Parameter_t p = NULL;
+                Map_t params = (Map_t)obj->userdata;
+                if (!params)
+                {
+                    continue;
+                }
+                int err = get_smap_by_key(params, loop_adapt_active_parameters[i].name, (void**)&p);
+                if (err == 0)
+                {
+                    parameter_set_function f = loop_adapt_active_parameters[p->param_list_idx].set;
+                    if (f)
+                    {
+                        f(thread->objidx, p->init);
+                    }
+                }
+            }
+        }
+    }
+    return 0;
 }

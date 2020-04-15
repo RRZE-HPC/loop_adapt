@@ -9,7 +9,7 @@ LoopAdaptConfiguration_t loop_adapt_get_new_config_cc_client(char* string);
 
 LoopAdaptConfiguration_t loop_adapt_get_current_config_cc_client(char* string);
 
-int loop_adapt_config_cc_client_write(LoopAdaptConfiguration_t config, int num_results, ParameterValue* results);
+int loop_adapt_config_cc_client_write(ThreadData_t thread, char* loopname, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results);
 
 void loop_adapt_config_cc_client_finalize();
 

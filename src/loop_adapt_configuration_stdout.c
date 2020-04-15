@@ -71,8 +71,18 @@ int loop_adapt_config_stdout_init()
     return 0;
 }
 
+int loop_adapt_config_stdout_output_raw(char* loopname, char* rawstring)
+{
+    if (loopname && rawstring)
+    {
+        bstring line = bformat("LOOP=%s|%s\n", loopname, rawstring);
+        fprintf(loop_adapt_config_stdout_fd, "%s", bdata(line));
+        bdestroy(line);
+        fflush(loop_adapt_config_stdout_fd);
+    }
+}
 
-int loop_adapt_config_stdout_write(LoopAdaptConfiguration_t config, int num_results, ParameterValue* results)
+int loop_adapt_config_stdout_write(ThreadData_t thread, char* loopname, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results)
 {
     int i = 0, j = 0;
     if (config && num_results > 0 && results)
@@ -120,7 +130,8 @@ int loop_adapt_config_stdout_write(LoopAdaptConfiguration_t config, int num_resu
             }
         }
         btrunc(line, blength(line) - 1);
-        fprintf(loop_adapt_config_stdout_fd, "%s\n", bdata(line));
+        fprintf(loop_adapt_config_stdout_fd, "LOOP=%s;THREAD=%d:%d|%s\n", loopname, thread->thread, thread->cpu, bdata(line));
+        fflush(loop_adapt_config_stdout_fd);
         bdestroy(line);
     }
     else

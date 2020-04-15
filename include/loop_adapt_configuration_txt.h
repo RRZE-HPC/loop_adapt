@@ -33,15 +33,14 @@
 #include <loop_adapt_configuration_types.h>
 
 int loop_adapt_config_txt_input_init();
-int loop_adapt_config_txt_output_init();
-
 LoopAdaptConfiguration_t loop_adapt_get_new_config_txt(char* string);
-//LoopAdaptConfiguration_t loop_adapt_get_last_config_txt(char* string);
 LoopAdaptConfiguration_t loop_adapt_get_current_config_txt(char* string);
-//int loop_adapt_has_new_config_txt(char* string);
-int loop_adapt_config_txt_write(LoopAdaptConfiguration_t config, int num_results, ParameterValue* results);
+void loop_adapt_config_txt_input_finalize();
 
-void loop_adapt_config_txt_finalize();
 
+int loop_adapt_config_txt_output_init();
+int loop_adapt_config_txt_output_write(ThreadData_t thread, char* loopname, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results);
+int loop_adapt_config_txt_output_raw(char* loopname, char* rawstring);
+void loop_adapt_config_txt_output_finalize();
 
 #endif /* LOOP_ADAPT_CONFIGURATION_TXT_H */

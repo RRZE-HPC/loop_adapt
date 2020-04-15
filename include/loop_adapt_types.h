@@ -29,6 +29,7 @@ typedef struct {
     int cpuid; /**< \brief Current CPU */
     int objidx; /**< \brief Object index in the topology tree */
     int reg_tid; /**< \brief Thread ID as returned by the registered thread ID function */
+    int current_config_id; 
     cpu_set_t cpuset; /**< \brief Current CPUset */
     LoopThreadState state; /**< \brief Status of the thread */
 } LoopThreadData;
@@ -54,12 +55,13 @@ typedef struct {
     int max_iterations;
 //    int num_policies; /**< \brief Number of registered policies */
     LoopRunStatus status; /**< \brief State of the loop */
-    int cur_policy_id; /**< \brief ID of currently active policy */
+//   int cur_policy_id; /**< \brief ID of currently active policy */
 //    Policy_t cur_policy; /**< \brief Pointer to the currently active policy */
 //    Policy_t *policies; /**< \brief List of all policies */
     pthread_mutex_t lock; /**< \brief Lock for tree manipulation */
-    Map_t threads; /**< \brief Hashtable mapping thread ID to ThreadData */
+//    Map_t threads; /**< \brief Hashtable mapping thread ID to ThreadData */
     int current_config_id;
+    int announced;
 } LoopData;
 /*! \brief Pointer to a Treedata structure */
 typedef LoopData* LoopData_t;

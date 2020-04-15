@@ -29,14 +29,16 @@ extern "C"
 
 
 extern int loop_adapt_active;
-extern int loop_adapt_verbosity;
+extern LoopAdaptDebugLevel loop_adapt_verbosity;
 
 int loop_adapt_initialize();
 void loop_adapt_register(char * name, int num_iterations);
 int loop_adapt_register_thread(int threadid);
 int loop_adapt_start_loop( char* name, char* file, int linenumber );
+int loop_adapt_start_loop_new( char* name, char* file, int linenumber );
 void loop_adapt_finalize();
 void loop_adapt_debug_level(int level);
+int loop_adapt_register_inparallel_function(int (*in_parallel)(void));
 
 //#define _LOOP_ADAPT_DEFINE_PARAM_GET_SET_DEFS(NAME) \
 //    int loop_adapt_get_##NAME##_parameter(char* name); \
@@ -51,7 +53,8 @@ void loop_adapt_debug_level(int level);
 #define LA_FINALIZE loop_adapt_finalize();
 
 #define LA_REGISTER(name, count) loop_adapt_register(((char *)name), (count));
-#define LA_REGISTER_THREAD(threadid) loop_adapt_register_thread((threadid))
+#define LA_REGISTER_THREAD(threadid) loop_adapt_register_thread((threadid));
+#define LA_REGISTER_INPARALLEL_FUNC(func) loop_adapt_register_inparallel_function((func));
 
 #define LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(TYPE) \
     int loop_adapt_new_##TYPE##_parameter(char* name, LoopAdaptScope_t scope, TYPE value); \
@@ -73,7 +76,7 @@ LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(float)
 #define LA_NEW_BOOL_PARAMETER(name, scope, value) loop_adapt_new_bool_parameter(((char *)name), (scope), (value))
 
 #define LOOP_BEGIN(name) loop_adapt_start_loop(((char *)name), (char *)__FILE__, __LINE__)
-#define LOOP_END(name) //loop_adapt_end(name)
+#define LOOP_END(name) loop_adapt_end(((char *)name))
 
 #define LA_FOR(name, start, cond, inc) \
     for (start; cond && LOOP_BEGIN(((char *)name)); inc)
@@ -91,6 +94,7 @@ LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(float)
 
 #define LA_REGISTER(name, count)
 #define LA_REGISTER_THREAD(threadid)
+#define LA_REGISTER_INPARALLEL_FUNC(func)
 #define LA_NEW_PARAMETER(name, scope, type)
 #define LA_GET_INT_PARAMETER(name, x)
 

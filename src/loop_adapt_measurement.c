@@ -76,7 +76,9 @@ static int _loop_adapt_copy_measurement_definition(MeasurementDefinition* in, Me
         out->init = in->init;
         out->setup = in->setup;
         out->start = in->start;
+        out->startall = in->startall;
         out->stop = in->stop;
+        out->stopall = in->stopall;
         out->result = in->result;
         out->finalize = in->finalize;
 
@@ -179,6 +181,7 @@ static void _loop_adapt_measurement_destroy(gpointer mptr)
 int loop_adapt_measurement_setup(ThreadData_t thread, char* measurement, bstring configuration, bstring metrics)
 {
     int i = 0;
+    int s = 0;
     int md_idx = -1;
     MeasurementDefinition* md = NULL;
     for (i = 0; i < loop_adapt_num_active_measurements; i++)
@@ -195,9 +198,15 @@ int loop_adapt_measurement_setup(ThreadData_t thread, char* measurement, bstring
         ERROR_PRINT(No measurement backend %s, measurement);
         return -EINVAL;
     }
-    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Setup measurement system %s, md->name);
 
-    hwloc_obj_t obj = hwloc_get_obj_by_type(loop_adapt_measurement_tree, md->scope, thread->scopeOffsets[md->scope]);
+
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Setup measurement system %s for thread %d (scope %s %d), md->name, thread->thread, hwloc_obj_type_string(md->scope), thread->scopeOffsets[md->scope]);
+    for (s=0;s < LOOP_ADAPT_NUM_SCOPES; s++)
+    {
+    	if (LoopAdaptScopeList[s] == md->scope)
+    		break;
+    }
+    hwloc_obj_t obj = hwloc_get_obj_by_type(loop_adapt_measurement_tree, md->scope, thread->scopeOffsets[s]);
     if (obj)
     {
         Map_t measurements = (Map_t)obj->userdata;
@@ -213,8 +222,10 @@ int loop_adapt_measurement_setup(ThreadData_t thread, char* measurement, bstring
         {
             m->measure_list_idx = md_idx;
             lock_acquire(&m->responsible, thread->objidx);
-            printf("Lock %d\n", m->responsible);
-            m->instance = obj->logical_index;
+            if (md->scope == LOOP_ADAPT_SCOPE_THREAD)
+                m->instance = thread->thread;
+            else
+                m->instance = obj->logical_index;
             m->configuration = bstrcpy(configuration);
             m->metrics = bstrcpy(metrics);
             loop_adapt_active_measurements[md_idx].setup(m->instance, m->configuration, m->metrics);
@@ -269,42 +280,27 @@ int loop_adapt_measurement_start(ThreadData_t thread, char* measurement)
     return 0;
 }
 
-void _loop_adapt_measurement_startall_cb(mpointer key, mpointer value, mpointer user_data)
-{
-    int* objidx = (int*)user_data;
-    Measurement_t m = (Measurement_t)value;
-    char* name = (char* )key;
-    if (m)
-    {
-        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Startall callback for measurement %s with instance %d (resp %d=%d state %d) %p, name, m->instance, m->responsible , *objidx, m->state, m);
-        if (m->responsible == *objidx)
-        {
-            switch(m->state)
-            {
-                case LOOP_ADAPT_MEASUREMENT_STATE_STOPPED:
-                case LOOP_ADAPT_MEASUREMENT_STATE_SETUP:
-                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Start measurement %s with instance %d (state %d), name, m->instance, LOOP_ADAPT_MEASUREMENT_STATE_RUNNING);
-                    loop_adapt_active_measurements[m->measure_list_idx].start(m->instance);
-                    m->state = LOOP_ADAPT_MEASUREMENT_STATE_RUNNING;
-                    break;
-                default:
-                    break;
-            }
-        }
-    }
-}
 
-int loop_adapt_measurement_start_all(ThreadData_t thread)
+int loop_adapt_measurement_start_all()
 {
-    for (int s = LOOP_ADAPT_NUM_SCOPES-1; s >= 0 ; s--)
+    int i = 0;
+    for (i = 0; i < loop_adapt_num_active_measurements; i++)
     {
-        if (thread->scopeOffsets[s] < 0) continue;
-        hwloc_obj_t obj = hwloc_get_obj_by_type(loop_adapt_measurement_tree, LoopAdaptScopeList[s], thread->scopeOffsets[s]);
-        if (obj)
+        
+        if (loop_adapt_active_measurements[i].startall)
         {
-            Map_t measurements = (Map_t)obj->userdata;
-            if (!measurements) continue;
-            foreach_in_smap(measurements, _loop_adapt_measurement_startall_cb, &thread->objidx);
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling startall function for measurement %s, loop_adapt_active_measurements[i].name);
+            loop_adapt_active_measurements[i].startall();
+        }
+        else
+        {
+            int j = 0;
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling start function for measurement %s for all threads, loop_adapt_active_measurements[i].name);
+            for (j = 0; j < loop_adapt_threads_get_count(); j++)
+            {
+                ThreadData_t thread = loop_adapt_threads_getthread(i);
+                loop_adapt_measurement_start(thread, loop_adapt_active_measurements[i].name);
+            }
         }
     }
     return 0;
@@ -349,40 +345,15 @@ int loop_adapt_measurement_stop(ThreadData_t thread, char* measurement)
     return 0;
 }
 
-void _loop_adapt_measurement_stopall_cb(mpointer key, mpointer value, mpointer user_data)
-{
-    int* objidx = (int*)user_data;
-    Measurement_t m = (Measurement_t)value;
-    if (m)
-    {
-        if (m->responsible == *objidx)
-        {
-            switch(m->state)
-            {
-                case LOOP_ADAPT_MEASUREMENT_STATE_RUNNING:
-                    loop_adapt_active_measurements[m->measure_list_idx].stop(m->instance);
-                    m->state = LOOP_ADAPT_MEASUREMENT_STATE_STOPPED;
-                    break;
-                default:
-                    break;
-            }
-        }
-    }
-}
 
-int loop_adapt_measurement_stop_all(ThreadData_t thread)
-{
-    for (int s = 0; s < LOOP_ADAPT_NUM_SCOPES ; s++)
-    {
-        if (thread->scopeOffsets[s] < 0) continue;
-        hwloc_obj_t obj = hwloc_get_obj_by_type(loop_adapt_measurement_tree, LoopAdaptScopeList[s], thread->scopeOffsets[s]);
-        if (obj)
-        {
-            Map_t measurements = (Map_t)obj->userdata;
-            if (!measurements) continue;
 
-            foreach_in_smap(measurements, _loop_adapt_measurement_stopall_cb, &thread->objidx);
-        }
+int loop_adapt_measurement_stop_all()
+{
+    int i = 0;
+    for (i = 0; i < loop_adapt_num_active_measurements; i++)
+    {
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling stopall function for measurement %s, loop_adapt_active_measurements[i].name);
+        loop_adapt_active_measurements[i].stopall();
     }
     return 0;
 }

@@ -5,20 +5,19 @@
 
 int loop_adapt_configuration_initialize();
 
-LoopAdaptConfiguration_t loop_adapt_get_last_configuration(char* string);
-LoopAdaptConfiguration_t loop_adapt_get_new_configuration(char* string);
-LoopAdaptConfiguration_t loop_adapt_get_current_configuration(char* string);
-
-int loop_adapt_configuration_announce(LoopAdaptAnnounce_t announce);
+int loop_adapt_get_new_configuration(char* string, LoopAdaptConfiguration_t *config);
+int loop_adapt_get_current_configuration(char* string, LoopAdaptConfiguration_t *config);
 
 int loop_adapt_has_new_configuration(char* string);
 
-int loop_adapt_write_configuration_results(LoopAdaptConfiguration_t config, int num_results, ParameterValue* results);
+int loop_adapt_write_configuration_results(ThreadData_t thread, char* loopname, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results);
 
 void loop_adapt_configuration_destroy_config(LoopAdaptConfiguration_t config);
 int loop_adapt_configuration_resize_config(LoopAdaptConfiguration_t *config, int num_parameters, int num_measurements);
 
 void loop_adapt_configuration_finalize();
+
+int loop_adapt_configuration_announce(LoopAdaptAnnounce_t announe);
 
 
 /* Helper functions and macros*/

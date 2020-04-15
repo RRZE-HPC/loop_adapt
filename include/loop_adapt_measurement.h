@@ -10,15 +10,15 @@ int loop_adapt_measurement_initialize();
 
 int loop_adapt_measurement_setup(ThreadData_t thread, char* measurement, bstring configuration, bstring metrics);
 int loop_adapt_measurement_start(ThreadData_t thread, char* measurement);
-int loop_adapt_measurement_start_all(ThreadData_t thread);
+int loop_adapt_measurement_start_all();
 int loop_adapt_measurement_stop(ThreadData_t thread, char* measurement);
-int loop_adapt_measurement_stop_all(ThreadData_t thread);
+int loop_adapt_measurement_stop_all();
 int loop_adapt_measurement_result(ThreadData_t thread, char* measurement, int num_values, ParameterValue* value);
 
 int loop_adapt_measurement_available(char* measurement);
 int loop_adapt_measurement_num_metrics(ThreadData_t thread);
 
-int loop_adapt_measurement_announce(LoopAdaptAnnounce_t announce);
+int loop_adapt_measurement_configs(struct bstrList* configs);
 
 void loop_adapt_measurement_finalize();
 
