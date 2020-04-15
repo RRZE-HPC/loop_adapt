@@ -9,6 +9,7 @@ LIKWID_LIBDIR ?= /mnt/opt/likwid-5.0.1/lib
 INCLUDES  += -I./include -I$(HWLOC_INCDIR) -I$(LIKWID_INCDIR)
 OBJ       = $(patsubst src/%.c, BUILD/%.o,$(wildcard src/*.c))
 OBJ      += $(patsubst src/%.cc, BUILD/%.o,$(wildcard src/*.cc))
+OBJ      += $(patsubst src/%.cpp, BUILD/%.o,$(wildcard src/*.cpp))
 Q         ?= @
 DEFINES += -D_GNU_SOURCE
 
@@ -33,6 +34,10 @@ BUILD/%.o:  src/%.c create_build_dir
 	$(Q)$(CC) $(DEFINES) $(INCLUDES) -c $(CFLAGS) $(ANSI_CFLAGS) $(CPPFLAGS) $< -o $@
 
 BUILD/%.o:  src/%.cc create_build_dir
+	@echo "===>  COMPILE (C++) $@"
+	$(Q)$(CXX) $(DEFINES) $(INCLUDES) -c $(ANSI_CFLAGS) $(CPPFLAGS) $< -o $@
+
+BUILD/%.o:  src/%.cpp create_build_dir
 	@echo "===>  COMPILE (C++) $@"
 	$(Q)$(CXX) $(DEFINES) $(INCLUDES) -c $(ANSI_CFLAGS) $(CPPFLAGS) $< -o $@
 
