@@ -1,8 +1,12 @@
 
 include config.mk
-LIKWID_INCDIR ?= ${HOME}/Apps/hwloc/include
-LIKWID_LIBDIR ?= ${HOME}/Apps/hwloc/lib
-INCLUDES  += -I./include -I$(LIKWID_INCDIR)
+
+HWLOC_INCDIR ?= ${HOME}/Apps/include
+HWLOC_LIBDIR ?= ${HOME}/Apps/lib
+LIKWID_INCDIR ?= /mnt/opt/likwid-5.0.1/include
+LIKWID_LIBDIR ?= /mnt/opt/likwid-5.0.1/lib
+
+INCLUDES  += -I./include -I$(HWLOC_INCDIR) -I$(LIKWID_INCDIR)
 OBJ       = $(patsubst src/%.c, BUILD/%.o,$(wildcard src/*.c))
 OBJ      += $(patsubst src/%.cc, BUILD/%.o,$(wildcard src/*.cc))
 Q         ?= @
@@ -10,12 +14,12 @@ DEFINES += -D_GNU_SOURCE
 
 ANSI_CFLAGS   =
 
-CFLAGS   = -g -O2 -std=gnu99 -Wno-format -fPIC
-CPPFLAGS   = -g -O2 -Wno-format -fPIC
+CFLAGS   = -g -std=gnu99 -Wno-format -fPIC
+CPPFLAGS   = -g -Wno-format -fPIC
 SHARED_CFLAGS = -fPIC
-SHARED_LFLAGS = -shared -L$(LIKWID_LIBDIR)
+SHARED_LFLAGS = -shared -L$(HWLOC_LIBDIR) -L$(LIKWID_LIBDIR)
 DYNAMIC_TARGET_LIB = libloop_adapt.so
-LIBS =  -llikwid -lhwloc -lstdc++
+LIBS =  -llikwid -lhwloc
 
 
 all: $(DYNAMIC_TARGET_LIB)
@@ -49,6 +53,10 @@ uninstall:
 clean:
 	@rm -rf BUILD $(DYNAMIC_TARGET_LIB)
 
-distclean: clean
+allclean: clean
+	make -C examples clean
+	make -C tests  clean
+
+distclean: allclean
 
 .PHONY: clean
