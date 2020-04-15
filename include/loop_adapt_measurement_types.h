@@ -48,6 +48,7 @@ typedef int (*measurement_setup_function)(int instance, bstring configuration, b
 typedef void (*measurement_start_function)(int instance);
 typedef void (*measurement_stop_function)(int instance);
 typedef int (*measurement_result_function)(int instance, int num_values, ParameterValue* values);
+typedef int (*measurement_configs_function)(struct bstrList* configs);
 typedef void (*measurement_finalize_function)();
 
 typedef struct {
@@ -58,6 +59,7 @@ typedef struct {
     measurement_start_function start;
     measurement_stop_function stop;
     measurement_result_function result;
+    measurement_configs_function configs;
     measurement_finalize_function finalize;
 } MeasurementDefinition;
 

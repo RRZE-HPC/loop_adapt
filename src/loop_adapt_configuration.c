@@ -270,6 +270,19 @@ int loop_adapt_write_configuration_results(LoopAdaptConfiguration_t config, int 
     {
         ERROR_PRINT(Cannot write configuration because of missing input data or results != measurements);
     }
+    return -EINVAL;
+}
+
+int loop_adapt_configuration_announce(LoopAdaptAnnounce_t announce)
+{
+    if (   announce
+        && loop_adapt_configuration_funcs_output
+        && loop_adapt_configuration_funcs_output->announce)
+    {
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling announce function of output backend);
+        return loop_adapt_configuration_funcs_output->announce(announce);
+    }
+    return -EINVAL;
 }
 
 

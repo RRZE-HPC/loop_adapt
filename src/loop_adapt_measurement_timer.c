@@ -6,6 +6,7 @@
 #include <time.h>
 
 #include <bstrlib.h>
+#include <bstrlib_helper.h>
 #include <likwid.h>
 
 #include <map.h>
@@ -218,4 +219,15 @@ int loop_adapt_measurement_timer_result(int instance, int num_values, ParameterV
         return 1;
     }
     return 0;
+}
+
+
+int loop_adapt_measurement_timer_configs(struct bstrList* configs)
+{
+    bstrListAddChar(configs, "REALTIME");
+    bstrListAddChar(configs, "MONOTONIC");
+    bstrListAddChar(configs, "PROCESS_CPUTIME");
+    bstrListAddChar(configs, "THREAD_CPUTIME");
+    bstrListAddChar(configs, "LIKWID");
+    return 5;
 }

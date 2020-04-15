@@ -11,7 +11,7 @@ int loop_adapt_measurement_likwid_setup(int instance, bstring configuration, bst
 void loop_adapt_measurement_likwid_start(int instance);
 void loop_adapt_measurement_likwid_stop(int instance);
 int loop_adapt_measurement_likwid_result(int instance, int num_values, ParameterValue* values);
-
+int loop_adapt_measurement_likwid_configs(struct bstrList* configs);
 void loop_adapt_measurement_likwid_finalize();
 
 #endif

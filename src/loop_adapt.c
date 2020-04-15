@@ -47,6 +47,7 @@
 #include <loop_adapt_hwloc_tree.h>
 #include <loop_adapt_threads.h>
 #include <loop_adapt_parameter.h>
+#include <loop_adapt_parameter_value.h>
 #include <loop_adapt_measurement.h>
 #include <loop_adapt_configuration.h>
 
@@ -312,6 +313,82 @@ int loop_adapt_register_thread(int threadid)
 {
     DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Registering loop thread %d, threadid);
     return loop_adapt_threads_register(threadid);
+}
+
+static void loop_adapt_announce_destroy(LoopAdaptAnnounce_t announce)
+{
+    int i = 0;
+    int j = 0;
+    if (announce)
+    {
+        bdestroy(announce->loopname);
+
+        if (announce->num_parameters > 0 && announce->parameters)
+        {
+            for (i = 0; i < announce->num_parameters; i++)
+            {
+                LoopAdaptConfigurationParameter* p = &announce->parameters[i];
+                for (j = 0; j < p->num_values; j++)
+                {
+                    loop_adapt_destroy_param_value(p->values[j]);
+                }
+                bdestroy(p->parameter);
+                p->type = LOOP_ADAPT_PARAMETER_TYPE_INVALID;
+                free(p->values);
+                p->values = NULL;
+                p->num_values = 0;
+            }
+            free(announce->parameters);
+            announce->parameters = NULL;
+            announce->num_parameters = 0;
+        }
+        if (announce->num_measurements > 0 && announce->measurements)
+        {
+            for (i = 0; i < announce->num_measurements; i++)
+            {
+                LoopAdaptConfigurationMeasurement* m = &announce->measurements[i];
+                bdestroy(m->measurement);
+                bdestroy(m->metric);
+                bdestroy(m->config);
+            }
+            free(announce->measurements);
+            announce->measurements = NULL;
+            announce->num_measurements = 0;
+        }
+    }
+    return;
+}
+
+static int loop_adapt_announce(char* string)
+{
+    int err = 0;
+    hwloc_topology_t loop_tree = NULL;
+    if (loop_adapt_active)
+    {
+        if (get_smap_by_key(loop_adapt_global_hash, string, (void**)&loop_tree) == 0)
+        {
+            LoopAdaptAnnounce_t announce = NULL;
+            announce = malloc(sizeof(LoopAdaptAnnounce));
+            if (!announce)
+            {
+                return -ENOMEM;
+            }
+            announce->loopname = bfromcstr(string);
+            err = loop_adapt_parameters_announce(announce);
+            if (err)
+            {
+                loop_adapt_announce_destroy(announce);
+                return err;
+            }
+            err = loop_adapt_measurement_announce(announce);
+            if (err)
+            {
+                loop_adapt_announce_destroy(announce);
+                return err;
+            }
+            loop_adapt_configuration_announce(announce);
+        }
+    }
 }
 
 /*void loop_adapt_register_int_paramlist( char* string,*/

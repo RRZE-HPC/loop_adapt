@@ -3,6 +3,7 @@
 
 #include <loop_adapt_parameter_types.h>
 #include <loop_adapt_parameter_value_types.h>
+#include <loop_adapt_configuration_types.h>
 #include <loop_adapt_threads_types.h>
 
 int loop_adapt_parameter_initialize();
@@ -18,6 +19,8 @@ int loop_adapt_parameter_add_user(char* name, LoopAdaptScope_t scope, ParameterV
 int loop_adapt_parameter_set(ThreadData_t thread, char* parameter, ParameterValue value);
 int loop_adapt_parameter_get(ThreadData_t thread, char* parameter, ParameterValue* value);
 int loop_adapt_parameter_getcurrent(ThreadData_t thread, char* parameter, ParameterValue* value);
+int loop_adapt_parameters_announce(LoopAdaptAnnounce_t announce);
+
 
 ParameterValueType_t loop_adapt_parameter_type(char* name);
 LoopAdaptScope_t loop_adapt_parameter_scope(char* name);

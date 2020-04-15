@@ -170,37 +170,37 @@ char* loop_adapt_print_param_valuetype(ParameterValueType_t t)
     switch(t)
     {
         case LOOP_ADAPT_PARAMETER_TYPE_INT:
-            return "INT";
+            return "int";
             break;
         case LOOP_ADAPT_PARAMETER_TYPE_UINT:
-            return "UINT";
+            return "uint";
             break;
         case LOOP_ADAPT_PARAMETER_TYPE_LONG:
-            return "LONG";
+            return "long";
             break;
         case LOOP_ADAPT_PARAMETER_TYPE_ULONG:
-            return "ULONG";
+            return "ulong";
             break;
         case LOOP_ADAPT_PARAMETER_TYPE_DOUBLE:
-            return "DOUBLE";
+            return "double";
             break;
         case LOOP_ADAPT_PARAMETER_TYPE_FLOAT:
-            return "FLOAT";
+            return "float";
             break;
         case LOOP_ADAPT_PARAMETER_TYPE_BOOL:
-            return "BOOL";
+            return "bool";
             break;
         case LOOP_ADAPT_PARAMETER_TYPE_CHAR:
-            return "CHAR";
+            return "char";
             break;
         case LOOP_ADAPT_PARAMETER_TYPE_STR:
-            return "STR";
+            return "string";
             break;
         case LOOP_ADAPT_PARAMETER_TYPE_PTR:
-            return "PTR";
+            return "ptr";
             break;
         default:
-            return "INVALID";
+            return "invalid";
             break;
     }
     return NULL;

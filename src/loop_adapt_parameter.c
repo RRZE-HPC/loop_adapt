@@ -584,3 +584,39 @@ int loop_adapt_parameter_getnames(int* count, char*** parameters)
     *parameters = p;
     return 0;
 }
+
+int loop_adapt_parameter_configs(struct bstrList* configs)
+{
+    int i = 0;
+    int count = 0;
+    for (i = 0; i < loop_adapt_num_active_parameters; i++)
+    {
+        ParameterDefinition* pd = &loop_adapt_active_parameters[i];
+        if (pd->avail)
+        {
+            ParameterValueLimit limit = DEC_NEW_INVALID_PARAM_LIMIT;
+            int err = pd->avail(0, &limit);
+            if (!err)
+            {
+                if (limit.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_RANGE)
+                {
+                    char* s = loop_adapt_param_value_str(limit.limit.range.start);
+                    char* e = loop_adapt_param_value_str(limit.limit.range.end);
+                    char* t = loop_adapt_print_param_valuetype(limit.limit.range.start.type);
+                    bstring c = bformat("%s,%s,%s,%s", pd->name, t, s, e);
+                    bstrListAdd(configs, c);
+                    bdestroy(c);
+                    free(s);
+                    free(e);
+                    free(t);
+                    count++;
+                }
+                else if (limit.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_LIST)
+                {
+                    ERROR_PRINT(Parameter limit (list) not supported by loop_adapt_parameter_configs);
+                }
+            }
+        }
+    }
+    return count;
+}

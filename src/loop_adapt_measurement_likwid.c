@@ -3,6 +3,7 @@
 #include <errno.h>
 
 #include <bstrlib.h>
+#include <bstrlib_helper.h>
 #include <likwid.h>
 
 #include <loop_adapt_parameter_value_types.h>
@@ -214,4 +215,19 @@ int loop_adapt_measurement_likwid_result(int instance, int num_values, Parameter
         v->value.dval = r;
     }
     return loop;
+}
+
+int loop_adapt_measurement_likwid_configs(struct bstrList* configs)
+{
+    int i = 0;
+    char** groups = NULL;
+
+    int num_groups = perfmon_getGroups(&groups, NULL, NULL);
+
+    for (i = 0; i < num_groups; i++)
+    {
+        bstrListAddChar(configs, groups[i]);
+    }
+    return num_groups;
+
 }

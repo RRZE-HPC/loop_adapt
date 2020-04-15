@@ -28,6 +28,15 @@ typedef struct {
 typedef LoopAdaptConfiguration* LoopAdaptConfiguration_t;
 
 typedef struct {
+    bstring loopname;
+    int num_parameters;
+    LoopAdaptConfigurationParameter* parameters;
+    int num_measurements;
+    LoopAdaptConfigurationMeasurement* measurements;
+} LoopAdaptAnnounce;
+typedef LoopAdaptAnnounce* LoopAdaptAnnounce_t;
+
+typedef struct {
     int (*init)();
     LoopAdaptConfiguration_t (*getnew)(char* string);
     LoopAdaptConfiguration_t (*getcurrent)(char* string);
@@ -36,6 +45,7 @@ typedef struct {
 
 typedef struct {
     int (*init)();
+    int (*announce)(LoopAdaptAnnounce_t announce);
     int (*write)(LoopAdaptConfiguration_t config, int num_results, ParameterValue* results);
     void (*finalize)();
 } LoopAdaptOutputConfigurationFunctions;

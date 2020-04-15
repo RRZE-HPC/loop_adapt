@@ -9,6 +9,8 @@ LoopAdaptConfiguration_t loop_adapt_get_last_configuration(char* string);
 LoopAdaptConfiguration_t loop_adapt_get_new_configuration(char* string);
 LoopAdaptConfiguration_t loop_adapt_get_current_configuration(char* string);
 
+int loop_adapt_configuration_announce(LoopAdaptAnnounce_t announce);
+
 int loop_adapt_has_new_configuration(char* string);
 
 int loop_adapt_write_configuration_results(LoopAdaptConfiguration_t config, int num_results, ParameterValue* results);

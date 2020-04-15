@@ -15,6 +15,11 @@ int loop_adapt_param_limit_tolist(ParameterValueLimit in, ParameterValueLimit *o
 
 int loop_adapt_check_param_limit(ParameterValue p, ParameterValueLimit l);
 
+#define DEC_NEW_INVALID_PARAM_LIMIT \
+    { \
+        .type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID, \
+    }
+
 #define DEC_NEW_INTRANGE_PARAM_LIMIT(START, END, STEP) \
     { \
         .type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_RANGE, \

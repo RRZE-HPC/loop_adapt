@@ -35,6 +35,7 @@
 
 #include <loop_adapt_measurement_types.h>
 #include <loop_adapt_measurement_list.h>
+#include <loop_adapt_configuration_types.h>
 #include <loop_adapt_hwloc_tree.h>
 #include <loop_adapt_lock.h>
 #include <loop_adapt_threads.h>
@@ -445,4 +446,20 @@ int loop_adapt_measurement_num_metrics(ThreadData_t thread)
         }
     }
     return count;
+}
+
+
+int loop_adapt_measurement_announce(LoopAdaptAnnounce_t announce)
+{
+    int i = 0;
+    int ret = 0;
+    struct bstrList* configs = bstrListCreate();
+    for (i = 0; i < loop_adapt_num_active_measurements; i++)
+    {
+        if (loop_adapt_active_measurements[i].configs)
+        {
+            ret += loop_adapt_active_measurements[i].configs(configs);
+        }
+    }
+    return ret;
 }
