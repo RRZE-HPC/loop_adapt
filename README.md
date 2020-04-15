@@ -67,12 +67,10 @@ Before you start the application, you configure the configuration system with en
 - `LA_CONFIG_INPUT_TYPE`: Specifiy the input backend for configurations.
   - `0`: Text file input reading line by line of format `<parameter0>:<id0>:<value0>;<parameter1>:<id1>:<value1>;...|<measurement0>:<config0>:<metrics0>;<measurement1>:<config1>:<metrics1>;...`. The filename is `<loopname>.txt` like `TIMESTEPLOOP.txt` for loop in above example.
   - `1`: (Not usable!) Example backend to a C++ class
-  - `2`: (Work in progress) Receiving configurations over a TCP socket
 - `LA_CONFIG_OUTPUT_TYPE`: Specifiy the output backend for configurations.
   - `0`: Test file output writing line by line of format `<parameter0>:<id0>:<value0>;<parameter1>:<id1>:<value1>;...|<measurement0>:<config0>:<metrics0>:<value0>;<measurement1>:<config1>:<metrics1>:<value1>,...`. The output folder is defined through the environment variable `LA_CONFIG_TXT_OUTPUT` and creates files name `<loopname>.txt` like `TIMESTEPLOOP.txt` for loop in above example.
   - `1`: Output to stdout or stderr line by line of format `<parameter0>:<id0>:<value0>;<parameter1>:<id1>:<value1>;...|<measurement0>:<config0>:<metrics0>:<value0>;<measurement1>:<config1>:<metrics1>:<value1>;...`. The default is output to stdout. The output can be explicitly set with `LA_CONFIG_STDOUT_OUTPUT=(stdout|stderr)` environment variable.
   - `2`: (Not usable!) Example backend to a C++ class
-  - `3`: (Work in progress) Sending configuration results over a TCP socket
 
 
 # Parameter space
@@ -109,7 +107,7 @@ Users can register their own parameters in the system topology tree. Like the bu
 
 There exists one distinct creation macro/function per supported data type:
 
-- `int LA_NEW_BOOL_PARAMETER(name, scope, boolean value)` =
+- `int LA_NEW_BOOL_PARAMETER(name, scope, boolean value)`
 - `int LA_NEW_CHAR_PARAMETER(name, scope, char value)`
 - `int LA_NEW_INT_PARAMETER(name, scope, int value)`
 - `int LA_NEW_UINT_PARAMETER(name, scope, unsigned int value)`
@@ -150,8 +148,8 @@ The documentation of the internals can be found [here](INTERNALS.md).
 
 - Own application parameters don't have any background effents. With background effects I mean that they don't call any further functions. Other predefined parameters like `HW_PREFETCHER` call a function in the background that actually manipulates the hardware prefetcher at system level. For application parameters this might be useful as well.
 
-- Already implemented but not yet added anywhere are `Parameter` limits. These limits allow to specify a valid set of values for a parameter. This is e.g. needed for a parameter that reflects a function pointer which points to different code variants. The function pointers to the code variants need to be known and are the only valid values for the parameter.
+- (Implmented but not well tested) Already implemented but not yet added anywhere are `Parameter` limits. These limits allow to specify a valid set of values for a parameter. This is e.g. needed for a parameter that reflects a function pointer which points to different code variants. The function pointers to the code variants need to be known and are the only valid values for the parameter.
 
 - Multiplexing user defined parameters with configurations received from the backend
 
-- Announing of loops, parameters and measurement backends to configuration output backend. If there is some application producing configurations like a network daemon, it needs to know the available backends and knobs to work like what's the range of a user defined paramters, its scope and what type the parameters value is.
+- (Started) Announing of loops, parameters and measurement backends to configuration output backend. If there is some application producing configurations like a network daemon, it needs to know the available backends and knobs to work like what's the range of a user defined paramters, its scope and what type the parameters value is.
