@@ -304,3 +304,53 @@ int loop_adapt_copy_param_value_limit(ParameterValueLimit in, ParameterValueLimi
     }
     return -EINVAL;
 }
+
+
+int loop_adapt_check_param_limit(ParameterValue p, ParameterValueLimit l)
+{
+    int i = 0;
+    int ret = 0;
+    switch(l.type)
+    {
+        case LOOP_ADAPT_PARAMETER_LIMIT_TYPE_RANGE:
+            if (   loop_adapt_greater_param_value(p, l.limit.range.start)
+                || loop_adapt_equal_param_value(p, l.limit.range.start))
+            {
+                if (loop_adapt_less_param_value(p, l.limit.range.end))
+                {
+                    if (l.limit.range.step.type == LOOP_ADAPT_PARAMETER_TYPE_INVALID)
+                    {
+                        ret = 1;
+                    }
+                    else
+                    {
+                        ParameterValue x = DEC_NEW_INVALID_PARAM_VALUE;
+                        loop_adapt_copy_param_value(l.limit.range.start, &x);
+                        while (loop_adapt_less_param_value(x, l.limit.range.end))
+                        {
+                            if (loop_adapt_equal_param_value(p, x))
+                            {
+                                ret = 1;
+                                break;
+                            }
+                            loop_adapt_add_param_value(x, l.limit.range.step, &x);
+                        }
+                    }
+                }
+            }
+            break;
+        case LOOP_ADAPT_PARAMETER_LIMIT_TYPE_LIST:
+            for (i = 0; i < l.limit.list.num_values; i++)
+            {
+                if (loop_adapt_equal_param_value(p, l.limit.list.values[i]))
+                {
+                    ret = 1;
+                    break;
+                }
+            }
+            break;
+        default:
+            break;
+    }
+    return ret;
+}
