@@ -42,6 +42,8 @@
 #include <likwid.h>
 #include <map.h>
 #include <error.h>
+#include <bstrlib.h>
+#include <bstrlib_helper.h>
 
 #include <loop_adapt.h>
 #include <loop_adapt_hwloc_tree.h>
@@ -111,6 +113,8 @@ static LoopData_t _loop_adapt_new_loopdata()
     ldata->status = LOOP_STOPPED;
     ldata->filename = NULL;
     ldata->linenumber = -1;
+    ldata->parameters = bstrListCreate();
+    ldata->policy = bfromcstr("");
 
     //ldata->threads = g_hash_table_new(g_direct_hash, g_direct_equal);
     //init_map(&ldata->threads, MAP_KEY_TYPE_INT, -1, _loop_adapt_free_loopdata_thread);
@@ -132,6 +136,8 @@ static void _loop_adapt_destroy_loopdata(gpointer val)
 /*            destroy_imap(loopdata->threads);*/
 /*        }*/
         pthread_mutex_destroy(&loopdata->lock);
+        bstrListDestroy(loopdata->parameters);
+        bdestroy(loopdata->policy);
         memset(loopdata, 0, sizeof(LoopData));
         free(loopdata);
     }
@@ -313,6 +319,89 @@ int loop_adapt_register_thread(int threadid)
 {
     DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Registering loop thread %d, threadid);
     return loop_adapt_threads_register(threadid);
+}
+
+int loop_adapt_add_loop_parameter(char* string, char* parameter)
+{
+    if (loop_adapt_active)
+    {
+        hwloc_topology_t tree = NULL;
+        if (get_smap_by_key(loop_adapt_global_hash, string, (void**)&tree) == 0)
+        {
+            LoopData_t ldata = NULL;
+            
+
+            ldata = (LoopData_t)hwloc_topology_get_userdata(tree);
+            if (ldata)
+            {
+                int i = 0;
+                int found = 0;
+                bstring bparam = bfromcstr(parameter);
+                for (i = 0; i < ldata->parameters->qty; i++)
+                {
+                    if (bstrcmp(bparam, ldata->parameters->entry[i]) == BSTR_OK)
+                    {
+                        found = 1;
+                        break;
+                    }
+                }
+                if (!found)
+                {
+                    bstrListAdd(ldata->parameters, bparam);
+                }
+                bdestroy(bparam);
+            }
+        }
+    }
+    return 0;
+}
+
+int loop_adapt_add_loop_policy(char* string, char* policy)
+{
+    if (loop_adapt_active)
+    {
+        hwloc_topology_t tree = NULL;
+        if (get_smap_by_key(loop_adapt_global_hash, string, (void**)&tree) == 0)
+        {
+            LoopData_t ldata = NULL;
+            
+            ldata = (LoopData_t)hwloc_topology_get_userdata(tree);
+            if (ldata)
+            {
+                if (blength(ldata->policy) > 0)
+                {
+                    ERROR_PRINT(Policy %s already registered for loop %s, bdata(ldata->policy), string);
+                    return -EFAULT;
+                }
+                bdestroy(ldata->policy);
+                ldata->policy = bfromcstr(policy);
+            }
+        }
+    }
+    return 0;
+}
+
+int loop_adapt_get_loop_parameter(char* string, struct bstrList* parameters)
+{
+    if (loop_adapt_active)
+    {
+        hwloc_topology_t tree = NULL;
+        if (get_smap_by_key(loop_adapt_global_hash, string, (void**)&tree) == 0)
+        {
+            LoopData_t ldata = NULL;
+            
+            ldata = (LoopData_t)hwloc_topology_get_userdata(tree);
+            if (ldata)
+            {
+                int i = 0;
+                for (i = 0; i < ldata->parameters->qty; i++)
+                {
+                    bstrListAdd(parameters, ldata->parameters->entry[i]);
+                }
+            }
+        }
+    }
+    return 0;
 }
 
 // static void loop_adapt_announce_destroy(LoopAdaptAnnounce_t announce)

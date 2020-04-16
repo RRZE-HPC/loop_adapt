@@ -16,6 +16,8 @@ using namespace std;
 
 extern "C"
 {
+// Loop_adapt internal functions accessing the loop data
+#include <loop_adapt_internal.h>
 // A parameter value is a container for different types like integer, double, string, boolean, ...
 #include <loop_adapt_parameter_value.h>
 // To access main parameter functions like "get parameter names"
@@ -38,8 +40,6 @@ static char* pass = NULL;
 static char prog_name[300];
 
 
-
-
 typedef struct {
     BaseClient* client;
     LoopAdaptConfiguration_t current;
@@ -60,6 +60,7 @@ static void _cc_client_hash_final_delete(mpointer p)
     }
 }
 
+// Read the current executable name from /proc filesystem
 static void read_executable_name()
 {
     int ret = 0;
@@ -143,30 +144,33 @@ extern "C" LoopAdaptConfiguration_t loop_adapt_get_new_config_cc_client(char* st
         //config->client.add_argument(pp);
         // ...
 
-        // Get all parameters currently available in the system. Includes builtin and user-given parameters
-        // The list elements are already properly formatted for OpenTuner
-        // TODO: Do we really need to register all parameters here or just the ones that should be optimized?
-        // Where do we get that data from?
+        
+        // Get the parameters for the loop and add them to OpenTuner
+        // Create an empry list of strings
         struct bstrList* available_params = bstrListCreate();
-        int num_params = loop_adapt_parameter_configs(available_params);
+        // Fill list of parameter names
+        int num_params = loop_adapt_get_loop_parameter(string, available_params);
+        // Add each parameter name to OpenTuner
         for (i = 0; i < num_params; i++)
         {
             cc_config->client->add_parameter(bdata(available_params->entry[i]));
         }
+        // Do the OpenTuner setup
         cc_config->client->setup();
+        // Delete list of parameter names
         bstrListDestroy(available_params);
 
         // Add new client to hash map;
         add_smap(cc_client_hash, string, (void*)cc_config);
     }
     
-
+    // Allocate a fresh Configuration
     LoopAdaptConfiguration_t config = NULL;
-    struct bstrList *param_names = bstrListCreate();
-
     config = (LoopAdaptConfiguration_t) malloc(sizeof(LoopAdaptConfiguration));
 
-    loop_adapt_parameter_getbnames(param_names);
+    // Get all parameter names
+    struct bstrList *param_names = bstrListCreate();
+    loop_adapt_get_loop_parameter(string, param_names);
 
     std::string config_data = cc_config->client->set_config();
 
@@ -198,10 +202,11 @@ extern "C" LoopAdaptConfiguration_t loop_adapt_get_current_config_cc_client(char
     if (cc_client_hash)
     {
         CCConfig * cc_config = NULL;
-        // Get loop-specific client from hash table
+        // Get loop-specific config from hash table
         int err = get_smap_by_key(cc_client_hash, string, (void**)&cc_config);
         if (err == 0 && cc_config != NULL)
         {
+            // Return the current configuration
             return cc_config->current;
         }
     }
@@ -209,8 +214,8 @@ extern "C" LoopAdaptConfiguration_t loop_adapt_get_current_config_cc_client(char
 }
 
 
-// This is just an example. This is going to be an extra module or part of the measurement module
-double loop_adapt_policy_eval(int num_results, ParameterValue* results)
+// This is just an example (sum all values). This is going to be an extra module or part of the measurement module
+double loop_adapt_policy_eval(char* loopname, int num_results, ParameterValue* results)
 {
     ParameterValue r = loop_adapt_new_param_value(results[0].type);
     int i = 0;
@@ -228,10 +233,13 @@ extern "C" int loop_adapt_config_cc_client_write(ThreadData_t thread, char* loop
     if (cc_client_hash)
     {
         CCConfig * cc_config = NULL;
+        // Get loop-specific config from hash table
         int err = get_smap_by_key(cc_client_hash, loopname, (void**)&cc_config);
         if (err == 0 && cc_config != NULL)
         {
-            double result = loop_adapt_policy_eval(num_results, results);
+            // Evaluate the measurements using the policy registered for the loop
+            double result = loop_adapt_policy_eval(loopname, num_results, results);
+            // Send result to OpenTuner
             cc_config->client->report_config(result);
             return 0;
         }

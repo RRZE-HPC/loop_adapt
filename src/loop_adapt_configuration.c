@@ -327,3 +327,4 @@ int loop_adapt_config_parse_default_entry(bstring b, bstring* first, bstring* se
     }
     return 0;
 }
+

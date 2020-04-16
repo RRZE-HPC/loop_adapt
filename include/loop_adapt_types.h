@@ -2,7 +2,7 @@
 #define LOOP_ADAPT_TYPES_H
 
 #include <pthread.h>
-#include <likwid.h>
+#include <bstrlib.h>
 #include <map.h>
 
 #include <loop_adapt.h>
@@ -60,6 +60,9 @@ typedef struct {
 //    Policy_t *policies; /**< \brief List of all policies */
     pthread_mutex_t lock; /**< \brief Lock for tree manipulation */
 //    Map_t threads; /**< \brief Hashtable mapping thread ID to ThreadData */
+    struct bstrList* parameters;
+    bstring policy;
+
     int current_config_id;
     int announced;
 } LoopData;
