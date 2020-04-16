@@ -8,6 +8,7 @@
 
 int loop_adapt_parameter_initialize();
 int loop_adapt_parameter_getnames(int* count, char*** parameters);
+int loop_adapt_parameter_getbnames(struct bstrList* parameters);
 
 
 int loop_adapt_parameter_add(char* name, LoopAdaptScope_t scope,

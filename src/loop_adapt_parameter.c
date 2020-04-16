@@ -640,6 +640,18 @@ int loop_adapt_parameter_getnames(int* count, char*** parameters)
     return 0;
 }
 
+int loop_adapt_parameter_getbnames(struct bstrList* parameters)
+{
+    int i = 0;
+    for (i = 0; i < loop_adapt_num_active_parameters; i++)
+    {
+        ParameterDefinition* pd = &loop_adapt_active_parameters[i];
+        bstrListAddChar(parameters, pd->name);
+    }
+    return 0;
+}
+
+
 int loop_adapt_parameter_configs(struct bstrList* configs)
 {
     int i = 0;
@@ -674,7 +686,9 @@ int loop_adapt_parameter_configs(struct bstrList* configs)
         }
     }
     return count;
-}int loop_adapt_parameter_loop_start(ThreadData_t thread)
+}
+
+int loop_adapt_parameter_loop_start(ThreadData_t thread)
 {
     if ((!thread))
     {
