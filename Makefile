@@ -20,7 +20,7 @@ CPPFLAGS   = -g -Wno-format -fPIC
 SHARED_CFLAGS = -fPIC
 SHARED_LFLAGS = -shared -L$(HWLOC_LIBDIR) -L$(LIKWID_LIBDIR)
 DYNAMIC_TARGET_LIB = libloop_adapt.so
-LIBS =  -llikwid -lhwloc
+LIBS =  -llikwid -lhwloc -lmysqlcppconn
 
 
 all: $(DYNAMIC_TARGET_LIB)
