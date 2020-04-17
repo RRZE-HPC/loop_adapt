@@ -50,16 +50,17 @@ int main(int argc, char* argv[])
     LA_REGISTER("LOOP", 5);
     LA_NEW_INT_PARAMETER("blksize", LOOP_ADAPT_SCOPE_SYSTEM, 1);
 
+    LA_USE_LOOP_PARAMETER("LOOP", "blksize");
+    LA_USE_LOOP_PARAMETER("LOOP", "CL_PREFETCHER");
+
+    LA_USE_LOOP_POLICY("LOOP", "MIN_TIME");
+
 #pragma omp parallel
 {
     max_threads = omp_get_num_threads();
     LA_REGISTER_THREAD(omp_get_thread_num());
-    //REGISTER_PARAMETER("LOOP", "blksize", LOOP_ADAPT_SCOPE_MACHINE, sched_getcpu(), NODEPARAMETER_INT, 5, 1, 20);
-/*    int tmp[10] = {1,4,6,10,50,100,200,300,500,1000};*/
-/*    REGISTER_PARAMETER_LIST("LOOP", "blksize", LOOP_ADAPT_SCOPE_MACHINE, sched_getcpu(), NODEPARAMETER_INT, 10, tmp);*/
 }
-    //REGISTER_PARAMETER("LOOP", LOOP_ADAPT_SCOPE_MACHINE, "nthreads", 0, NODEPARAMETER_INT, 1, 1, max_threads);
-    //nr_threads = max_threads;
+
 
     LA_GET_INT_PARAMETER("blksize", blockSize);
 
