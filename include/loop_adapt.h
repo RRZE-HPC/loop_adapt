@@ -105,6 +105,9 @@ LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(float)
 
 #else /* !LOOP_ADAPT_ACTIVATE */
 
+#define LA_INIT
+#define LA_FINALIZE
+
 #define LA_REGISTER(name, count)
 #define LA_REGISTER_THREAD(threadid)
 #define LA_REGISTER_INPARALLEL_FUNC(func)
