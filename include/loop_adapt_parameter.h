@@ -3,7 +3,6 @@
 
 #include <loop_adapt_parameter_types.h>
 #include <loop_adapt_parameter_value_types.h>
-#include <loop_adapt_configuration_types.h>
 #include <loop_adapt_threads_types.h>
 
 int loop_adapt_parameter_initialize();

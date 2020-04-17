@@ -143,7 +143,7 @@ int loop_adapt_parameter_cpufrequency_avail(int instance, ParameterValueLimit* l
         cpu = loop_adapt_threads_get_cpu(instance);
         if (cpu >= 0)
         {
-            fprintf(stderr, "TODO - support both drivers");
+            TODO_PRINT(Support both cpufreq drivers);
             char* cfreqs = freq_getAvailFreq(cpu);
             bstring bfreqs = bfromcstr(cfreqs);
             struct bstrList* freqlist = bsplit(bfreqs, ' ');

@@ -3,7 +3,10 @@
 
 #include <bstrlib.h>
 #include <loop_adapt_parameter_value_types.h>
+#include <loop_adapt_policy_types.h>
 
+int loop_adapt_policy_initialize();
+void loop_adapt_policy_finalize();
 
 int loop_adapt_policy_available(char* policy);
 

@@ -39,7 +39,9 @@
 #include <loop_adapt_hwloc_tree.h>
 #include <loop_adapt_lock.h>
 #include <loop_adapt_threads.h>
-
+#include <map.h>
+#include <bstrlib.h>
+#include <bstrlib_helper.h>
 
 static MeasurementDefinition* loop_adapt_active_measurements = NULL;
 static int loop_adapt_num_active_measurements = 0;
@@ -420,17 +422,13 @@ int loop_adapt_measurement_num_metrics(ThreadData_t thread)
 }
 
 
-int loop_adapt_measurement_announce(LoopAdaptAnnounce_t announce)
+int loop_adapt_measurement_getbnames(struct bstrList* measurements)
 {
     int i = 0;
-    int ret = 0;
-    struct bstrList* configs = bstrListCreate();
     for (i = 0; i < loop_adapt_num_active_measurements; i++)
     {
-        if (loop_adapt_active_measurements[i].configs)
-        {
-            ret += loop_adapt_active_measurements[i].configs(configs);
-        }
+        MeasurementDefinition* md = &loop_adapt_active_measurements[i];
+        bstrListAddChar(measurements, md->name);
     }
-    return ret;
+    return 0;
 }

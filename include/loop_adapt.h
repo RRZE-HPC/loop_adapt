@@ -25,10 +25,6 @@ typedef int (*policy_eval_function)(int num_values, ParameterValue *values, doub
 
 #ifdef LOOP_ADAPT_ACTIVATE
 
-#include <loop_adapt_parameter_value_types.h>
-
-
-
 
 extern int loop_adapt_active;
 extern LoopAdaptDebugLevel loop_adapt_verbosity;
@@ -37,7 +33,7 @@ extern LoopAdaptDebugLevel loop_adapt_verbosity;
 int loop_adapt_initialize();
 void loop_adapt_register(char * name, int num_iterations);
 int loop_adapt_register_thread(int threadid);
-//int loop_adapt_register_policy(char* name, char* backend, char* config, char* metric, policy_eval_function func );
+int loop_adapt_register_policy(char* name, char* backend, char* config, char* metric, policy_eval_function func );
 int loop_adapt_add_loop_parameter(char* string, char* parameter);
 int loop_adapt_add_loop_policy(char* string, char* policy);
 int loop_adapt_start_loop( char* name, char* file, int linenumber );
@@ -47,21 +43,13 @@ void loop_adapt_debug_level(int level);
 int loop_adapt_register_inparallel_function(int (*in_parallel)(void));
 
 
-//#define _LOOP_ADAPT_DEFINE_PARAM_GET_SET_DEFS(NAME) \
-//    int loop_adapt_get_##NAME##_parameter(char* name); \
-//    int loop_adapt_set_##NAME##_parameter(char* name, NAME value);
-//_LOOP_ADAPT_DEFINE_PARAM_GET_SET_DEFS(int)
-//_LOOP_ADAPT_DEFINE_PARAM_GET_SET_DEFS(bool)
-/*int loop_adapt_get_bool_parameter(char* name);*/
-/*int loop_adapt_set_bool_parameter(char* name, unsigned int value);*/
-
 #define LA_INIT loop_adapt_initialize();
 
 #define LA_FINALIZE loop_adapt_finalize();
 
 #define LA_REGISTER(name, count) loop_adapt_register(((char *)name), (count));
 #define LA_REGISTER_THREAD(threadid) loop_adapt_register_thread((threadid));
-//#define LA_REGISTER_POLICY(name, backend, config, metric, func) loop_adapt_register_policy((name), (backend), (config), (metric), (func));
+#define LA_REGISTER_POLICY(name, backend, config, metric, func) loop_adapt_register_policy((name), (backend), (config), (metric), (func));
 #define LA_REGISTER_INPARALLEL_FUNC(func) loop_adapt_register_inparallel_function((func));
 #define LA_USE_LOOP_PARAMETER(name, parameter) loop_adapt_add_loop_parameter((name), (parameter));
 #define LA_USE_LOOP_POLICY(name, policy) loop_adapt_add_loop_policy((name), (policy));
@@ -111,12 +99,17 @@ LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(float)
 #define LA_REGISTER(name, count)
 #define LA_REGISTER_THREAD(threadid)
 #define LA_REGISTER_INPARALLEL_FUNC(func)
-//#define LA_REGISTER_POLICY(name, backend, config, metric, func)
+#define LA_REGISTER_POLICY(name, backend, config, metric, func)
 #define LA_USE_LOOP_PARAMETER(name, parameter)
 #define LA_USE_LOOP_POLICY(name, policy)
 
-#define LA_NEW_PARAMETER(name, scope, type)
+#define LA_NEW_INT_PARAMETER(name, scope, type)
 #define LA_GET_INT_PARAMETER(name, x)
+#define LA_SET_INT_PARAMETER(name, x)
+
+#define LA_NEW_BOOL_PARAMETER(name, scope, type)
+#define LA_GET_BOOL_PARAMETER(name, x)
+#define LA_SET_BOOL_PARAMETER(name, x)
 
 #define LOOP_BEGIN(name)
 #define LOOP_END(name)

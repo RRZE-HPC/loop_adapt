@@ -65,7 +65,7 @@ static Parameter_t _loop_adapt_new_parameter()
     return p;
 }
 
-static int _loop_adapt_copy_parameter_definition(ParameterDefinition* in, ParameterDefinition*out)
+static int _loop_adapt_copy_parameter_definition(ParameterDefinition* in, ParameterDefinition *out)
 {
     if (in && out)
     {

@@ -4,7 +4,7 @@
 #include <string.h>
 #include <errno.h>
 
-#include <loop_adapt.h>
+//#include <loop_adapt.h>
 
 #define error_h_str(x) #x
 #define error_h_tostring(x) error_h_str(x)
@@ -15,6 +15,7 @@ typedef enum {
     LOOP_ADAPT_DEBUGLEVEL_INFO,
     LOOP_ADAPT_DEBUGLEVEL_DEBUG
 } LoopAdaptDebugLevel;
+
 #define LOOP_ADAPT_DEBUGLEVEL_MAX LOOP_ADAPT_DEBUGLEVEL_DEBUG
 #define LOOP_ADAPT_DEBUGLEVEL_MIN LOOP_ADAPT_DEBUGLEVEL_ONLYERROR
 

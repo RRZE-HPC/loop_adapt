@@ -19,6 +19,7 @@ int loop_adapt_measurement_available(char* measurement);
 int loop_adapt_measurement_num_metrics(ThreadData_t thread);
 
 int loop_adapt_measurement_configs(struct bstrList* configs);
+int loop_adapt_measurement_getbnames(struct bstrList* measurements);
 
 void loop_adapt_measurement_finalize();
 
