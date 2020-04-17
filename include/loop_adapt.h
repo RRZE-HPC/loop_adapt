@@ -20,6 +20,7 @@ extern "C"
 #define FALSE 0
 #endif
 
+typedef int (*policy_eval_function)(int num_values, ParameterValue *values, double *result);
 
 #ifdef LOOP_ADAPT_ACTIVATE
 
@@ -31,14 +32,19 @@ extern "C"
 extern int loop_adapt_active;
 extern LoopAdaptDebugLevel loop_adapt_verbosity;
 
+
 int loop_adapt_initialize();
 void loop_adapt_register(char * name, int num_iterations);
 int loop_adapt_register_thread(int threadid);
+//int loop_adapt_register_policy(char* name, char* backend, char* config, char* metric, policy_eval_function func );
+int loop_adapt_add_loop_parameter(char* string, char* parameter);
+int loop_adapt_add_loop_policy(char* string, char* policy)
 int loop_adapt_start_loop( char* name, char* file, int linenumber );
-int loop_adapt_start_loop_new( char* name, char* file, int linenumber );
+
 void loop_adapt_finalize();
 void loop_adapt_debug_level(int level);
 int loop_adapt_register_inparallel_function(int (*in_parallel)(void));
+
 
 //#define _LOOP_ADAPT_DEFINE_PARAM_GET_SET_DEFS(NAME) \
 //    int loop_adapt_get_##NAME##_parameter(char* name); \
@@ -54,7 +60,13 @@ int loop_adapt_register_inparallel_function(int (*in_parallel)(void));
 
 #define LA_REGISTER(name, count) loop_adapt_register(((char *)name), (count));
 #define LA_REGISTER_THREAD(threadid) loop_adapt_register_thread((threadid));
+//#define LA_REGISTER_POLICY(name, backend, config, metric, func) loop_adapt_register_policy((name), (backend), (config), (metric), (func));
 #define LA_REGISTER_INPARALLEL_FUNC(func) loop_adapt_register_inparallel_function((func));
+#define LA_USE_LOOP_PARAMETER(name, parameter) loop_adapt_add_loop_parameter((name), (parameter));
+#define LA_USE_LOOP_POLICY(name, policy) loop_adapt_add_loop_policy((name), (policy));
+
+
+
 
 #define LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(TYPE) \
     int loop_adapt_new_##TYPE##_parameter(char* name, LoopAdaptScope_t scope, TYPE value); \
@@ -95,6 +107,10 @@ LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(float)
 #define LA_REGISTER(name, count)
 #define LA_REGISTER_THREAD(threadid)
 #define LA_REGISTER_INPARALLEL_FUNC(func)
+//#define LA_REGISTER_POLICY(name, backend, config, metric, func)
+#define LA_USE_LOOP_PARAMETER(name, parameter)
+#define LA_USE_LOOP_POLICY(name, policy)
+
 #define LA_NEW_PARAMETER(name, scope, type)
 #define LA_GET_INT_PARAMETER(name, x)
 

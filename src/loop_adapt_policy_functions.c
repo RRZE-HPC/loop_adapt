@@ -63,3 +63,14 @@ int loop_adapt_policy_function_sum(int num_values, ParameterValue *values, doubl
     loop_adapt_destroy_param_value(r);
     return 0;
 }
+
+int loop_adapt_policy_function_avg(int num_values, ParameterValue *values, double *result)
+{
+    double sum = 0;
+    int err = loop_adapt_policy_function_sum(num_values, values, &sum);
+    if (err == 0)
+    {
+        *result = sum/num_values;
+    }
+    return err;
+}
