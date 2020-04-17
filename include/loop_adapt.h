@@ -39,7 +39,7 @@ void loop_adapt_register(char * name, int num_iterations);
 int loop_adapt_register_thread(int threadid);
 //int loop_adapt_register_policy(char* name, char* backend, char* config, char* metric, policy_eval_function func );
 int loop_adapt_add_loop_parameter(char* string, char* parameter);
-int loop_adapt_add_loop_policy(char* string, char* policy)
+int loop_adapt_add_loop_policy(char* string, char* policy);
 int loop_adapt_start_loop( char* name, char* file, int linenumber );
 
 void loop_adapt_finalize();
