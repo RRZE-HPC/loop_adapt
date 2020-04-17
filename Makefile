@@ -15,8 +15,8 @@ DEFINES += -D_GNU_SOURCE
 
 ANSI_CFLAGS   =
 
-CFLAGS   = -g -std=gnu99 -Wno-format -fPIC
-CPPFLAGS   = -g -Wno-format -fPIC
+CFLAGS   = -g -fopenmp -std=gnu99 -Wno-format -fPIC
+CPPFLAGS   = -g -fopenmp -Wno-format -fPIC
 SHARED_CFLAGS = -fPIC
 SHARED_LFLAGS = -shared -L$(HWLOC_LIBDIR) -L$(LIKWID_LIBDIR)
 DYNAMIC_TARGET_LIB = libloop_adapt.so
