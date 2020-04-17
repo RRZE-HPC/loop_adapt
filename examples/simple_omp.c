@@ -4,6 +4,7 @@
 #include <omp.h>
 
 #include <loop_adapt.h>
+#include <likwid.h>
 
 #define ARRAY_SIZE 80000000
 #define ITERATIONS 30
