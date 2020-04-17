@@ -10,6 +10,7 @@ extern "C"
 
 #include <loop_adapt_types.h>
 #include <loop_adapt_scopes.h>
+#include <loop_adapt_parameter_value_types.h>
 #include <hwloc.h>
 
 #ifndef TRUE
