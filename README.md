@@ -2,7 +2,18 @@
 
 *loop_adapt* is a runtime system for controlling system parameters and measuring the performance for timestep based applications. It monitors (using timers or [LIKWID](https://github.com/RRZE-HPC/likwid)) the timestep loop with controllable parameters like CPU frequency. The configurations for the timestep loop are not provided by loop_adapt, it is just the application level interface. Configurations can be provided by different backends like input files or through network. A configuration assembles a set of parameter values and a set of measurements. Whenever a configuration was applied and the loop's runtime measurements are performed, the setting is send to an output backend like stdout, files or to the network.
 
-# Description:
+# Installation
+
+## Dependencies
+
+- C/C++ compiler
+- LIKWID
+- HWLOC (2.x)
+- mysqlcppconn
+
+You can configure the installation prefix in `config.mk`.
+
+# Description
 
 Here we describe the main data types used in loop_adapt:
 - Parameter: A parameter is a runtime value or a knob for system manipulation. It consists of a name and a value (int, float, double, boolean, character, string). If it is a system knob, everytime we change the parameter value, the system is adjusted accordingly. An example parameter would be the CPU frequency. There are also used defined parameters which can only be changed without effect to the system. This can be runtime paramters like cache blocking factors or grid partition settings.

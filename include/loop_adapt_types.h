@@ -6,6 +6,7 @@
 #include <map.h>
 
 #include <loop_adapt.h>
+#include <loop_adapt_configuration_types.h>
 
 
 typedef unsigned int boolean;
@@ -24,17 +25,17 @@ registration it determines some values like system PID, current CPU, ...
 */
 typedef struct {
     pthread_t pthread; /**< \brief PThreads data structure */
-    int thread_id; /**< \brief Thread ID given by loop_adapt */
-    int system_tid; /**< \brief System PID (or TID) of the thread */
-    int cpuid; /**< \brief Current CPU */
-    int objidx; /**< \brief Object index in the topology tree */
-    int reg_tid; /**< \brief Thread ID as returned by the registered thread ID function */
+    int thread; /**< \brief Thread ID given by loop_adapt */
+    int num_iterations;
+    LoopAdaptConfiguration_t config;
     int current_config_id; 
     cpu_set_t cpuset; /**< \brief Current CPUset */
     LoopThreadState state; /**< \brief Status of the thread */
 } LoopThreadData;
 /*! \brief Pointer to a ThreadData structure */
 typedef LoopThreadData* LoopThreadData_t;
+
+
 
 /*! \brief Status of a loop */
 typedef enum {
@@ -61,7 +62,9 @@ typedef struct {
     pthread_mutex_t lock; /**< \brief Lock for tree manipulation */
 //    Map_t threads; /**< \brief Hashtable mapping thread ID to ThreadData */
     struct bstrList* parameters;
-    bstring policy;
+    bstring loopname;
+    int policy;
+    Map_t currentThreadConfig;
 
     int current_config_id;
     int announced;

@@ -82,17 +82,13 @@ int loop_adapt_config_stdout_output_raw(char* loopname, char* rawstring)
     }
 }
 
-int loop_adapt_config_stdout_write(ThreadData_t thread, char* loopname, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results)
+int loop_adapt_config_stdout_write(ThreadData_t thread, char* loopname, PolicyDefinition_t policy, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results)
 {
     int i = 0, j = 0;
     if (config && num_results > 0 && results)
     {
-        if (config->num_measurements != num_results)
-        {
-            return -EINVAL;
-        }
         bstring line = bfromcstr("");
-        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Writing %d parameters and %d measurements, config->num_parameters, config->num_measurements);
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Writing %d parameters and %d measurements, config->num_parameters, 1);
         for (i = 0; i < config->num_parameters; i++)
         {
             LoopAdaptConfigurationParameter *p = &config->parameters[i];
@@ -114,21 +110,20 @@ int loop_adapt_config_stdout_write(ThreadData_t thread, char* loopname, LoopAdap
         }
         btrunc(line, blength(line) - 1);
         bconchar(line, '|');
-        for (i = 0; i < config->num_measurements; i++)
+        if (policy->eval)
         {
-            LoopAdaptConfigurationMeasurement *m = &config->measurements[i];
-            if (m)
-            {
-                char* c = loop_adapt_param_value_str(results[i]);
-                bstring x = loop_adapt_config_parse_default_entry_bbb(m->measurement, m->config, m->metric);
-                bconchar(x, ':');
-                bcatcstr(x, c);
-                free(c);
-                bconcat(line, x);
-                bconchar(line, ';');
-                bdestroy(x);
-            }
+            double r = 0;
+            policy->eval(num_results, results, &r);
+            bstring x;
+            if (policy->match)
+                x = bformat("%s:%s:%s=%f", bdata(policy->backend), bdata(policy->config), bdata(policy->match), r);
+            else
+                x = bformat("%s:%s=%f", bdata(policy->backend), bdata(policy->config), r);
+            bconcat(line, x);
+            bdestroy(x);
         }
+
+
         btrunc(line, blength(line) - 1);
         fprintf(loop_adapt_config_stdout_fd, "LOOP=%s;THREAD=%d:%d|%s\n", loopname, thread->thread, thread->cpu, bdata(line));
         fflush(loop_adapt_config_stdout_fd);

@@ -143,6 +143,10 @@ static int _loop_adapt_add_parameter_to_tree(ParameterDefinition* def, int idx_i
                 {
                     loop_adapt_copy_param_value_limit(limit, &p->limit);
                 }
+                else
+                {
+                    p->limit.type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID;
+                }
 
                 //DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Adding parameter '%s' to %s %d, def->name, hwloc_obj_type_string(def->scope), i);
                 err = add_smap(params, def->name,(void*) p);

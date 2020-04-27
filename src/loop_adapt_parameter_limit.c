@@ -175,7 +175,6 @@ void loop_adapt_destroy_param_limit(ParameterValueLimit l)
             l.limit.list.value_idx = -1;
             break;
         default:
-            fprintf(stderr, "INVALID (destroy)");
             break;
     }
 }

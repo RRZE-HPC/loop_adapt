@@ -81,22 +81,6 @@ void loop_adapt_configuration_destroy_config(LoopAdaptConfiguration_t config)
             config->parameters = NULL;
             config->num_parameters = 0;
         }
-        if (config->measurements)
-        {
-            for (i = 0; i < config->num_measurements; i++)
-            {
-                LoopAdaptConfigurationMeasurement* m = &config->measurements[i];
-                if (m)
-                {
-                    bdestroy(m->measurement);
-                    bdestroy(m->config);
-                    bdestroy(m->metric);
-                }
-            }
-            free(config->measurements);
-            config->measurements = NULL;
-            config->num_measurements = 0;
-        }
         memset(config, 0, sizeof(LoopAdaptConfiguration));
         free(config);
         config = NULL;
@@ -104,7 +88,7 @@ void loop_adapt_configuration_destroy_config(LoopAdaptConfiguration_t config)
 }
 
 
-int loop_adapt_configuration_resize_config(LoopAdaptConfiguration_t *configuration, int num_parameters, int num_measurements)
+int loop_adapt_configuration_resize_config(LoopAdaptConfiguration_t *configuration, int num_parameters)
 {
     LoopAdaptConfiguration_t config = *configuration;
     if (!config)
@@ -113,9 +97,8 @@ int loop_adapt_configuration_resize_config(LoopAdaptConfiguration_t *configurati
         config = malloc(sizeof(LoopAdaptConfiguration));
         memset(config, 0, sizeof(LoopAdaptConfiguration));
         config->parameters = NULL;
-        config->measurements = NULL;
     }
-    if (config && num_parameters > 0 && num_measurements > 0)
+    if (config && num_parameters > 0)
     {
         if (num_parameters > config->num_parameters)
         {
@@ -126,16 +109,6 @@ int loop_adapt_configuration_resize_config(LoopAdaptConfiguration_t *configurati
                 return -ENOMEM;
             }
             config->parameters = ptmp;
-        }
-        if (num_measurements > config->num_measurements)
-        {
-            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Increase size of measurements from %d to %d, config->num_measurements, num_measurements);
-            LoopAdaptConfigurationMeasurement* mtmp = realloc(config->measurements, (num_measurements)*sizeof(LoopAdaptConfigurationMeasurement));
-            if (!mtmp)
-            {
-                return -ENOMEM;
-            }
-            config->measurements = mtmp;
         }
         *configuration = config;
         return 0;
@@ -230,7 +203,7 @@ void loop_adapt_configuration_finalize()
 
 
 
-int loop_adapt_get_new_configuration(char* string, LoopAdaptConfiguration_t *config)
+int loop_adapt_get_new_configuration(char* string, int config_id, LoopAdaptConfiguration_t *config)
 {
     int err = -EINVAL;
     if (   string
@@ -239,53 +212,39 @@ int loop_adapt_get_new_configuration(char* string, LoopAdaptConfiguration_t *con
         && loop_adapt_configuration_funcs_input->getnew)
     {
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling getnew function of input backend);
-        *config = loop_adapt_configuration_funcs_input->getnew(string);
-        err = 0;
+        err = loop_adapt_configuration_funcs_input->getnew(string, config_id, config);
     }
     return err;
 }
 
-int loop_adapt_get_current_configuration(char* string, LoopAdaptConfiguration_t *config)
-{
-    int err = -EINVAL;
-    if (   string
-        && config
-        && loop_adapt_configuration_funcs_input
-        && loop_adapt_configuration_funcs_input->getcurrent)
-    {
-        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling getcurrent function of input backend);
-        *config = loop_adapt_configuration_funcs_input->getcurrent(string);
-        err = 0;
-    }
-    return err;
-}
+// int loop_adapt_get_current_configuration(char* string, LoopAdaptConfiguration_t *config)
+// {
+//     int err = -EINVAL;
+//     if (   string
+//         && config
+//         && loop_adapt_configuration_funcs_input
+//         && loop_adapt_configuration_funcs_input->getcurrent)
+//     {
+//         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling getcurrent function of input backend);
+//         *config = loop_adapt_configuration_funcs_input->getcurrent(string);
+//         err = 0;
+//     }
+//     return err;
+// }
 
-int loop_adapt_write_configuration_results(ThreadData_t thread, char* loopname, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results)
+int loop_adapt_write_configuration_results(ThreadData_t thread, char* loopname, PolicyDefinition_t policy, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results)
 {
-    if (   config && results
-        && num_results == config->num_measurements
+    if (   policy && results
         && loop_adapt_configuration_funcs_output
         && loop_adapt_configuration_funcs_output->write)
     {
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling write function of output backend);
-        return loop_adapt_configuration_funcs_output->write(thread, loopname, config, num_results, results);
+        return loop_adapt_configuration_funcs_output->write(thread, loopname, policy, config, num_results, results);
     }
     else
     {
         ERROR_PRINT(Cannot write configuration because of missing input data or results != measurements);
     }
-    return -EINVAL;
-}
-
-int loop_adapt_configuration_announce(LoopAdaptAnnounce_t announce)
-{
-    // if (   announce
-    //     && loop_adapt_configuration_funcs_output
-    //     && loop_adapt_configuration_funcs_output->announce)
-    // {
-    //     DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling announce function of output backend);
-    //     return loop_adapt_configuration_funcs_output->announce(announce);
-    // }
     return -EINVAL;
 }
 

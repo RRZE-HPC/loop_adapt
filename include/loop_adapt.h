@@ -51,8 +51,8 @@ int loop_adapt_register_inparallel_function(int (*in_parallel)(void));
 #define LA_REGISTER_THREAD(threadid) loop_adapt_register_thread((threadid));
 #define LA_REGISTER_POLICY(name, backend, config, metric, func) loop_adapt_register_policy((name), (backend), (config), (metric), (func));
 #define LA_REGISTER_INPARALLEL_FUNC(func) loop_adapt_register_inparallel_function((func));
-#define LA_USE_LOOP_PARAMETER(name, parameter) loop_adapt_add_loop_parameter((name), (parameter));
-#define LA_USE_LOOP_POLICY(name, policy) loop_adapt_add_loop_policy((name), (policy));
+#define LA_USE_LOOP_PARAMETER(name, parameter) loop_adapt_add_loop_parameter(((char *)name), ((char *)parameter));
+#define LA_USE_LOOP_POLICY(name, policy) loop_adapt_add_loop_policy(((char *)name), ((char *)policy));
 
 
 

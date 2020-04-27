@@ -1,23 +1,24 @@
 #ifndef LOOP_ADAPT_CONFIGURATION_H
 #define LOOP_ADAPT_CONFIGURATION_H
 
+#include <loop_adapt_policy_types.h>
 #include <loop_adapt_configuration_types.h>
 
 int loop_adapt_configuration_initialize();
 
-int loop_adapt_get_new_configuration(char* string, LoopAdaptConfiguration_t *config);
-int loop_adapt_get_current_configuration(char* string, LoopAdaptConfiguration_t *config);
+int loop_adapt_get_new_configuration(char* string, int config_id, LoopAdaptConfiguration_t *config);
 
-int loop_adapt_has_new_configuration(char* string);
 
-int loop_adapt_write_configuration_results(ThreadData_t thread, char* loopname, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results);
+int loop_adapt_write_configuration_results(ThreadData_t thread, char* loopname, PolicyDefinition_t policy, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results);
 
 void loop_adapt_configuration_destroy_config(LoopAdaptConfiguration_t config);
-int loop_adapt_configuration_resize_config(LoopAdaptConfiguration_t *config, int num_parameters, int num_measurements);
+int loop_adapt_configuration_resize_config(LoopAdaptConfiguration_t *config, int num_parameters);
 
 void loop_adapt_configuration_finalize();
 
-int loop_adapt_configuration_announce(LoopAdaptAnnounce_t announe);
+
+
+// int loop_adapt_configuration_announce(LoopAdaptAnnounce_t announe);
 
 
 /* Helper functions and macros*/

@@ -27,12 +27,10 @@ static LoopAdaptInputConfigurationFunctions loop_adapt_configuration_input_list[
     [LA_CONFIG_IN_TXT] = {.init = loop_adapt_config_txt_input_init,
                           .finalize = loop_adapt_config_txt_input_finalize,
                           .getnew = loop_adapt_get_new_config_txt,
-                          .getcurrent = loop_adapt_get_current_config_txt,
                          },
     [LA_CONFIG_IN_CC_CLIENT] = {.init = loop_adapt_config_cc_client_init,
                                 .finalize = loop_adapt_config_cc_client_finalize,
                                 .getnew = loop_adapt_get_new_config_cc_client,
-                                .getcurrent = loop_adapt_get_current_config_cc_client,
                                }
 };
 

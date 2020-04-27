@@ -220,7 +220,7 @@ static int  _loop_adapt_get_new_config_txt_read_file(char* filename)
     return 0;
 }
 
-LoopAdaptConfiguration_t loop_adapt_get_new_config_txt(char* string)
+int loop_adapt_get_new_config_txt(char* string, int config_id, LoopAdaptConfiguration_t* configuration)
 {
     int i = 0;
     int j = 0;
@@ -228,7 +228,7 @@ LoopAdaptConfiguration_t loop_adapt_get_new_config_txt(char* string)
     ConfigurationFile* cfile = 0;
     if ((!string) || (!loop_adapt_config_txt_input_hash))
     {
-        return NULL;
+        return -EINVAL;
     }
     DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Get new config for loop %s, string);
     err = get_smap_by_key(loop_adapt_config_txt_input_hash, string, (void*)&cfile);
@@ -241,52 +241,27 @@ LoopAdaptConfiguration_t loop_adapt_get_new_config_txt(char* string)
     }
     if (err == 0)
     {
-        if (cfile->line_idx == cfile->lines->qty)
+        if (config_id == cfile->lines->qty)
         {
-            return NULL;
+            return -EFAULT;
         }
 
         int pcount = 0;
         int mcount = 0;
-        struct bstrList* first = bsplit(cfile->lines->entry[cfile->line_idx], '|');
+        struct bstrList* first = bsplit(cfile->lines->entry[config_id], '|');
         struct bstrList* params = bsplit(first->entry[0], ';');
         struct bstrList* measure = bsplit(first->entry[1], ';');
         bstrListDestroy(first);
-        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Line %d has %d parameters and %d measurements, cfile->line_idx, params->qty, measure->qty);
-/*        LoopAdaptConfiguration_t config = malloc(sizeof(LoopAdaptConfiguration));*/
-/*        if (!config)*/
-/*        {*/
-/*            bstrListDestroy(params);*/
-/*            bstrListDestroy(measure);*/
-/*            return NULL;*/
-/*        }*/
-/*        config->parameters = malloc(params->qty * sizeof(LoopAdaptConfigurationParameter));*/
-/*        if (!config->parameters)*/
-/*        {*/
-/*            bstrListDestroy(params);*/
-/*            bstrListDestroy(measure);*/
-/*            free(config);*/
-/*            return NULL;*/
-/*        }*/
-/*        memset(config->parameters, 0, params->qty * sizeof(LoopAdaptConfigurationParameter));*/
-/*        config->measurements = malloc(measure->qty * sizeof(LoopAdaptConfigurationMeasurement));*/
-/*        if (!config->measurements)*/
-/*        {*/
-/*            bstrListDestroy(params);*/
-/*            bstrListDestroy(measure);*/
-/*            free(config->parameters);*/
-/*            free(config);*/
-/*            return NULL;*/
-/*        }*/
-/*        memset(config->measurements, 0, measure->qty * sizeof(LoopAdaptConfigurationMeasurement));*/
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Line %d has %d parameters and %d measurements, config_id, params->qty, measure->qty);
+
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Resize configuration for %d parameters and %d measurements, params->qty, measure->qty);
-        err = loop_adapt_configuration_resize_config(&cfile->current, params->qty, measure->qty);
-        LoopAdaptConfiguration_t config = cfile->current;
+        err = loop_adapt_configuration_resize_config(configuration, params->qty);
+        LoopAdaptConfiguration_t config = *configuration;
         if (err != 0)
         {
             bstrListDestroy(params);
             bstrListDestroy(measure);
-            return NULL;
+            return -ENOMEM;
         }
 
         for (i = 0; i < params->qty; i++)
@@ -348,25 +323,8 @@ LoopAdaptConfiguration_t loop_adapt_get_new_config_txt(char* string)
         }
         config->num_parameters = pcount;
         bstrListDestroy(params);
-        for (i = 0; i < measure->qty; i++)
-        {
-            struct bstrList* plist = bsplit(measure->entry[i], '=');
-
-            if (loop_adapt_measurement_available(bdata(plist->entry[0])))
-            {
-                LoopAdaptConfigurationMeasurement* m = &config->measurements[mcount];
-                m->measurement = bstrcpy(plist->entry[0]);
-                struct bstrList* mlist = bsplit(plist->entry[1], ':');
-                m->config = bstrcpy(mlist->entry[0]);
-                m->metric = bstrcpy(mlist->entry[1]);
-                bstrListDestroy(mlist);
-                mcount++;
-            }
-            bstrListDestroy(plist);
-        }
         bstrListDestroy(measure);
-        config->num_measurements = mcount;
-        config->configuration_id = cfile->line_idx;
+        config->configuration_id = config_id;
 
 /*        if (cfile->current)*/
 /*        {*/
@@ -375,28 +333,27 @@ LoopAdaptConfiguration_t loop_adapt_get_new_config_txt(char* string)
 /*        }*/
         cfile->current = config;
         cfile->line_idx++;
-        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, New line idx %d, cfile->line_idx);
-
-        return config;
+        *configuration = config;
+        return 0;
     }
-    return NULL;
+    return -ENODEV;
 }
 
 
-LoopAdaptConfiguration_t loop_adapt_get_current_config_txt(char* string)
-{
-    int err = 0;
-    ConfigurationFile* cfile = 0;
-    if (string && loop_adapt_config_txt_input_hash)
-    {
-        err = get_smap_by_key(loop_adapt_config_txt_input_hash, string, (void*)&cfile);
-        if (err == 0)
-        {
-            return cfile->current;
-        }
-    }
-    return NULL;
-}
+// LoopAdaptConfiguration_t loop_adapt_get_current_config_txt(char* string)
+// {
+//     int err = 0;
+//     ConfigurationFile* cfile = 0;
+//     if (string && loop_adapt_config_txt_input_hash)
+//     {
+//         err = get_smap_by_key(loop_adapt_config_txt_input_hash, string, (void*)&cfile);
+//         if (err == 0)
+//         {
+//             return cfile->current;
+//         }
+//     }
+//     return NULL;
+// }
 
 
 int loop_adapt_config_txt_output_init()
@@ -452,7 +409,7 @@ int loop_adapt_config_txt_output_raw(char* loopname, char* rawstring)
     }
 }
 
-int loop_adapt_config_txt_output_write(ThreadData_t thread, char* loopname, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results)
+int loop_adapt_config_txt_output_write(ThreadData_t thread, char* loopname, PolicyDefinition_t policy, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results)
 {
     int i = 0, j = 0;
     int err = 0;
@@ -471,7 +428,7 @@ int loop_adapt_config_txt_output_write(ThreadData_t thread, char* loopname, Loop
         }
 
         bstring line = bformat("THREAD=%d:%d|", thread->thread, thread->cpu);
-        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Writing %d parameters and %d measurements, config->num_parameters, config->num_measurements);
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Writing %d parameters, config->num_parameters);
         for (i = 0; i < config->num_parameters; i++)
         {
             LoopAdaptConfigurationParameter *p = &config->parameters[i];
@@ -493,23 +450,38 @@ int loop_adapt_config_txt_output_write(ThreadData_t thread, char* loopname, Loop
         }
         btrunc(line, blength(line) - 1);
         bconchar(line, '|');
-        for (i = 0; i < config->num_measurements; i++)
+
+        if (policy->eval)
         {
-            LoopAdaptConfigurationMeasurement *m = &config->measurements[i];
-            if (m)
-            {
-                char* c = loop_adapt_param_value_str(results[i]);
-                bstring x = loop_adapt_config_parse_default_entry_bbb(m->measurement, m->config, m->metric);
-                bconchar(x, ':');
-                bcatcstr(x, c);
-                free(c);
-                bconcat(line, x);
-                bconchar(line, ';');
-                bdestroy(x);
-            }
+            double r = 0;
+            policy->eval(num_results, results, &r);
+            bstring x;
+            if (policy->match)
+                x = bformat("%s:%s:%s=%f", bdata(policy->backend), bdata(policy->config), bdata(policy->match), r);
+            else
+                x = bformat("%s:%s=%f", bdata(policy->backend), bdata(policy->config), r);
+            bconcat(line, x);
+            bdestroy(x);
         }
-        btrunc(line, blength(line) - 1);
-        bconchar(line, '\n');
+
+        TODO_PRINT(Change txt write function to policy);
+        // for (i = 0; i < config->num_measurements; i++)
+        // {
+        //     LoopAdaptConfigurationMeasurement *m = &config->measurements[i];
+        //     if (m)
+        //     {
+        //         char* c = loop_adapt_param_value_str(results[i]);
+        //         bstring x = loop_adapt_config_parse_default_entry_bbb(m->measurement, m->config, m->metric);
+        //         bconchar(x, ':');
+        //         bcatcstr(x, c);
+        //         free(c);
+        //         bconcat(line, x);
+        //         bconchar(line, ';');
+        //         bdestroy(x);
+        //     }
+        // }
+        // btrunc(line, blength(line) - 1);
+        // bconchar(line, '\n');
 
         fwrite(bdata(line), sizeof(char), blength(line), outputfile);
         fflush(outputfile);

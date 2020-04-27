@@ -87,6 +87,8 @@ static LoopThreadData_t _loop_adapt_new_loopdata_thread()
         return NULL;
     }
     memset(ldata, 0, sizeof(LoopThreadData));
+    ldata->config = NULL;
+    CPU_ZERO(&ldata->cpuset);
     return ldata;
 }
 
@@ -96,6 +98,9 @@ static void _loop_adapt_free_loopdata_thread(void* t)
 {
     if (t)
     {
+        LoopThreadData_t ldata = (LoopThreadData_t)t;
+        
+        memset(ldata, 0, sizeof(LoopThreadData));
         free(t);
     }
 }
@@ -114,8 +119,9 @@ static LoopData_t _loop_adapt_new_loopdata()
     ldata->status = LOOP_STOPPED;
     ldata->filename = NULL;
     ldata->linenumber = -1;
-    ldata->parameters = bstrListCreate();
-    ldata->policy = bfromcstr("");
+    ldata->parameters = NULL;
+    ldata->policy = -1;
+    ldata->currentThreadConfig = NULL;
 
     //ldata->threads = g_hash_table_new(g_direct_hash, g_direct_equal);
     //init_map(&ldata->threads, MAP_KEY_TYPE_INT, -1, _loop_adapt_free_loopdata_thread);
@@ -137,8 +143,12 @@ static void _loop_adapt_destroy_loopdata(gpointer val)
 /*            destroy_imap(loopdata->threads);*/
 /*        }*/
         pthread_mutex_destroy(&loopdata->lock);
-        bstrListDestroy(loopdata->parameters);
-        bdestroy(loopdata->policy);
+
+        // bstrListPrint(loopdata->parameters);
+        // bstrListDestroy(loopdata->parameters);
+        if (loopdata->currentThreadConfig)
+            destroy_imap(loopdata->currentThreadConfig);
+        loopdata->policy = -1;
         memset(loopdata, 0, sizeof(LoopData));
         free(loopdata);
     }
@@ -206,6 +216,19 @@ void loop_adapt_finalize()
     if (loop_adapt_global_hash)
     {
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Finalize global hash);
+        int i = 0;
+        for (i = 0; i <  get_smap_size(loop_adapt_global_hash); i++)
+        {
+            LoopData_t loopdata = NULL;
+            get_smap_by_idx(loop_adapt_global_hash, i, (void**)&loopdata);
+            if (loopdata)
+            {
+                pthread_mutex_destroy(&loopdata->lock);
+                loopdata->policy = -1;
+                memset(loopdata, 0, sizeof(LoopData));
+                free(loopdata);
+            }
+        }
         destroy_smap(loop_adapt_global_hash);
         loop_adapt_global_hash = NULL;
     }
@@ -227,7 +250,7 @@ int loop_adapt_initialize()
         {
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Initialize global hash);
             pthread_mutex_lock(&loop_adapt_global_hash_lock);
-            err = init_smap(&loop_adapt_global_hash, _loop_adapt_destroy_loopdata);
+            err = init_smap(&loop_adapt_global_hash, NULL);
             pthread_mutex_unlock(&loop_adapt_global_hash_lock);
             if (err != 0)
             {
@@ -308,6 +331,9 @@ void loop_adapt_register(char* string, int num_iterations)
         ldata->max_iterations = num_iterations;
         ldata->num_iterations = 0;
         ldata->status = LOOP_STOPPED;
+        ldata->loopname = bfromcstr(string);
+        ldata->parameters = bstrListCreate();
+        init_imap(&ldata->currentThreadConfig, _loop_adapt_free_loopdata_thread);
 
         // Safe the global data struct in the topology tree. We can store an
         // object at the root of the tree. It does not work for tree elements later.
@@ -336,27 +362,38 @@ int loop_adapt_add_loop_parameter(char* string, char* parameter)
         if (get_smap_by_key(loop_adapt_global_hash, string, (void**)&tree) == 0)
         {
             LoopData_t ldata = NULL;
-            
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Found tree for loop %s, string);
             ldata = (LoopData_t)hwloc_topology_get_userdata(tree);
             if (ldata)
             {
                 int i = 0;
                 int found = 0;
                 bstring bparam = bfromcstr(parameter);
+                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Search for parameter %s for loop %s, parameter, string);
                 for (i = 0; i < ldata->parameters->qty; i++)
                 {
                     if (bstrcmp(bparam, ldata->parameters->entry[i]) == BSTR_OK)
                     {
+                        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Parameter %s to loop %s already registered, parameter, string);
                         found = 1;
                         break;
                     }
                 }
                 if (!found)
                 {
+                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Adding parameter %s to loop %s, parameter, string);
                     bstrListAdd(ldata->parameters, bparam);
                 }
                 bdestroy(bparam);
             }
+            else
+            {
+                ERROR_PRINT(No tree defined for loop %s, string);
+            }
+        }
+        else
+        {
+            ERROR_PRINT(No loop %s registered, string);
         }
     }
     return 0;
@@ -374,19 +411,26 @@ int loop_adapt_add_loop_policy(char* string, char* policy)
             ldata = (LoopData_t)hwloc_topology_get_userdata(tree);
             if (ldata)
             {
-                if (blength(ldata->policy) > 0)
+                if (ldata->policy >= 0)
                 {
-                    ERROR_PRINT(Policy %s already registered for loop %s, bdata(ldata->policy), string);
+                    ERROR_PRINT(Policy %s already registered for loop %s, ldata->policy, string);
                     return -EFAULT;
                 }
-                bdestroy(ldata->policy);
-                ldata->policy = bfromcstr(policy);
+
+                int p = loop_adapt_policy_available(policy);
+                if (p >= 0)
+                {
+                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Adding policy %s to loop %s, policy, string);
+                    ldata->policy = p;
+                }
             }
         }
     }
     return 0;
 }
 
+
+// internal use only
 int loop_adapt_get_loop_parameter(char* string, struct bstrList* parameters)
 {
     if (loop_adapt_active)
@@ -410,6 +454,7 @@ int loop_adapt_get_loop_parameter(char* string, struct bstrList* parameters)
     return 0;
 }
 
+// internal use only
 int loop_adapt_get_loopdata(char* string, LoopData_t *loopdata)
 {
     if (loop_adapt_active)
@@ -431,7 +476,100 @@ int loop_adapt_get_loopdata(char* string, LoopData_t *loopdata)
     return 0;
 }
 
+static int loop_adapt_handle_thread(LoopData_t loop, ThreadData_t thread)
+{
+    int i = 0;
+    int err = 0;
+    int first_iteration = 0;
+    LoopThreadData_t loopthread = NULL;
+    if (get_imap_by_key(loop->currentThreadConfig, thread->thread, (void**)&loopthread) < 0)
+    {
+        loopthread = _loop_adapt_new_loopdata_thread();
+        if (loopthread)
+        {
+            loopthread->num_iterations = 0;
+            loopthread->current_config_id = 0;
+            loopthread->config = NULL;
+            loopthread->pthread = thread->pthread;
+            loopthread->thread = thread->thread;
+            loopthread->state = LOOP_ADAPT_THREAD_PAUSE;
+            add_imap(loop->currentThreadConfig, thread->thread, (void*)loopthread);
+        }
+    }
+    PolicyDefinition_t pol = loop_adapt_policy_get(loop->policy);
+    if (!pol)
+    {
+        ERROR_PRINT(No policy registered for loop %s, loop->loopname);
+        return -ENODEV;
+    }
+    if (loopthread->config)
+    {
+        if (blength(pol->backend) > 0)
+        {
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Stopping measurement %s for thread %d, bdata(pol->backend), thread->thread);
+            err = loop_adapt_measurement_stop(thread, bdata(pol->backend));
+            if (err == 0)
+            {
 
+                int nmetrics = loop_adapt_measurement_num_metrics(thread);
+                ParameterValue* v = malloc(nmetrics * sizeof(ParameterValue));
+                if (v)
+                {
+                    loop_adapt_measurement_result(thread, bdata(pol->backend), 0, v);
+                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Write %d metrics for config with measurement %s, nmetrics, bdata(pol->backend));
+                    loop_adapt_write_configuration_results(thread, bdata(loop->loopname), pol, loopthread->config, nmetrics, v);
+                    free(v);
+                }
+                else
+                {
+                    ERROR_PRINT(Cannot allocate space to gather all measurement results);
+                }
+            }
+            else
+            {
+                ERROR_PRINT(Failed to stop measurement %s, bdata(pol->backend));
+            }
+            loopthread->current_config_id++;
+            loop_adapt_parameter_loop_end(thread);
+        }
+    }
+    else
+    {
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, New Loop %s for thread %d: Saving parameters, bdata(loop->loopname), thread->thread);
+        loop_adapt_parameter_loop_start(thread);
+        first_iteration = 1;
+    }
+    err = loop_adapt_get_new_configuration(bdata(loop->loopname), loopthread->current_config_id, &loopthread->config);
+    if (err == 0)
+    {
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, New configuration %d for thread %d (%p), loopthread->current_config_id, thread->thread, loopthread->config);
+        for (i = 0; i < loopthread->config->num_parameters; i++)
+        {
+            LoopAdaptConfigurationParameter* cp = &loopthread->config->parameters[i];
+            if (cp->num_values > 1 && thread->thread < cp->num_values)
+            {
+                loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[thread->thread]);
+            }
+            else if (cp->num_values == 1)
+            {
+                loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[0]);
+            }
+        }
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Setup measurement %s for thread %d, bdata(pol->backend), thread->thread);
+        if (first_iteration)
+            err = loop_adapt_measurement_setup(thread, bdata(pol->backend), pol->config, pol->match);
+        if (err == 0)
+        {
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Setup measurement %s for thread %d, bdata(pol->backend), thread->thread);
+            err = loop_adapt_measurement_start(thread, bdata(pol->backend));
+        }
+    }
+    else
+    {
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, No config for loop %s and thread %d, bdata(loop->loopname), thread->thread);
+    }
+    return err;
+}
 
 
 /* This function is called when the loop starts and at the beginning of each loop iteration */
@@ -443,6 +581,7 @@ int loop_adapt_start_loop( char* string, char* file, int linenumber )
     hwloc_topology_t tree = NULL;
     LoopData_t ldata = NULL;
     ThreadData_t thread = NULL;
+    LoopThreadData_t loopthread = NULL;
     if (loop_adapt_active)
     {
         if (get_smap_by_key(loop_adapt_global_hash, string, (void**)&tree) < 0)
@@ -453,235 +592,69 @@ int loop_adapt_start_loop( char* string, char* file, int linenumber )
         ldata = (LoopData_t)hwloc_topology_get_userdata(tree);
         if (ldata)
         {
-            if (ldata->status == LOOP_STARTED)
+            // Get the topology data for the current thread
+            thread = loop_adapt_threads_get();
+            if (get_imap_by_key(ldata->currentThreadConfig, thread->thread, (void**)&loopthread) < 0)
             {
-                if (ldata->num_iterations < ldata->max_iterations)
+                loopthread = _loop_adapt_new_loopdata_thread();
+                if (loopthread)
                 {
-                    ldata->num_iterations++;
+                    loopthread->num_iterations = 0;
+                    loopthread->current_config_id = 0;
+                    loopthread->config = NULL;
+                    loopthread->pthread = thread->pthread;
+                    loopthread->thread = thread->thread;
+                    loopthread->state = LOOP_ADAPT_THREAD_PAUSE;
+                    add_imap(ldata->currentThreadConfig, thread->thread, (void*)loopthread);
+                }
+            }
+
+            if (ldata->status == LOOP_STARTED && loopthread->state == LOOP_ADAPT_THREAD_RUN)
+            {
+                if (loopthread->num_iterations < ldata->max_iterations)
+                {
+                    loopthread->num_iterations++;
                     DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Need more iterations for loop '%s', string);
                     return 1;
                 }
                 else
                 {
-                    LoopAdaptConfiguration_t config = NULL;
-                    err = loop_adapt_get_current_configuration(string, &config);
-                    if (err == 0 && config)
-                    {
-/*                        if (config->configuration_id != ldata->current_config_id)*/
-/*                        {*/
-/*                            fprintf(stderr, "ERROR: Configuration mismatch (%d vs %d) for loop %s\n", config->configuration_id, ldata->current_config_id, string);*/
-/*                        }*/
-                        if (loop_adapt_threads_in_parallel() == 0)
-                        {
-                            loop_adapt_measurement_stop_all();
-                            for (i = 0; i < loop_adapt_threads_get_count(); i++)
-                            {
-                                thread = loop_adapt_threads_getthread(i);
-                                int nmetrics = loop_adapt_measurement_num_metrics(thread);
-                                ParameterValue* v = malloc(nmetrics * sizeof(ParameterValue));
-                                if (v)
-                                {
-                                    int tmp = 0;
-
-                                    for (j = 0; j < config->num_measurements; j++)
-                                    {
-                                        LoopAdaptConfigurationMeasurement* cm = &config->measurements[j];
-                                        tmp += loop_adapt_measurement_result(thread, bdata(cm->measurement), nmetrics - tmp, &v[tmp]);
-                                    }
-                                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Write %d metrics for config with %d measurements, nmetrics, config->num_measurements);
-                                    loop_adapt_write_configuration_results(thread, string, config, nmetrics, v);
-                                    free(v);
-                                }
-                                loop_adapt_parameter_loop_end(thread);
-                            }
-                            
-
-                        }
-                        else
-                        {
-                            thread = loop_adapt_threads_get();
-                            for (j = 0; j < config->num_measurements; j++)
-                            {
-                                LoopAdaptConfigurationMeasurement* cm = &config->measurements[j];
-                                loop_adapt_measurement_stop(thread, bdata(cm->measurement));
-                            }
-                            int nmetrics = loop_adapt_measurement_num_metrics(thread);
-                            ParameterValue* v = malloc(nmetrics * sizeof(ParameterValue));
-                            if (v)
-                            {
-                                int tmp = 0;
-
-                                for (j = 0; j < config->num_measurements; j++)
-                                {
-                                    LoopAdaptConfigurationMeasurement* cm = &config->measurements[j];
-                                    tmp += loop_adapt_measurement_result(thread, bdata(cm->measurement), nmetrics - tmp, &v[tmp]);
-                                }
-                                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Write %d metrics for config with %d measurements, nmetrics, config->num_measurements);
-                                loop_adapt_write_configuration_results(thread, string, config, nmetrics, v);
-                                free(v);
-                            }
-                            loop_adapt_parameter_loop_end(thread);
-                        }
-                        // stop profiling and send data
-/*                        loop_adapt_measurement_stop_all(thread);*/
-                        
-                        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, loop_adapt stop measurements);
-                    }
-                    ldata->status = LOOP_STOPPED;
-                    ldata->num_iterations = 0;
-                    ldata->current_config_id = -1;
-
-
-                    LoopAdaptConfiguration_t new = NULL;
-                    err = loop_adapt_get_new_configuration(string, &new);
-                    if (err == 0 && new)
-                    {
-                        // apply new parameter
-                        // configure and start measurements
-                        if (loop_adapt_threads_in_parallel() == 0)
-                        {
-                            for (i = 0; i < loop_adapt_threads_get_count(); i++)
-                            {
-                                thread = loop_adapt_threads_getthread(i);
-                                //_loop_adapt_set_setup_and_start(thread, new);
-                                for (j = 0; j < new->num_parameters; j++)
-                                {
-                                    LoopAdaptConfigurationParameter* cp = &new->parameters[j];
-                                    if (cp->num_values > 1 && thread->thread < cp->num_values)
-                                    {
-                                        loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[thread->thread]);
-                                    }
-                                    else if (cp->num_values == 1)
-                                    {
-                                        loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[0]);
-                                    }
-                                }
-                                for (j = 0; j < new->num_measurements; j++)
-                                {
-                                    LoopAdaptConfigurationMeasurement* cm = &new->measurements[j];
-                                    loop_adapt_measurement_setup(thread, bdata(cm->measurement), cm->config, cm->metric);
-                                }
-                            }
-                            loop_adapt_measurement_start_all();
-
-                            // for (i = 0; i < loop_adapt_threads_get_count(); i++)
-                            // {
-                            //     thread = loop_adapt_threads_getthread(i);
-                            //     for (i = 0; i < new->num_measurements; i++)
-                            //     {
-                            //         LoopAdaptConfigurationMeasurement* cm = &new->measurements[i];
-                            //         loop_adapt_measurement_start(thread, bdata(cm->measurement));
-                            //     }
-                            // }
-                        }
-                        else
-                        {
-                            thread = loop_adapt_threads_get();
-                            for (i = 0; i < new->num_parameters; i++)
-                            {
-                                LoopAdaptConfigurationParameter* cp = &new->parameters[i];
-                                if (cp->num_values > 1 && thread->thread < cp->num_values)
-                                {
-                                    loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[thread->thread]);
-                                }
-                                else if (cp->num_values == 1)
-                                {
-                                    loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[0]);
-                                }
-                            }
-                            for (i = 0; i < new->num_measurements; i++)
-                            {
-                                LoopAdaptConfigurationMeasurement* cm = &new->measurements[i];
-                                loop_adapt_measurement_setup(thread, bdata(cm->measurement), cm->config, cm->metric);
-                            }
-                            for (i = 0; i < new->num_measurements; i++)
-                            {
-                                LoopAdaptConfigurationMeasurement* cm = &new->measurements[i];
-                                loop_adapt_measurement_start(thread, bdata(cm->measurement));
-                            }
-                        }
-                        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, loop_adapt start measurements);
-                        ldata->current_config_id = config->configuration_id;
-                        ldata->status = LOOP_STARTED;
-                        ldata->num_iterations = 1;
-                    }
-                }
-            }
-            else
-            {
-                LoopAdaptConfiguration_t config = NULL;
-                err = loop_adapt_get_new_configuration(string, &config);
-                if (err == 0 && config)
-                {
-                    // apply new parameter
-                    // configure and start measurements
                     if (loop_adapt_threads_in_parallel() == 0)
                     {
                         for (i = 0; i < loop_adapt_threads_get_count(); i++)
                         {
-                            thread = loop_adapt_threads_getthread(i);
-                            loop_adapt_parameter_loop_start(thread);
-                            //_loop_adapt_set_setup_and_start(thread, config);
-                            for (j = 0; j < config->num_parameters; j++)
-                            {
-                                LoopAdaptConfigurationParameter* cp = &config->parameters[j];
-                                if (cp->num_values > 1 && thread->thread < cp->num_values)
-                                {
-                                    loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[thread->thread]);
-                                }
-                                else if (cp->num_values == 1)
-                                {
-                                    loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[0]);
-                                }
-                            }
-                            for (j = 0; j < config->num_measurements; j++)
-                            {
-                                LoopAdaptConfigurationMeasurement* cm = &config->measurements[j];
-                                loop_adapt_measurement_setup(thread, bdata(cm->measurement), cm->config, cm->metric);
-                            }
+                            ThreadData_t t = loop_adapt_threads_getthread(i);
+                            loop_adapt_handle_thread(ldata, t);
                         }
-                        loop_adapt_measurement_start_all();
                     }
                     else
                     {
-                        thread = loop_adapt_threads_get();
-                        for (j = 0; j < config->num_parameters; j++)
-                        {
-                            LoopAdaptConfigurationParameter* cp = &config->parameters[j];
-                            if (cp->num_values > 1 && thread->thread < cp->num_values)
-                            {
-                                loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[thread->thread]);
-                            }
-                            else if (cp->num_values == 1)
-                            {
-                                loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[0]);
-                            }
-                        }
-                        for (j = 0; j < config->num_measurements; j++)
-                        {
-                            LoopAdaptConfigurationMeasurement* cm = &config->measurements[j];
-                            loop_adapt_measurement_setup(thread, bdata(cm->measurement), cm->config, cm->metric);
-                        }
-                        for (j = 0; j < config->num_measurements; j++)
-                        {
-                            LoopAdaptConfigurationMeasurement* cm = &config->measurements[j];
-                            loop_adapt_measurement_start(thread, bdata(cm->measurement));
-                        }
-                        loop_adapt_parameter_loop_start(thread);
+                        loop_adapt_handle_thread(ldata, thread);
                     }
-                    
-                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, loop_adapt start measurements);
-                    ldata->current_config_id = config->configuration_id;
-                    ldata->status = LOOP_STARTED;
-                    ldata->num_iterations = 1;
-                }
-                else
-                {
-                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, loop_adapt received no new configuration);
-                    return 1;
+                    loopthread->num_iterations = 0;
                 }
             }
-            //hwloc_topology_set_userdata(tree, (void*)ldata);
+            else
+            {
+                err = loop_adapt_get_new_configuration(string, loopthread->current_config_id, &loopthread->config);
+                if (err == 0 && loopthread->config)
+                {
+                    if (loop_adapt_threads_in_parallel() == 0)
+                    {
+                        for (i = 0; i < loop_adapt_threads_get_count(); i++)
+                        {
+                            ThreadData_t t = loop_adapt_threads_getthread(i);
+                            loop_adapt_handle_thread(ldata, t);
+                        }
+                    }
+                    else
+                    {
+                        loop_adapt_handle_thread(ldata, thread);
+                    }
+                }
+                loopthread->state = LOOP_ADAPT_THREAD_RUN;
+                ldata->status = LOOP_STARTED;
+            }
         }
     }
     return 1;

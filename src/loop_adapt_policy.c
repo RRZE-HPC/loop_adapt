@@ -17,11 +17,11 @@ int _loop_adapt_copy_policy(_PolicyDefinition *in, PolicyDefinition* out)
     if (in && out)
     {
         out->name = bfromcstr(in->name);
+        out->backend = bfromcstr(in->backend);
+        out->config = bfromcstr(in->config);
+        out->match = bfromcstr(in->match);
         out->eval = in->eval;
-        if (in->match)
-            out->measurement = bformat("%s=%s:%s", in->backend, in->config, in->match);
-        else
-            out->measurement = bformat("%s=%s", in->backend, in->config);
+        
         return 0;
     }
     return -EINVAL;
@@ -37,7 +37,9 @@ void loop_adapt_policy_finalize()
             PolicyDefinition* pd = &loop_adapt_active_policy[i];
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Removing runtime policy %s, bdata(pd->name));
             bdestroy(pd->name);
-            bdestroy(pd->measurement);
+            bdestroy(pd->backend);
+            bdestroy(pd->config);
+            bdestroy(pd->match);
             pd->eval = NULL;
         }
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Freeing space for runtime policies);
@@ -106,15 +108,11 @@ int loop_adapt_register_policy(char* name, char* backend, char* config, char* ma
         tmp = NULL;
         tmp = &loop_adapt_active_policy[loop_adapt_num_active_policy];
         tmp->name = bfromcstr(name);
+        tmp->backend = bfromcstr(backend);
+        tmp->config = bfromcstr(config);
+        tmp->match = bfromcstr(match);
         tmp->eval = func;
-        if (match)
-        {
-            tmp->measurement = bformat("%s=%s:%s", backend, config, match);
-        }
-        else
-        {
-            tmp->measurement = bformat("%s=%s", backend, config);
-        }
+        
         loop_adapt_num_active_policy++;
         return 0;
     }
@@ -130,32 +128,36 @@ int loop_adapt_policy_eval(char* loop, int num_results, ParameterValue* inputs, 
     err = loop_adapt_get_loopdata(loop, &ldata);
     if (err == 0)
     {
-        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Evaluate policy for loop %s using policy %s, loop, bdata(ldata->policy));
-        for (i = 0; i < loop_adapt_num_active_policy; i++)
+        if (ldata->policy >= 0 && ldata->policy < loop_adapt_num_active_policy)
         {
-            PolicyDefinition* pd = &loop_adapt_active_policy[i];
-            if (bstrncmp(pd->name, ldata->policy, blength(pd->name)) == BSTR_OK)
-            {
-                return pd->eval(num_results, inputs, output);
-            }
+            PolicyDefinition* pd = &loop_adapt_active_policy[ldata->policy];
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Evaluate policy for loop %s using policy %d, loop, bdata(pd->name));
+            return pd->eval(num_results, inputs, output);
         }
         return -ENODEV;
     }
     return err;
 }
 
-bstring loop_adapt_policy_get_measurement(bstring policy)
+bstring loop_adapt_policy_get_measurement(int policy)
 {
     int i = 0;
     int err = 0;
     bstring out = bfromcstr("");
-    for (i = 0; i < loop_adapt_num_active_policy; i++)
+    if (policy >= 0 && policy < loop_adapt_num_active_policy)
     {
-        PolicyDefinition* pd = &loop_adapt_active_policy[i];
-        if (bstrncmp(pd->name, policy, blength(pd->name)) == BSTR_OK)
-        {
-            bconcat(out, pd->measurement);
-        }
+        PolicyDefinition* pd = &loop_adapt_active_policy[policy];
+        bconcat(out, pd->backend);
     }
     return out;
+}
+
+PolicyDefinition_t loop_adapt_policy_get(int policy)
+{
+    if (policy >= 0 && policy < loop_adapt_num_active_policy)
+    {
+        PolicyDefinition_t pd = &loop_adapt_active_policy[policy];
+        return pd;
+    }
+    return NULL;
 }

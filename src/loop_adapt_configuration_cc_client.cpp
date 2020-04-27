@@ -118,12 +118,12 @@ extern "C" void loop_adapt_config_cc_client_finalize()
 // loops simultaneously, we should hand it over to client.set_config() which
 // returns the per-loop config. Moreover, the client.current variable should be
 // a hash map string -> current config
-extern "C" LoopAdaptConfiguration_t loop_adapt_get_new_config_cc_client(char* string)
+extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, LoopAdaptConfiguration_t* configuration)
 {
     int i = 0;
     int err = 0;
     if ((!cc_client_hash) || (!string))
-        return NULL;
+        return -EINVAL;
     CCConfig * cc_config = NULL;
 
     // Check whether there is already a cc_config for the loop
@@ -134,7 +134,7 @@ extern "C" LoopAdaptConfiguration_t loop_adapt_get_new_config_cc_client(char* st
         cc_config = (CCConfig*) malloc(sizeof(CCConfig));
         if (!cc_config)
         {
-            return NULL;
+            return -ENOMEM;
         }
         cc_config->current = NULL;
         // Hash table empty for loop, create a new client
@@ -165,12 +165,17 @@ extern "C" LoopAdaptConfiguration_t loop_adapt_get_new_config_cc_client(char* st
     }
     
     // Allocate a fresh Configuration
-    LoopAdaptConfiguration_t config = NULL;
-    config = (LoopAdaptConfiguration_t) malloc(sizeof(LoopAdaptConfiguration));
+    LoopAdaptConfiguration_t config = *configuration;
+    if (!config)
+        config = (LoopAdaptConfiguration_t) malloc(sizeof(LoopAdaptConfiguration));
+
+    
 
     // Get all parameter names
     struct bstrList *param_names = bstrListCreate();
     loop_adapt_get_loop_parameter(string, param_names);
+
+    loop_adapt_configuration_resize_config(configuration, param_names->qty);
 
     std::string config_data = cc_config->client->set_config();
 
@@ -191,27 +196,27 @@ extern "C" LoopAdaptConfiguration_t loop_adapt_get_new_config_cc_client(char* st
     // Update current configuration for easy access later
     cc_config->current = config;
     bstrListDestroy(param_names);
-
-    return config;
+    *configuration = config;
+    return 0;
 }
 
 // Return the current configuration. See comment at loop_adapt_get_new_config_cc_client
 // for string function argument for per-loop configurations
-extern "C" LoopAdaptConfiguration_t loop_adapt_get_current_config_cc_client(char* string)
-{
-    if (cc_client_hash)
-    {
-        CCConfig * cc_config = NULL;
-        // Get loop-specific config from hash table
-        int err = get_smap_by_key(cc_client_hash, string, (void**)&cc_config);
-        if (err == 0 && cc_config != NULL)
-        {
-            // Return the current configuration
-            return cc_config->current;
-        }
-    }
-    return NULL;
-}
+// extern "C" LoopAdaptConfiguration_t loop_adapt_get_current_config_cc_client(char* string)
+// {
+//     if (cc_client_hash)
+//     {
+//         CCConfig * cc_config = NULL;
+//         // Get loop-specific config from hash table
+//         int err = get_smap_by_key(cc_client_hash, string, (void**)&cc_config);
+//         if (err == 0 && cc_config != NULL)
+//         {
+//             // Return the current configuration
+//             return cc_config->current;
+//         }
+//     }
+//     return NULL;
+// }
 
 
 // This is just an example (sum all values). This is going to be an extra module or part of the measurement module
@@ -228,7 +233,7 @@ double loop_adapt_policy_eval(char* loopname, int num_results, ParameterValue* r
 }
 
 // Write out measurement results
-extern "C" int loop_adapt_config_cc_client_write(ThreadData_t thread, char* loopname, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results)
+extern "C" int loop_adapt_config_cc_client_write(ThreadData_t thread, char* loopname, PolicyDefinition_t policy, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results)
 {
     if (cc_client_hash)
     {
@@ -238,7 +243,11 @@ extern "C" int loop_adapt_config_cc_client_write(ThreadData_t thread, char* loop
         if (err == 0 && cc_config != NULL)
         {
             // Evaluate the measurements using the policy registered for the loop
-            double result = loop_adapt_policy_eval(loopname, num_results, results);
+            double result = 0;//loop_adapt_policy_eval(loopname, num_results, results);
+            if (policy->eval)
+            {
+                policy->eval(num_results, results, &result);
+            }
             // Send result to OpenTuner
             cc_config->client->report_config(result);
             return 0;
@@ -246,3 +255,5 @@ extern "C" int loop_adapt_config_cc_client_write(ThreadData_t thread, char* loop
     }
     return -ENODEV;
 }
+
+//L3[hostname,threadid]=value|...

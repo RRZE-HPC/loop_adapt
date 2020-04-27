@@ -34,7 +34,7 @@
 
 int loop_adapt_config_stdout_init();
 
-int loop_adapt_config_stdout_write(ThreadData_t thread, char* loopname, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results);
+int loop_adapt_config_stdout_write(ThreadData_t thread, char* loopname, PolicyDefinition_t policy, LoopAdaptConfiguration_t config, int num_results, ParameterValue* results);
 
 int loop_adapt_config_stdout_output_raw(char* loopname, char* rawstring);
 
