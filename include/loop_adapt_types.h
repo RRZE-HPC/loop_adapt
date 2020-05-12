@@ -65,6 +65,7 @@ typedef struct {
     bstring loopname;
     int policy;
     Map_t currentThreadConfig;
+    pthread_barrier_t barrier;
 
     int current_config_id;
     int announced;

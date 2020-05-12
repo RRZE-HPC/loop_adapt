@@ -372,7 +372,11 @@ int loop_adapt_measurement_result(ThreadData_t thread, char* measurement, int nu
         if (obj)
         {
             Map_t measurements = (Map_t)obj->userdata;
-            if (!measurements) continue;
+            if (!measurements)
+            {
+                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, No measurements at obj for scope %d, s);
+                continue;
+            }
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Checking measurement map at %s %d for thread %d, hwloc_obj_type_string(obj->type), obj->logical_index, thread->thread);
             Measurement_t m = NULL;
             err = get_smap_by_key(measurements, measurement, (void**)&m);
@@ -383,8 +387,17 @@ int loop_adapt_measurement_result(ThreadData_t thread, char* measurement, int nu
                     DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling getresult function for measurement %s (%d) with instance %d, measurement, m->measure_list_idx, m->instance);
                     err = loop_adapt_active_measurements[m->measure_list_idx].result(m->instance, num_values, values);
                 }
+                else
+                {
+                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, NOT calling getresult function for measurement %s (%d) with instance %d);
+                }
             }
         }
+        else
+        {
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, No hwloc obj for scope %d, s);
+        }
+
     }
     return err;
 }

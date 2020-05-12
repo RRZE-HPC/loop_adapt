@@ -13,6 +13,7 @@ typedef struct {
     int thread;
     pid_t pid;
     pid_t tid;
+    int mpirank;
     cpu_set_t cpuset;
     pthread_t pthread;
     pthread_mutex_t lock;

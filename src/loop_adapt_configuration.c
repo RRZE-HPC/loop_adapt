@@ -6,6 +6,10 @@
 
 #include <pthread.h>
 
+#ifdef USE_MPI
+#include <mpi.h>
+#endif
+
 /*#include <map.h>*/
 #include <loop_adapt_configuration_types.h>
 #include <loop_adapt_configuration_backends.h>
@@ -238,8 +242,15 @@ int loop_adapt_write_configuration_results(ThreadData_t thread, char* loopname, 
         && loop_adapt_configuration_funcs_output
         && loop_adapt_configuration_funcs_output->write)
     {
-        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling write function of output backend);
-        return loop_adapt_configuration_funcs_output->write(thread, loopname, policy, config, num_results, results);
+#ifdef MPI
+        if (thread->mpirank == 0)
+        {
+#endif
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling write function of output backend);
+            return loop_adapt_configuration_funcs_output->write(thread, loopname, policy, config, num_results, results);
+#ifdef MPI
+        }
+#endif
     }
     else
     {

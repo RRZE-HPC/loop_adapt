@@ -143,6 +143,10 @@ int loop_adapt_measurement_timer_setup(int instance, bstring configuration, bstr
             add_imap(timers, instance, (void*)timer);
         }
     }
+    else
+    {
+        printf("Unknown timer\n");
+    }
 
     bdestroy(likwid);
     bdestroy(realtime);

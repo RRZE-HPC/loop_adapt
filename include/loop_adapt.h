@@ -37,6 +37,7 @@ int loop_adapt_register_policy(char* name, char* backend, char* config, char* me
 int loop_adapt_add_loop_parameter(char* string, char* parameter);
 int loop_adapt_add_loop_policy(char* string, char* policy);
 int loop_adapt_start_loop( char* name, char* file, int linenumber );
+int loop_adapt_end_loop(char* string);
 
 void loop_adapt_finalize();
 void loop_adapt_debug_level(int level);
@@ -76,11 +77,14 @@ LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(float)
 #define LA_SET_BOOL_PARAMETER(name, x) loop_adapt_set_bool_parameter(((char *)name), (x));
 #define LA_NEW_BOOL_PARAMETER(name, scope, value) loop_adapt_new_bool_parameter(((char *)name), (scope), (value))
 
+int loop_adapt_new_loop_start(char* string, char* file, int linenumber);
+int loop_adapt_new_loop_end(char* string);
+
 #define LOOP_BEGIN(name) loop_adapt_start_loop(((char *)name), (char *)__FILE__, __LINE__)
-#define LOOP_END(name) loop_adapt_end(((char *)name))
+#define LOOP_END(name) loop_adapt_end_loop(((char *)name))
 
 #define LA_FOR(name, start, cond, inc) \
-    for (start; cond && LOOP_BEGIN(((char *)name)); inc)
+    for (start; cond && LOOP_BEGIN(((char *)name)); inc, LOOP_END(name))
 
 #define LA_FOR_BEGIN(name, ...) \
     for (__VA_ARGS__) \

@@ -15,6 +15,10 @@
 
 #include <hwloc.h>
 
+#ifdef USE_MPI
+#include <mpi.h>
+#endif
+
 #define gettid() syscall(SYS_gettid)
 
 static Map_t loop_adapt_threads = NULL;
@@ -25,6 +29,9 @@ static cpu_set_t loop_adapt_threads_cpuset;
 static cpu_set_t loop_adapt_threads_cpuset_inuse;
 /*! \brief  Taskset of the master thread of the application */
 /*static cpu_set_t loop_adapt_cpuset_master;*/
+
+static int MPIrank = -1;
+
 
 static int (*in_parallel)(void) = NULL;
 
@@ -84,6 +91,12 @@ int loop_adapt_threads_initialize()
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Initialize thread tree);
         loop_adapt_copy_hwloc_tree(&loop_adapt_threads_tree);
     }
+#ifdef MPI
+    if (MPIrank < 0)
+    {
+        MPI_Comm_rank(MPI_COMM_WORLD, &MPIrank);
+    }
+#endif
     return 0;
 }
 
@@ -109,6 +122,10 @@ int loop_adapt_threads_register(int threadid)
         tdata->thread = threadid;
         tdata->pid = getpid();
         tdata->tid = tid;
+#ifdef USE_MPI
+        tdata->mpirank = MPIrank;
+#endif
+        
         CPU_ZERO(&tdata->cpuset);
         //tdata->cpu = sched_getcpu();
         for (i = 0; i < hwloc_get_nbobjs_by_type(loop_adapt_threads_tree, HWLOC_OBJ_PU); i++)
@@ -245,6 +262,10 @@ int loop_adapt_threads_finalize()
         hwloc_topology_destroy(loop_adapt_threads_tree);
         loop_adapt_threads_tree = NULL;
         pthread_mutex_unlock(&loop_adapt_threads_lock);
+    }
+    if (MPIrank >= 0)
+    {
+        MPIrank = -1;
     }
 }
 

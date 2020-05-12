@@ -99,6 +99,8 @@ static void _loop_adapt_free_loopdata_thread(void* t)
     if (t)
     {
         LoopThreadData_t ldata = (LoopThreadData_t)t;
+        if (ldata->config)
+            loop_adapt_configuration_destroy_config(ldata->config);
         
         memset(ldata, 0, sizeof(LoopThreadData));
         free(t);
@@ -225,6 +227,7 @@ void loop_adapt_finalize()
             {
                 pthread_mutex_destroy(&loopdata->lock);
                 loopdata->policy = -1;
+
                 memset(loopdata, 0, sizeof(LoopData));
                 free(loopdata);
             }
@@ -476,12 +479,57 @@ int loop_adapt_get_loopdata(char* string, LoopData_t *loopdata)
     return 0;
 }
 
-static int loop_adapt_handle_thread(LoopData_t loop, ThreadData_t thread)
+static int loop_adapt_handle_thread_stop(LoopData_t loop, ThreadData_t thread)
+{
+    int err = 0;
+    LoopThreadData_t loopthread = NULL;
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Stopping loop %s for thread %d, bdata(loop->loopname), thread->thread);
+    if (get_imap_by_key(loop->currentThreadConfig, thread->thread, (void**)&loopthread) == 0)
+    {
+        PolicyDefinition_t pol = loop_adapt_policy_get(loop->policy);
+        if (!pol)
+        {
+            ERROR_PRINT(No policy registered for loop %s, loop->loopname);
+            return -ENODEV;
+        }
+        if (loopthread->config && blength(pol->backend) > 0)
+        {
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Stopping measurement %s for thread %d, bdata(pol->backend), thread->thread);
+            err = loop_adapt_measurement_stop(thread, bdata(pol->backend));
+            if (err == 0)
+            {
+
+                int nmetrics = loop_adapt_measurement_num_metrics(thread);
+                ParameterValue* v = malloc(nmetrics * sizeof(ParameterValue));
+                if (v)
+                {
+                    loop_adapt_measurement_result(thread, bdata(pol->backend), nmetrics, v);
+                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Write %d metrics for config with measurement %s, nmetrics, bdata(pol->backend));
+                    loop_adapt_write_configuration_results(thread, bdata(loop->loopname), pol, loopthread->config, nmetrics, v);
+                    free(v);
+                }
+                else
+                {
+                    ERROR_PRINT(Cannot allocate space to gather all measurement results);
+                }
+            }
+            else
+            {
+                ERROR_PRINT(Failed to stop measurement %s, bdata(pol->backend));
+            }
+            loopthread->current_config_id++;
+            loop_adapt_parameter_loop_end(thread);
+        }
+    }
+}
+
+static int loop_adapt_handle_thread_start(LoopData_t loop, ThreadData_t thread)
 {
     int i = 0;
     int err = 0;
     int first_iteration = 0;
     LoopThreadData_t loopthread = NULL;
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Starting loop %s for thread %d, bdata(loop->loopname), thread->thread);
     if (get_imap_by_key(loop->currentThreadConfig, thread->thread, (void**)&loopthread) < 0)
     {
         loopthread = _loop_adapt_new_loopdata_thread();
@@ -502,38 +550,38 @@ static int loop_adapt_handle_thread(LoopData_t loop, ThreadData_t thread)
         ERROR_PRINT(No policy registered for loop %s, loop->loopname);
         return -ENODEV;
     }
-    if (loopthread->config)
-    {
-        if (blength(pol->backend) > 0)
-        {
-            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Stopping measurement %s for thread %d, bdata(pol->backend), thread->thread);
-            err = loop_adapt_measurement_stop(thread, bdata(pol->backend));
-            if (err == 0)
-            {
+    // if (loopthread->config)
+    // {
+    //     if (blength(pol->backend) > 0)
+    //     {
+    //         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Stopping measurement %s for thread %d, bdata(pol->backend), thread->thread);
+    //         err = loop_adapt_measurement_stop(thread, bdata(pol->backend));
+    //         if (err == 0)
+    //         {
 
-                int nmetrics = loop_adapt_measurement_num_metrics(thread);
-                ParameterValue* v = malloc(nmetrics * sizeof(ParameterValue));
-                if (v)
-                {
-                    loop_adapt_measurement_result(thread, bdata(pol->backend), 0, v);
-                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Write %d metrics for config with measurement %s, nmetrics, bdata(pol->backend));
-                    loop_adapt_write_configuration_results(thread, bdata(loop->loopname), pol, loopthread->config, nmetrics, v);
-                    free(v);
-                }
-                else
-                {
-                    ERROR_PRINT(Cannot allocate space to gather all measurement results);
-                }
-            }
-            else
-            {
-                ERROR_PRINT(Failed to stop measurement %s, bdata(pol->backend));
-            }
-            loopthread->current_config_id++;
-            loop_adapt_parameter_loop_end(thread);
-        }
-    }
-    else
+    //             int nmetrics = loop_adapt_measurement_num_metrics(thread);
+    //             ParameterValue* v = malloc(nmetrics * sizeof(ParameterValue));
+    //             if (v)
+    //             {
+    //                 loop_adapt_measurement_result(thread, bdata(pol->backend), 0, v);
+    //                 DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Write %d metrics for config with measurement %s, nmetrics, bdata(pol->backend));
+    //                 loop_adapt_write_configuration_results(thread, bdata(loop->loopname), pol, loopthread->config, nmetrics, v);
+    //                 free(v);
+    //             }
+    //             else
+    //             {
+    //                 ERROR_PRINT(Cannot allocate space to gather all measurement results);
+    //             }
+    //         }
+    //         else
+    //         {
+    //             ERROR_PRINT(Failed to stop measurement %s, bdata(pol->backend));
+    //         }
+    //         loopthread->current_config_id++;
+    //         loop_adapt_parameter_loop_end(thread);
+    //     }
+    // }
+    if (loopthread->current_config_id == 0)
     {
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, New Loop %s for thread %d: Saving parameters, bdata(loop->loopname), thread->thread);
         loop_adapt_parameter_loop_start(thread);
@@ -556,8 +604,8 @@ static int loop_adapt_handle_thread(LoopData_t loop, ThreadData_t thread)
             }
         }
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Setup measurement %s for thread %d, bdata(pol->backend), thread->thread);
-        if (first_iteration)
-            err = loop_adapt_measurement_setup(thread, bdata(pol->backend), pol->config, pol->match);
+        
+        err = loop_adapt_measurement_setup(thread, bdata(pol->backend), pol->config, pol->match);
         if (err == 0)
         {
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Setup measurement %s for thread %d, bdata(pol->backend), thread->thread);
@@ -582,6 +630,7 @@ int loop_adapt_start_loop( char* string, char* file, int linenumber )
     LoopData_t ldata = NULL;
     ThreadData_t thread = NULL;
     LoopThreadData_t loopthread = NULL;
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO,--- Starting loop %s, string);
     if (loop_adapt_active)
     {
         if (get_smap_by_key(loop_adapt_global_hash, string, (void**)&tree) < 0)
@@ -604,37 +653,38 @@ int loop_adapt_start_loop( char* string, char* file, int linenumber )
                     loopthread->config = NULL;
                     loopthread->pthread = thread->pthread;
                     loopthread->thread = thread->thread;
-                    loopthread->state = LOOP_ADAPT_THREAD_PAUSE;
+                    loopthread->state = LOOP_ADAPT_THREAD_RUN;
                     add_imap(ldata->currentThreadConfig, thread->thread, (void*)loopthread);
                 }
             }
+            ldata->status = LOOP_STARTED;
 
-            if (ldata->status == LOOP_STARTED && loopthread->state == LOOP_ADAPT_THREAD_RUN)
-            {
-                if (loopthread->num_iterations < ldata->max_iterations)
-                {
-                    loopthread->num_iterations++;
-                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Need more iterations for loop '%s', string);
-                    return 1;
-                }
-                else
-                {
-                    if (loop_adapt_threads_in_parallel() == 0)
-                    {
-                        for (i = 0; i < loop_adapt_threads_get_count(); i++)
-                        {
-                            ThreadData_t t = loop_adapt_threads_getthread(i);
-                            loop_adapt_handle_thread(ldata, t);
-                        }
-                    }
-                    else
-                    {
-                        loop_adapt_handle_thread(ldata, thread);
-                    }
-                    loopthread->num_iterations = 0;
-                }
-            }
-            else
+            //if (ldata->status == LOOP_STARTED && loopthread->num_iterations < ldata->max_iterations)
+            //{
+                // if (loopthread->num_iterations < ldata->max_iterations)
+                // {
+                //    loopthread->num_iterations++;
+                //    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Need more iterations for loop '%s', string);
+                //    return 1;
+                // }
+                // else
+                // {
+                //     if (loop_adapt_threads_in_parallel() == 0)
+                //     {
+                //         for (i = 0; i < loop_adapt_threads_get_count(); i++)
+                //         {
+                //             ThreadData_t t = loop_adapt_threads_getthread(i);
+                //             loop_adapt_handle_thread_start(ldata, t);
+                //         }
+                //     }
+                //     else
+                //     {
+                //         loop_adapt_handle_thread_start(ldata, thread);
+                //     }
+                //     loopthread->num_iterations = 0;
+                // }
+            //}
+            if (loopthread->num_iterations == 0)
             {
                 err = loop_adapt_get_new_configuration(string, loopthread->current_config_id, &loopthread->config);
                 if (err == 0 && loopthread->config)
@@ -644,27 +694,83 @@ int loop_adapt_start_loop( char* string, char* file, int linenumber )
                         for (i = 0; i < loop_adapt_threads_get_count(); i++)
                         {
                             ThreadData_t t = loop_adapt_threads_getthread(i);
-                            loop_adapt_handle_thread(ldata, t);
+                            loop_adapt_handle_thread_start(ldata, t);
                         }
                     }
                     else
                     {
-                        loop_adapt_handle_thread(ldata, thread);
+                        loop_adapt_handle_thread_start(ldata, thread);
                     }
                 }
+                else
+                {
+                    ldata->status = LOOP_STOPPED;
+                }
                 loopthread->state = LOOP_ADAPT_THREAD_RUN;
-                ldata->status = LOOP_STARTED;
             }
         }
     }
     return 1;
 }
 
-int loop_adapt_end(char* name)
+int loop_adapt_end_loop(char* string)
 {
-    fprintf(stderr, "loop_adapt_end\n");
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO,--- Stopping loop %s, string);
+    int i = 0;
+    int j = 0;
+    int err = 0;
+    hwloc_topology_t tree = NULL;
+    LoopData_t ldata = NULL;
+    ThreadData_t thread = NULL;
+    LoopThreadData_t loopthread = NULL;
+    if (loop_adapt_active)
+    {
+        if (get_smap_by_key(loop_adapt_global_hash, string, (void**)&tree) < 0)
+        {
+            fprintf(stderr, "ERROR: Loop string %s not registered\n", string);
+            return 1;
+        }
+        ldata = (LoopData_t)hwloc_topology_get_userdata(tree);
+        if (ldata)
+        {
+            // Get the topology data for the current thread
+            thread = loop_adapt_threads_get();
+            if (get_imap_by_key(ldata->currentThreadConfig, thread->thread, (void**)&loopthread) == 0)
+            {
+                if (ldata->status == LOOP_STARTED)
+                {
+                    if (loopthread->num_iterations < ldata->max_iterations)
+                    {
+                        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Need more iterations for loop '%s', string);
+                        loopthread->num_iterations++;
+                    }
+                    else
+                    {
+                        if (loop_adapt_threads_in_parallel() == 0)
+                        {
+                            for (i = 0; i < loop_adapt_threads_get_count(); i++)
+                            {
+                                ThreadData_t t = loop_adapt_threads_getthread(i);
+                                loop_adapt_handle_thread_stop(ldata, t);
+                            }
+                        }
+                        else
+                        {
+                            loop_adapt_handle_thread_stop(ldata, thread);
+                        }
+                        loopthread->num_iterations = 0;
+                    }
+                }
+                loopthread->state = LOOP_ADAPT_THREAD_PAUSE;
+                //loopthread->num_iterations = ldata->max_iterations+1;
+            }
+        }
+    }
     return 1;
 }
+
+
+
 
 
 #define _LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(NAME, TYPE, VAR) \

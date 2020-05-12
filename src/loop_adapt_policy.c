@@ -8,6 +8,10 @@
 
 #include <loop_adapt_policy_list.h>
 
+#ifdef USE_MPI
+#include <mpi.h>
+#endif
+
 
 static PolicyDefinition* loop_adapt_active_policy = NULL;
 static int loop_adapt_num_active_policy = 0;
@@ -132,7 +136,14 @@ int loop_adapt_policy_eval(char* loop, int num_results, ParameterValue* inputs, 
         {
             PolicyDefinition* pd = &loop_adapt_active_policy[ldata->policy];
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Evaluate policy for loop %s using policy %d, loop, bdata(pd->name));
-            return pd->eval(num_results, inputs, output);
+            int err = pd->eval(num_results, inputs, output);
+#ifdef MPI
+            if (err == 0)
+            {
+                err = MPI_Reduce(&output, &output, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+            }
+#endif
+            return err;
         }
         return -ENODEV;
     }
