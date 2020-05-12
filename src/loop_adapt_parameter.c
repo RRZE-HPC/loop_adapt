@@ -50,6 +50,8 @@ static int loop_adapt_parameter_debug = 0;
 static ParameterDefinition* loop_adapt_active_parameters = NULL;
 static int loop_adapt_num_active_parameters = 0;
 
+static char host_name[300];
+
 /*static struct bstrList* loop_adapt_parameter_names = NULL;*/
 
 static Parameter_t _loop_adapt_new_parameter()
@@ -230,6 +232,7 @@ int loop_adapt_parameter_initialize()
         _loop_adapt_add_parameter_to_tree(pd, loop_adapt_num_active_parameters, limit);
         loop_adapt_num_active_parameters++;
     }
+    gethostname(host_name, 300);
 /*    loop_adapt_parameter_names = bstrListCreate();*/
 }
 
@@ -674,7 +677,8 @@ int loop_adapt_parameter_configs(struct bstrList* configs)
                     char* s = loop_adapt_param_value_str(limit.limit.range.start);
                     char* e = loop_adapt_param_value_str(limit.limit.range.end);
                     char* t = loop_adapt_print_param_valuetype(limit.limit.range.start.type);
-                    bstring c = bformat("%s,%s,%s,%s", pd->name, t, s, e);
+                    int count = loop_adapt_parameter_scope_count(pd->name);
+                    bstring c = bformat("%s[%s,%d],%s,%s,%s", pd->name, host_name, count, t, s, e);
                     bstrListAdd(configs, c);
                     bdestroy(c);
                     free(s);

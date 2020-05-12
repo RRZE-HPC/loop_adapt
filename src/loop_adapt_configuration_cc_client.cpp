@@ -41,7 +41,7 @@ static char prog_name[300];
 
 
 typedef struct {
-    BaseClient* client;
+    Client* client;
     LoopAdaptConfiguration_t current;
 } CCConfig;
 
@@ -52,7 +52,7 @@ static void _cc_client_hash_final_delete(mpointer p)
     CCConfig* cc_config = (CCConfig* )p;
     if (cc_config)
     {
-        cc_config->client->close();
+        //cc_config->client->close();
         if (cc_config->current != NULL)
         {
             loop_adapt_configuration_destroy_config(cc_config->current);
@@ -121,6 +121,7 @@ extern "C" void loop_adapt_config_cc_client_finalize()
 extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, LoopAdaptConfiguration_t* configuration)
 {
     int i = 0;
+    int j = 0;
     int err = 0;
     if ((!cc_client_hash) || (!string))
         return -EINVAL;
@@ -137,28 +138,33 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
             return -ENOMEM;
         }
         cc_config->current = NULL;
-        // Hash table empty for loop, create a new client
-        cc_config->client = new BaseClient(data, user, pass, prog_name, proj_name);
 
-        // Add default stuff
-        //config->client.add_argument(pp);
-        // ...
-
-        
-        // Get the parameters for the loop and add them to OpenTuner
         // Create an empry list of strings
-        struct bstrList* available_params = bstrListCreate();
-        // Fill list of parameter names
-        int num_params = loop_adapt_get_loop_parameter(string, available_params);
-        // Add each parameter name to OpenTuner
+        struct bstrList* loop_params = bstrListCreate();
+        int num_params = loop_adapt_get_loop_parameter(string, loop_params);
+
+        struct bstrList* available_configs = bstrListCreate();
+        int avail_configs = loop_adapt_parameter_configs(available_configs);
+
+        std::vector<std::string> otparameters;
         for (i = 0; i < num_params; i++)
         {
-            cc_config->client->add_parameter(bdata(available_params->entry[i]));
+            for (j = 0; j < avail_configs; j++)
+            {
+                if (bstrncmp(loop_params->entry[i], available_configs->entry[j], blength(loop_params->entry[i])) == BSTR_OK)
+                {
+                    otparameters.push_back(bdata(available_configs->entry[j]));
+                }
+            }
         }
-        // Do the OpenTuner setup
-        cc_config->client->setup();
-        // Delete list of parameter names
-        bstrListDestroy(available_params);
+        bstrListDestroy(loop_params);
+        bstrListDestroy(available_configs);
+        std::vector<std::string> otarguments;
+        // Add default arguments
+
+        // Hash table empty for loop, create a new client
+        cc_config->client = new Client(data, user, pass, otarguments, otparameters, prog_name, proj_name, NULL);
+
 
         // Add new client to hash map;
         add_smap(cc_client_hash, string, (void*)cc_config);
@@ -177,13 +183,13 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
 
     loop_adapt_configuration_resize_config(configuration, param_names->qty);
 
-    std::string config_data = cc_config->client->set_config();
+    cc_config->client->nextConfig();
 
     // We check for all available parameters whether the client has some values for 
     for (i = 0; i < param_names->qty; i++)
     {
         // This here will be tricky because not all parameters will be int;
-        int param = cc_config->client->get_config_at<int>("int", bdata(param_names->entry[i]));
+        std::string param = cc_config->client->getConfigAt(bdata(param_names->entry[i]));
         // add param to config;
         // _cc_client_add_parameter(config, param);
     }
@@ -249,7 +255,8 @@ extern "C" int loop_adapt_config_cc_client_write(ThreadData_t thread, char* loop
                 policy->eval(num_results, results, &result);
             }
             // Send result to OpenTuner
-            cc_config->client->report_config(result);
+            TODO_PRINT(WTF happened to report config?);
+            //cc_config->client->report_config(result);
             return 0;
         }
     }

@@ -2,6 +2,7 @@
 #define POLICY_HPP
 
 #include <chrono>
+#include <string>
 
 class Policy
 {
@@ -13,13 +14,16 @@ public:
 
   virtual void stop() = 0;
 
-  virtual double get_rating() = 0;
+  virtual double getRating() = 0;
+
+  virtual std::string getMeasurementString() = 0;
 };
 
 class TimePolicy: public Policy
 {
-public:
+  std::chrono::time_point<std::chrono::steady_clock> start_t, stop_t;
 
+public:
   void start()
   {
     start_t = std::chrono::steady_clock::now();
@@ -30,13 +34,15 @@ public:
     stop_t = std::chrono::steady_clock::now();
   }
 
-  double get_rating()
+  double getRating()
   {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(stop_t - start_t).count();
   }
 
-private:
-  std::chrono::time_point<std::chrono::steady_clock> start_t, stop_t;
+  std::string getMeasurementString()
+  {
+    return ("runtime," + std::to_string(getRating()));
+  }
 };
 
-#endif
+#endif // POLICY_HPP

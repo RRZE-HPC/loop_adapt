@@ -1,867 +1,614 @@
 #include "loop_adapt_configuration_cc_client_base.hpp"
 
-/******* Public Methods *******/
-
-/// Constructor of the class
-BaseClient::BaseClient(char* data, char* user, char* pass,
-                       const std::string& prog_name,
-                       const std::string& proj_name)
-
-    : driver(get_driver_instance())
+Client::Client(char* address, char* user, char* pass,
+               const std::vector<std::string>& arguments,
+               const std::vector<std::string>& parameters,
+               const std::string& programName,
+               const std::string& projectName,
+               std::unique_ptr<Policy> policy)
+  : m_policy(std::move(policy))
 {
+  m_bestConfigRating = std::numeric_limits<double>::max();
 
 #ifdef USE_MPI
-    if (world.rank() == 0)
-    {
+  if (world.rank() == 0)
+  {
 #endif // USE_MPI
-        session = driver->connect(data, user, pass);
+
+    sql::Driver* driver = get_driver_instance();
+    m_JHSession = driver->connect(address, user, pass);
+    m_JHSession->setSchema("job_handler");
+
+    std::string args = buildString(arguments);
+    std::string params = buildString(parameters);
+
+    generateTuningRun(args, params, "min_time", programName, projectName);
+    connectToDatabase();
+    writeHostname();
+
 #ifdef USE_MPI
-    }
-    else
-    {
-        session = nullptr;
-    }
+  }
 #endif // USE_MPI
-    if (session != nullptr)
-    {
-        session->setSchema("job_handler");
-    }
-
-    current_best_config_time = std::numeric_limits<double>::infinity();
-    program_name = prog_name;
-    project_name = proj_name;
-
-    add_objective("min_time");
 }
 
-/// Destructor
-BaseClient::~BaseClient()
+Client::~Client()
 {
-    delete session;
-    delete tr_session;
-}
-
-/// @param str Arguments to guide the tuning process
-void BaseClient::add_argument(const std::string& str)
-{
-    if (arguments.empty())
-    {
-        arguments = str;
-    }
-    else
-    {
-        arguments.append("|").append(str);
-    }
-}
-
-/// @param str Objectives of the tuning process
-void BaseClient::add_objective(const std::string& str)
-{
-    if (objective.empty())
-    {
-        objective = str;
-    }
-    else
-    {
-        std::cout << "Too many objectives" << std::endl;
-    }
-}
-
-/// @param str Parameters to be tuned
-void BaseClient::add_parameter(const std::string& str)
-{
-    if (parameters.empty())
-    {
-        parameters = str;
-    }
-    else
-    {
-        parameters.append("|").append(str);
-    }
-}
-
-/// @param pol Policy with the objective for tuning
-void BaseClient::add_policy(std::unique_ptr<Policy> pol)
-{
-    policy = std::move(pol);
-}
-
-/// @return Returns true if the tuning run is finished or aborted.
-bool BaseClient::check_completed()
-{
-    bool retval = false;
 #ifdef USE_MPI
-    if (world.rank() == 0)
-    {
+  if (world.rank() == 0)
+  {
 #endif // USE_MPI
-        std::unique_ptr<sql::PreparedStatement> stmt(session->prepareStatement(
-                    "SELECT id, manipulator_settings, tuning_run_id, "
-                    "job_handler_state, database_name, program_name, "
-                    "project_name, best_config, opentuner_args, objective, "
-                    "error_message, error FROM job_handler WHERE "
-                    "tuning_run_id = ? AND (job_handler_state "
-                    "= 'COMPLETE' OR job_handler_state = 'ABORTED');"));
 
-        stmt->setInt(1, tuning_run_id);
-        std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
-        if (!res->next())
+    m_OTSession->close();
+    m_JHSession->close();
+
+#ifdef USE_MPI
+  }
+#endif // USE_MPI
+
+  delete m_OTSession;
+  delete m_JHSession;
+}
+
+std::string Client::buildString(const std::vector<std::string>& list) const
+{
+  std::string str;
+  for (const std::string& entry : list)
+  {
+    if (str.empty())
+    {
+      str = entry;
+    }
+    else
+    {
+      str.append("|").append(entry);
+    }
+  }
+  return str;
+}
+
+void Client::generateTuningRun(const std::string& arguments,
+                               const std::string& parameters,
+                               const std::string& objective,
+                               const std::string& programName,
+                               const std::string& projectName)
+{
+  std::unique_ptr<sql::Statement> stmt(m_JHSession->createStatement());
+
+  if (objective.empty())
+  {
+    std::unique_ptr<sql::PreparedStatement> prepStmt(m_JHSession->prepareStatement(
+          "INSERT INTO job_handler (manipulator_settings, program_name, "
+          "project_name, opentuner_args, job_handler_state, error_message, "
+          "error) VALUES (?, ?, ?, ?, 'REQUESTED', 'no_error', 'NONE');"));
+    prepStmt->setString(1, parameters);
+    prepStmt->setString(2, programName);
+    prepStmt->setString(3, projectName);
+    prepStmt->setString(4, arguments);
+    prepStmt->execute();
+
+    std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID() AS id"));
+    res->next();
+    m_jobId = res->getInt("id");
+  }
+  else
+  {
+    std::unique_ptr<sql::PreparedStatement> prepStmt(m_JHSession->prepareStatement(
+          "INSERT INTO job_handler (manipulator_settings, program_name, "
+          "project_name, opentuner_args, job_handler_state, error_message, "
+          "error, objective) VALUES (?, ?, "
+          "?, ?, 'REQUESTED', 'no_error', 'NONE',?);"));
+    prepStmt->setString(1, parameters);
+    prepStmt->setString(2, programName);
+    prepStmt->setString(3, projectName);
+    prepStmt->setString(4, arguments);
+    prepStmt->setString(5, objective);
+    prepStmt->execute();
+
+    std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID() AS id"));
+    res->next();
+    m_jobId = res->getInt("id");
+  }
+}
+
+std::string Client::getDatabase()
+{
+  std::string tuningRunDatabase;
+  std::unique_ptr<sql::ResultSet> res;
+
+  while (true)
+  {
+    std::unique_ptr<sql::PreparedStatement> prepStmt(m_JHSession->prepareStatement(
+          "SELECT tuning_run_id, database_name "
+          "FROM job_handler "
+          "WHERE job_handler_state = 'RUNNING' AND id = ?;"));
+    prepStmt->setInt(1, m_jobId);
+    res.reset(prepStmt->executeQuery());
+
+    if (res->next())
+    {
+      m_tuningRunId = res->getInt("tuning_run_id");
+      tuningRunDatabase = res->getString("database_name");
+      break;
+    }
+  }
+  return tuningRunDatabase;
+}
+
+void Client::connectToDatabase()
+{
+  sql::Driver* driver = get_driver_instance();
+  std::string tuningRunDatabase = getDatabase();
+
+  // Convert the python style tuning_run_database address to C++ style (tcp)
+  std::string userpass = tuningRunDatabase.substr(0, tuningRunDatabase.find('@'));
+  userpass = userpass.substr(userpass.find("//"), userpass.length());
+  std::string user = userpass.substr(2, userpass.find(':') - 2);
+  std::string pass = userpass.substr(userpass.find(':') + 1, userpass.find('@'));
+  std::string address = tuningRunDatabase.substr(tuningRunDatabase.find('@') + 1,
+                        tuningRunDatabase.length());
+  address = "tcp://" + address;
+
+  // Establish the connection with the opentuner database.
+  m_OTSession = driver->connect(address, user, pass);
+  m_OTSession->setSchema("opentuner");
+}
+
+bool Client::serverAlive() const
+{
+  bool retval = false;
+
+#ifdef USE_MPI
+  if (world.rank() == 0)
+  {
+#endif // USE_MPI
+
+    if (!m_JHSession->isValid())
+    {
+      std::cout << "Connection with the server failed!" << std::endl;
+      retval = false;
+    }
+
+    std::unique_ptr<sql::Statement> stmt(m_JHSession->createStatement());
+    std::unique_ptr<sql::ResultSet> res(
+      stmt->executeQuery("SHOW DATABASES LIKE 'job_handler';"));
+
+    if (!res->next())
+    {
+      std::cout << "No usable job_handler database! ";
+      std::cout << "Please initialize Server!" << std::endl;
+      retval = false;
+    }
+
+    res = std::unique_ptr<sql::ResultSet>(
+            stmt->executeQuery("SHOW TABLES LIKE 'server_status'; "));
+
+    if (!res->next())
+    {
+      std::cout << "No usable job_handler database! ";
+      std::cout << "Please initialize Server!" << std::endl;
+      retval = false;
+    }
+
+    res = std::unique_ptr<sql::ResultSet>(
+            stmt->executeQuery("SELECT id, server_state FROM server_status "
+                               "WHERE server_state = 'OFFLINE';"));
+    if (res->next())
+    {
+      std::cout << res->getString("") << " ";
+      std::cout << "Server is not running!" << std::endl;
+      retval = false;
+    }
+
+#ifdef USE_MPI
+    retval = true;
+  }
+  broadcast(world, retval, 0);
+#endif // USE_MPI
+  return retval;
+}
+
+void Client::writeHostname()
+{
+  std::string machineClassName, machineName;
+
+  char hostname[1024];
+  gethostname(hostname, 1023);
+  machineClassName = std::string(hostname);
+  machineName = std::string(hostname);
+
+  std::unique_ptr<sql::ResultSet> machine;
+  std::unique_ptr<sql::Statement> stmt(m_OTSession->createStatement());
+
+  std::unique_ptr<sql::PreparedStatement> machineClassSelectStmt(m_OTSession->prepareStatement(
+        "SELECT id "
+        "FROM machine_class "
+        "WHERE name = ?;"));
+  machineClassSelectStmt->setString(1, machineClassName);
+  std::unique_ptr<sql::ResultSet> machineClass(machineClassSelectStmt->executeQuery());
+
+  std::unique_ptr<sql::PreparedStatement> machineClassInsertStmt(m_OTSession->prepareStatement(
+        "INSERT INTO machine_class (name)"
+        "VALUES (?);"));
+  machineClassInsertStmt->setString(1, machineClassName);
+
+  int machineClassId;
+
+  if (!machineClass->next())
+  {
+    machineClassInsertStmt->execute();
+    std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID() AS id"));
+    res->next();
+    machineClassId = res->getInt("id");
+  }
+  else
+  {
+    machineClassId = machineClass->getInt("id");
+  }
+
+  std::unique_ptr<sql::PreparedStatement> machineSelectStmt(m_OTSession->prepareStatement(
+        "SELECT id "
+        "FROM machine WHERE name = ?;"));
+  machineSelectStmt->setString(1, machineName);
+  machine.reset(machineSelectStmt->executeQuery());
+
+  if (machine->next())
+  {
+    m_machineId = machine->getInt("id");
+  }
+
+  std::unique_ptr<sql::PreparedStatement> machineInsertStmt(m_OTSession->prepareStatement(
+        "INSERT INTO machine (name, cpu, cores, memory_gb, machine_class_id) "
+        "VALUES (?, ?, ?, ?, ?);"));
+  machineInsertStmt->setString(1, machineName);
+  machineInsertStmt->setString(2, cpuType());
+  machineInsertStmt->setInt(3, cpuCount());
+  machineInsertStmt->setDouble(4, memorySize() / (1024.0 * 1024.0 * 1024.0));
+  machineInsertStmt->setInt(5, machineClassId);
+  machineInsertStmt->execute();
+
+  std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID() AS id"));
+  res->next();
+  m_machineId = res->getInt("id");
+}
+
+int Client::cpuCount() const
+{
+  return sysconf(_SC_NPROCESSORS_ONLN);
+}
+
+std::string Client::cpuType() const
+{
+  // for OS X
+#ifdef __APPLE__
+  char buffer[128];
+  size_t bufferlen = 128;
+  sysctlbyname("machdep.cpu.brand_string", &buffer, &bufferlen, NULL, 0);
+  return std::string(buffer);
+
+  // for Linux
+#elif __linux__
+  std::string line;
+  std::ifstream finfo("/proc/cpuinfo");
+  while (std::getline(finfo, line))
+  {
+    std::stringstream str(line);
+    std::string itype;
+    std::string info;
+
+    if (std::getline(str, itype, ':')
+        && std::getline(str, info)
+        && itype.substr(0, 10) == "model name")
+    {
+      return info;
+    }
+  }
+#endif
+}
+
+int Client::memorySize() const
+{
+  // for OS X
+#ifdef __APPLE__
+  char buffer[128];
+  size_t bufferlen = 128;
+  sysctlbyname("hw.memsize", &buffer, &bufferlen, NULL, 0);
+  return atoi(buffer);
+  // for linux
+#elif __linux__
+  size_t mem = (size_t) sysconf(_SC_PHYS_PAGES) * (size_t) sysconf(_SC_PAGESIZE);
+  return static_cast<int>(mem);
+#endif
+}
+
+void Client::nextConfig()
+{
+  if (checkCompleted())
+  {
+    // If tuning finished, exit. Best config is already set as current
+    return;
+  }
+  else
+  {
+    // If there are new configs available select one
+    if (!m_pendingConfigs.empty())
+    {
+      // Pop first pending config
+      m_currentConfigId = m_pendingConfigs.begin()->first;
+      m_currentConfig = m_pendingConfigs.begin()->second;
+      m_pendingConfigs.erase(m_pendingConfigs.begin());
+      m_useBestConfig = false;
+    }
+    else
+    {
+      // No more pending configs, ask for more
+      queryDesiredResults();
+      // Check if there are now pending configs
+      if (!m_pendingConfigs.empty())
+      {
+        // Pop first pending config
+        m_currentConfigId = m_pendingConfigs.begin()->first;
+        m_currentConfig = m_pendingConfigs.begin()->second;
+        m_pendingConfigs.erase(m_pendingConfigs.begin());
+        m_useBestConfig = false;
+      }
+      else
+      {
+        // If still no available config use best config
+        if (!m_currentBestConfig.empty())
         {
-            retval = false;
+          m_currentConfig = m_currentBestConfig;
+          m_useBestConfig = true;
         }
         else
         {
-            retval = true;
-        }
-#ifdef USE_MPI
-    }
-    world.barrier();
-    broadcast(world, retval, 0);
-#endif // USE_MPI
-
-    return retval;
-}
-
-/// Close tuning session
-void BaseClient::close()
-{
-    close_tr_session();
-    get_best_config();
-    read_final_config();
-    finish();
-}
-
-/// Return type of element at given position in the config
-const std::string BaseClient::get_element_type(int pos)
-{
-  std::stringstream outer(parameters);
-  std::string token;
-  char delim1 = '|';
-  char delim2 = ',';
-
-  for (int i = 0; i < pos; i++)
-  {
-    if (std::getline(outer, token, delim1) && i == pos - 1)
-    {
-      std::stringstream inner(token);
-      for (int i = 0; i < 2; i++)
-      {
-        if (std::getline(inner, token, delim2) && i == 1)
-        {
-          std::cout << token << std::endl;
-          return token;
+          // If no config yet tested, loop until there are available configs
+          while(m_pendingConfigs.empty())
+          {
+            queryDesiredResults();
+          }
+          // Pop first pending config
+          m_currentConfigId = m_pendingConfigs.begin()->first;
+          m_currentConfig = m_pendingConfigs.begin()->second;
+          m_pendingConfigs.erase(m_pendingConfigs.begin());
+          m_useBestConfig = false;
         }
       }
     }
   }
-  return "";
 }
 
-void BaseClient::report_config(double rtime)
+bool Client::checkCompleted()
 {
-    if (check_completed())
-    {
-        return;
-    }
-    update_best_config(rtime);
-    generate_result(get_id(config), rtime, get_id(desired_requests));
-    resultset_next(desired_requests, desired_requests_next);
-}
-
-/// @return true if there is a usable database for the tuning run request.
-bool BaseClient::server_alive() const
-{
-    bool retval = false;
+  if (m_tuningFinished)
+  {
+    return true;
+  }
 
 #ifdef USE_MPI
-    if (world.rank() == 0)
-    {
+  if (world.rank() == 0)
+  {
 #endif // USE_MPI
+    std::unique_ptr<sql::PreparedStatement> stmt(m_JHSession->prepareStatement(
+          "SELECT id "
+          "FROM job_handler WHERE "
+          "tuning_run_id = ? AND (job_handler_state "
+          "= 'COMPLETE' OR job_handler_state = 'ABORTED');"));
+    stmt->setInt(1, m_tuningRunId);
 
-        if (!session->isValid())
-        {
-            std::cout << "Connection with the server failed!" << std::endl;
-            retval = false;
-        }
+    std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
-        std::unique_ptr<sql::Statement> stmt(session->createStatement());
-        std::unique_ptr<sql::ResultSet> res(
-            stmt->executeQuery("SHOW DATABASES LIKE 'job_handler';"));
-
-        if (!res->next())
-        {
-            std::cout << "No usable job_handler database! ";
-            std::cout << "Please initialize Server!" << std::endl;
-            retval = false;
-        }
-
-        res = std::unique_ptr<sql::ResultSet>(
-                  stmt->executeQuery("SHOW TABLES LIKE 'server_status'; "));
-
-        if (!res->next())
-        {
-            std::cout << "No usable job_handler database! ";
-            std::cout << "Please initialize Server!" << std::endl;
-            retval = false;
-        }
-
-        res = std::unique_ptr<sql::ResultSet>(
-                  stmt->executeQuery("SELECT id, server_state FROM server_status "
-                                     "WHERE server_state = 'OFFLINE';"));
-        if (res->next())
-        {
-            std::cout << res->getString("") << " ";
-            std::cout << "Server is not running!" << std::endl;
-            retval = false;
-        }
-
-#ifdef USE_MPI
-        retval = true;
-    }
-    world.barrier();
-    broadcast(world, retval, 0);
-#endif // USE_MPI
-    return retval;
-}
-
-const std::string BaseClient::set_config()
-{
-    if (check_completed())
+    if (!res->next())
     {
-        config_data = current_best_config;
-        return config_data;
-    }
-    if (desired_requests_next)
-    {
-        config.reset(get_next_config(desired_requests));
-        resultset_next(config, config_next);
-        if (config_next)
-        {
-            config_data = get_data_text(config);
-        }
-        else
-        {
-            resultset_next(desired_requests, desired_requests_next);
-            set_config();
-        }
+      m_tuningFinished = false;
     }
     else
     {
-        get_desired_requests();
-        set_config();
+      m_currentConfig = m_currentBestConfig;
+      m_tuningFinished = true;
     }
-    return config_data;
+#ifdef USE_MPI
+  }
+  broadcast(world, m_tuningFinished, 0);
+#endif // USE_MPI
+  return m_tuningFinished;
 }
 
-/// Setup tuning session
-void BaseClient::setup()
+void Client::queryDesiredResults()
 {
-    generate_tuning_run();
-    get_database();
-    connect_to_database();
-    write_hostname();
-}
-
-void BaseClient::start_measurement()
-{
-    policy->start();
-}
-
-void BaseClient::stop_measurement()
-{
-    policy->stop();
-}
-
-void BaseClient::report_measurement()
-{
-    double result = policy->get_rating();
-    report_config(result);
+  std::vector<int> configIDs;
+  std::vector<std::string> configTexts;
 
 #ifdef USE_MPI
-    if (world.rank() == 0)
-#endif
+  if (world.rank() == 0)
+  {
+#endif // USE_MPI
+
+    std::unique_ptr<sql::PreparedStatement> queryStmt(m_OTSession->prepareStatement(
+          "SELECT id "
+          "FROM desired_result "
+          "WHERE tuning_run_id = ? and state = 'REQUESTED' and generation = "
+          "(SELECT max(generation) FROM desired_result WHERE tuning_run_id = ?);"));
+
+    std::unique_ptr<sql::PreparedStatement> updateStmt(m_OTSession->prepareStatement(
+          "UPDATE desired_result "
+          "SET state = 'RUNNING', start_date = CURRENT_TIMESTAMP "
+          "WHERE id = ?;"));
+
+    std::unique_ptr<sql::PreparedStatement> configStmt(m_OTSession->prepareStatement(
+          "SELECT id, data_text "
+          "FROM configuration "
+          "WHERE id = "
+          "(SELECT configuration_id FROM desired_result "
+          "WHERE id = ?);"));
+
+    queryStmt->setInt(1, m_tuningRunId);
+    queryStmt->setInt(2, m_tuningRunId);
+
+    m_desiredResults.reset(queryStmt->executeQuery()); // Reset pointer with new ResultSet
+
+    while(m_desiredResults->next())
     {
-        std::cout << "Testing " << config_data;
-        std::cout << ", Result = " << result / 1e9 << " seconds" << std::endl;
+      // Mark desired results as accepted
+      updateStmt->setInt(1, m_desiredResults->getInt("id"));
+      updateStmt->executeUpdate();
+
+      // Get configs from desired results
+      configStmt->setInt(1, m_desiredResults->getInt("id"));
+      std::shared_ptr<sql::ResultSet> configRS(configStmt->executeQuery());
+
+      while(configRS->next())
+      {
+        configIDs.push_back(configRS->getInt("id"));
+        configTexts.push_back(configRS->getString("data_text"));
+      }
     }
+    m_desiredResults->beforeFirst();
+#ifdef USE_MPI
+  }
+  broadcast(world, configIDs, 0);
+  broadcast(world, configTexts, 0);
+#endif // USE_MPI
+
+  for (int i = 0; i < configIDs.size(); i++)
+  {
+    m_pendingConfigs[configIDs[i]] = getConfigAsMap(configTexts[i]);
+  }
 }
 
-
-/******* Private Methods *******/
-
-
-void BaseClient::abort(sql::SQLException& e)
+std::map<std::string, std::string> Client::getConfigAsMap(const std::string& configString)
 {
-#ifdef USE_MPI
-    if (world.rank() == 0)
+  std::map<std::string, std::string> config;
+
+  std::stringstream outer(configString);
+  std::string key;
+  char delim1 = '|';
+  char delim2 = ',';
+
+  while (std::getline(outer, key, delim1))
+  {
+    std::stringstream inner(key);
+    if (std::getline(inner, key, delim2))
     {
-#endif // USE_MPI
-
-        if (tr_session_open)
-        {
-            tr_session->close();
-        }
-
-        abort_job_handler();
-        session->close();
-
-        std::cout << "Client finished due to abortion" << std::endl;
-        throw e;
-
-#ifdef USE_MPI
+      std::string value;
+      std::getline(inner, value, delim2);
+      config[key] = value;
     }
-#endif // USE_MPI
+  }
+  return config;
 }
 
-/// Abort connection with the job_handler database
-void BaseClient::abort_job_handler()
+std::string Client::getConfigAt(const std::string& name) const
 {
-    std::unique_ptr<sql::PreparedStatement> prep_stmt(session->prepareStatement(
-                "UPDATE job_handler "
-                "SET job_handler_state = 'ABORTED' , error = 'CLIENT' "
-                "WHERE id = ?;"));
-    prep_stmt->setInt(1, job_id);
-    prep_stmt->executeUpdate();
-    session->commit();
+  return m_currentConfig.at(name);
 }
 
-void BaseClient::close_tr_session()
+void Client::startMeasurement() const
 {
 #ifdef USE_MPI
-    if (world.rank() == 0)
-    {
+  if (world.rank() == 0)
+  {
 #endif // USE_MPI
-        tr_session->close();
+    m_policy->start();
 #ifdef USE_MPI
-    }
-#endif // USE_MPI
-    tr_session_open = false;
-}
-
-void BaseClient::commit_jh_session()
-{
-#ifdef USE_MPI
-    if (world.rank() == 0)
-    {
-#endif // USE_MPI
-        session->commit();
-#ifdef USE_MPI
-    }
+  }
 #endif // USE_MPI
 }
 
-void BaseClient::commit_tr_session()
+void Client::stopMeasurement() const
 {
 #ifdef USE_MPI
-    if (world.rank() == 0)
-    {
+  if (world.rank() == 0)
+  {
 #endif // USE_MPI
-        tr_session->commit();
+    m_policy->stop();
 #ifdef USE_MPI
-    }
+  }
 #endif // USE_MPI
 }
 
-void BaseClient::connect_to_database()
+void Client::reportMeasurement()
 {
+  // Use best config
+  if (m_tuningFinished || m_useBestConfig)
+  {
+    return;
+  }
+
+  double rating;
+  std::string rawMeasurement;
 #ifdef USE_MPI
-    if (world.rank() == 0)
-    {
+  if (world.rank() == 0)
+  {
+#endif // USE_MPI
+    rating = m_policy->getRating();
+    rawMeasurement = m_policy->getMeasurementString();
+#ifdef USE_MPI
+  }
+  broadcast(world, rating, 0);
 #endif // USE_MPI
 
-        // Convert the python style tuning_run_database address to C++ style (tcp)
-        std::string userpass = tuning_run_database.substr(0, tuning_run_database.find('@'));
-        userpass = userpass.substr(userpass.find("//"), userpass.length());
-        std::string user = userpass.substr(2, userpass.find(':') - 2);
-        std::string pass = userpass.substr(userpass.find(':') + 1, userpass.find('@'));
-        std::string address = tuning_run_database.substr(tuning_run_database.find('@') + 1,
-                              tuning_run_database.length());
-        address = "tcp://" + address;
-
-        // Establish the connection with the opentuner database.
-        tr_session = driver->connect(address, user, pass);
-        tr_session_open = true;
-        tr_session->setSchema("opentuner");
+  // Update best config
+  if (rating < m_bestConfigRating)
+  {
+    m_bestConfigRating = rating;
+    m_currentBestConfig = m_currentConfig;
+  }
 
 #ifdef USE_MPI
-    }
+  if (world.rank() == 0)
+  {
 #endif // USE_MPI
-}
+    m_desiredResults->next();
+    int drId = m_desiredResults->getInt("id");
+    time_t now = std::time(0);
 
-/// @return the CPU core count if possible.
-int BaseClient::cpucount()
-{
-    return sysconf(_SC_NPROCESSORS_ONLN);
-}
+    // Write result into database
+    std::unique_ptr<sql::PreparedStatement> insertStmt(m_OTSession->prepareStatement(
+          "INSERT INTO result (configuration_id, machine_id, tuning_run_id, collection_date, "
+          "collection_cost, state, time, raw_measurement) "
+          "VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, 'OK', ? , ?);"));
 
-/// @return the CPU type if possible.
-std::string BaseClient::cputype()
-{
-    // for OS X
-#ifdef __APPLE__
-    char buffer[128];
-    size_t bufferlen = 128;
-    sysctlbyname("machdep.cpu.brand_string", &buffer, &bufferlen, NULL, 0);
-    return std::string(buffer);
+    insertStmt->setInt(1, m_currentConfigId);
+    insertStmt->setInt(2, m_machineId);
+    insertStmt->setInt(3, m_tuningRunId);
+    insertStmt->setString(4, std::string(std::ctime(&now)));
+    insertStmt->setDouble(5, rating);
+    insertStmt->setString(6, rawMeasurement);
+    insertStmt->execute();
 
-    // for Linux
-#elif __linux__
-    std::string line;
-    std::ifstream finfo("/proc/cpuinfo");
-    while (std::getline(finfo, line))
-    {
-        std::stringstream str(line);
-        std::string itype;
-        std::string info;
-
-        if (std::getline(str, itype, ':')
-                && std::getline(str, info)
-                && itype.substr(0, 10) == "model name")
-        {
-            return info;
-        }
-    }
-#endif
-}
-
-void BaseClient::finish()
-{
-#ifdef USE_MPI
-    world.barrier();
-    if (world.rank() == 0)
-    {
-#endif // USE_MPI
-        std::cout << "Client finished" << std::endl;
-        session->close();
-#ifdef USE_MPI
-    }
-#endif // USE_MPI
-}
-
-/// Writes the result of the given configuration into the opentuner database
-void BaseClient::generate_result(const int config_id, const double rtime, const int dr_id)
-{
-#ifdef USE_MPI
-    if (world.rank() == 0)
-    {
-#endif // USE_MPI
-
-        // Write result into database
-        std::unique_ptr<sql::PreparedStatement> insert_stmt(tr_session->prepareStatement(
-                    "INSERT INTO result (configuration_id, machine_id, tuning_run_id, collection_date, "
-                    "collection_cost, state, time) "
-                    "VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, 'OK', ? );"));
-
-        insert_stmt->setInt(1, config_id);
-        insert_stmt->setInt(2, machine_id);
-        insert_stmt->setInt(3, tuning_run_id);
-        insert_stmt->setString(4, std::to_string((int) lap_timer() / CLOCKS_PER_SEC));
-        insert_stmt->setDouble(5, rtime);
-        insert_stmt->execute();
-
-        // Get id of last inserted result
-        std::unique_ptr<sql::Statement> stmt(tr_session->createStatement());
-        std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID() AS id"));
-        res->next();
-        int result_id = res->getInt("id");
-
-        // Update desired result to the last inserted result
-        std::unique_ptr<sql::PreparedStatement> update_stmt(tr_session->prepareStatement(
-                    "UPDATE desired_result "
-                    "SET state = 'COMPLETE', result_id = ? "
-                    "WHERE id = ? ;"));
-        update_stmt->setInt(1, result_id);
-        update_stmt->setInt(2, dr_id);
-        update_stmt->executeUpdate();
-        tr_session->commit();
-
-#ifdef USE_MPI
-    }
-#endif // USE_MPI
-}
-
-// Generate and write the tuning run request into the database.
-void BaseClient::generate_tuning_run()
-{
-
-#ifdef USE_MPI
-    if (world.rank() == 0)
-    {
-#endif // USE_MPI
-
-        std::unique_ptr<sql::Statement> stmt(session->createStatement());
-
-        if (objective.empty())
-        {
-            std::unique_ptr<sql::PreparedStatement> prep_stmt(session->prepareStatement(
-                        "INSERT INTO job_handler (manipulator_settings, program_name, "
-                        "project_name, opentuner_args, job_handler_state, error_message, "
-                        "error) VALUES (?, ?, ?, ?, 'REQUESTED', 'no_error', 'NONE');"));
-            prep_stmt->setString(1, parameters);
-            prep_stmt->setString(2, program_name);
-            prep_stmt->setString(3, project_name);
-            prep_stmt->setString(4, arguments);
-            prep_stmt->execute();
-
-            std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID() AS id"));
-            res->next();
-            job_id = res->getInt("id");
-        }
-        else
-        {
-            std::unique_ptr<sql::PreparedStatement> prep_stmt(session->prepareStatement(
-                        "INSERT INTO job_handler (manipulator_settings, program_name, "
-                        "project_name, opentuner_args, job_handler_state, error_message, "
-                        "error, objective) VALUES (?, ?, "
-                        "?, ?, 'REQUESTED', 'no_error', 'NONE',?);"));
-            prep_stmt->setString(1, parameters);
-            prep_stmt->setString(2, program_name);
-            prep_stmt->setString(3, project_name);
-            prep_stmt->setString(4, arguments);
-            prep_stmt->setString(5, objective);
-            prep_stmt->execute();
-
-            std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID() AS id"));
-            res->next();
-            job_id = res->getInt("id");
-        }
-        session->commit();
-
-#ifdef USE_MPI
-    }
-#endif // USE_MPI
-}
-
-/// Set the best configuration to continue the calculation
-void BaseClient::get_best_config()
-{
-#ifdef USE_MPI
-    if (world.rank() == 0)
-    {
-#endif // USE_MPI
-        std::unique_ptr<sql::PreparedStatement> prep_stmt(session->prepareStatement(
-                    "SELECT id, manipulator_settings, tuning_run_id, job_handler_state, database_name, "
-                    "program_name, project_name, best_config, opentuner_args, objective, error_message, error "
-                    "FROM job_handler WHERE id= ?;"
-                ));
-        prep_stmt->setInt(1, job_id);
-        job.reset(prep_stmt->executeQuery());
-#ifdef USE_MPI
-    }
-#endif // USE_MPI
-}
-
-std::string BaseClient::get_data_text(std::shared_ptr<sql::ResultSet> rs)
-{
-    std::string data;
-#ifdef USE_MPI
-    if (world.rank() == 0)
-    {
-#endif // USE_MPI
-        data = rs->getString("data_text");
-#ifdef USE_MPI
-    }
-    world.barrier();
-    broadcast(world, data, 0);
-#endif // USE_MPI
-    return data;
-}
-
-// Wait for the job handler to accept the request and for its initialization.
-// Also get the tuning run id and the opentuner database information for the dialog.
-void BaseClient::get_database()
-{
-#ifdef USE_MPI
-    if (world.rank() == 0)
-    {
-#endif // USE_MPI
-
-        while (true)
-        {
-            std::unique_ptr<sql::PreparedStatement> prep_stmt(session->prepareStatement(
-                        "SELECT id, manipulator_settings, tuning_run_id, "
-                        "job_handler_state, database_name, "
-                        "program_name, project_name, best_config, "
-                        "opentuner_args, objective, error_message, error "
-                        "FROM job_handler "
-                        "WHERE job_handler_state = 'RUNNING' AND id = ?;"));
-            prep_stmt->setInt(1, job_id);
-            job.reset(prep_stmt->executeQuery());
-
-            if (job->next())
-            {
-                tuning_run_id = job->getInt("tuning_run_id");
-                tuning_run_database = job->getString("database_name");
-                break;
-            }
-        }
-#ifdef USE_MPI
-    }
-#endif // USE_MPI
-}
-
-/// Get configurations to be tested from the database, update accepted results if config list not empty
-void BaseClient::get_desired_requests()
-{
-    desired_requests.reset(get_desired_results());
-    resultset_next(desired_requests, desired_requests_next);
-
-    if (desired_requests_next)
-    {
-        write_accepted_results(desired_requests);
-        resultset_next(desired_requests, desired_requests_next);
-    }
-}
-
-/// Wait for opentuner to generate new desired results.
-/// If there are any desired results the ones with the newest generation are selected.
-sql::ResultSet* BaseClient::get_desired_results()
-{
-#ifdef USE_MPI
-    if (world.rank() == 0)
-    {
-#endif // USE_MPI
-        std::unique_ptr<sql::PreparedStatement> tr_stmt(tr_session->prepareStatement(
-                    "SELECT id, configuration_id, desired_result.limit , priority, tuning_run_id, "
-                    "generation, requestor, request_date, state, result_id, start_date "
-                    "FROM desired_result "
-                    "WHERE tuning_run_id = ? and state = 'REQUESTED' and "
-                    "generation = (SELECT max(generation) FROM desired_result WHERE tuning_run_id = ?);"));
-        tr_stmt->setInt(1, tuning_run_id);
-        tr_stmt->setInt(2, tuning_run_id);
-        return tr_stmt->executeQuery();
-#ifdef USE_MPI
-    }
-    return nullptr;
-#endif // USE_MPI
-}
-
-int BaseClient::get_id(std::shared_ptr<sql::ResultSet> rs)
-{
-#ifdef USE_MPI
-    if (world.rank() == 0)
-    {
-#endif // USE_MPI
-        return rs->getInt("id");
-#ifdef USE_MPI
-    }
-    return 0;
-#endif // USE_MPI
-}
-
-/// get (or create) the machine and the machine_class
-std::shared_ptr<sql::ResultSet>
-BaseClient::get_machine(const std::string& machine_class_name, const std::string& machine_name)
-{
-    std::unique_ptr<sql::Statement> stmt(tr_session->createStatement());
-
-    std::unique_ptr<sql::PreparedStatement> machine_class_select_stmt(tr_session->prepareStatement(
-                "SELECT id, name "
-                "FROM machine_class "
-                "WHERE name = ?;"));
-    machine_class_select_stmt->setString(1, machine_class_name);
-    std::unique_ptr<sql::ResultSet> machine_class(machine_class_select_stmt->executeQuery());
-
-    std::unique_ptr<sql::PreparedStatement> machine_class_insert_stmt(tr_session->prepareStatement(
-                "INSERT INTO machine_class (name)"
-                "VALUES (?);"));
-    machine_class_insert_stmt->setString(1, machine_class_name);
-
-    int machine_class_id;
-
-    if (!machine_class->next())
-    {
-        machine_class_insert_stmt->execute();
-        std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID() AS id"));
-        res->next();
-        machine_class_id = res->getInt("id");
-        tr_session->commit();
-    }
-    else
-    {
-        machine_class_id = machine_class->getInt("id");
-    }
-
-    std::unique_ptr<sql::PreparedStatement> machine_select_stmt(tr_session->prepareStatement(
-                "SELECT id, name, cpu, cores, memory_gb, machine_class_id "
-                "FROM machine WHERE name = ?;"));
-    machine_select_stmt->setString(1, machine_name);
-    std::shared_ptr<sql::ResultSet> machine(machine_select_stmt->executeQuery());
-
-    if (machine->next())
-    {
-        machine_id = machine->getInt("id");
-        return machine;
-    }
-
-    std::unique_ptr<sql::PreparedStatement> machine_insert_stmt(tr_session->prepareStatement(
-                "INSERT INTO machine (name, cpu, cores, memory_gb, machine_class_id) "
-                "VALUES (?, ?, ?, ?, ?);"));
-    machine_insert_stmt->setString(1, machine_name);
-    machine_insert_stmt->setString(2, cputype());
-    machine_insert_stmt->setInt(3, cpucount());
-    machine_insert_stmt->setDouble(4, memorysize() / (1024.0 * 1024.0 * 1024.0));
-    machine_insert_stmt->setInt(5, machine_class_id);
-    machine_insert_stmt->execute();
-
+    // Get id of last inserted result
+    std::unique_ptr<sql::Statement> stmt(m_OTSession->createStatement());
     std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID() AS id"));
     res->next();
-    machine_id = res->getInt("id");
-    tr_session->commit();
+    int resultId = res->getInt("id");
 
-    std::shared_ptr<sql::ResultSet> to_return(machine_select_stmt->executeQuery());
-    return to_return;
+    // Update desired result to the last inserted result
+    std::unique_ptr<sql::PreparedStatement> updateStmt(m_OTSession->prepareStatement(
+          "UPDATE desired_result "
+          "SET state = 'COMPLETE', result_id = ? "
+          "WHERE id = ? ;"));
+    updateStmt->setInt(1, resultId);
+    updateStmt->setInt(2, drId);
+    updateStmt->executeUpdate();
+
+#ifdef USE_MPI
+  }
+#endif // USE_MPI
 }
 
-/// Get next configuration
-/// Process 0 will get a ResultSet pointer, all other processes will get nullptr
-sql::ResultSet* BaseClient::get_next_config(std::shared_ptr<sql::ResultSet> desired_requests)
+std::string Client::configToString() const
 {
-#ifdef USE_MPI
-    if (world.rank() == 0)
+  std::string configString = "";
+  int i = 0;
+  for (const std::pair<std::string, std::string>& c : m_currentConfig)
+  {
+    configString.append(c.first).append(",").append(c.second);
+    if (i == m_currentConfig.size() - 1)
     {
-#endif // USE_MPI
-        std::unique_ptr<sql::PreparedStatement> prep_stmt(tr_session->prepareStatement(
-                    "SELECT id, data_text "
-                    "FROM configuration "
-                    "WHERE id = "
-                    "(SELECT configuration_id FROM desired_result "
-                    "WHERE id = ? and tuning_run_id = ?);"));
-        prep_stmt->setInt(1, desired_requests->getInt("id"));
-        prep_stmt->setInt(2, desired_requests->getInt("tuning_run_id"));
-
-        return prep_stmt->executeQuery();
-#ifdef USE_MPI
+      break;
     }
-    return nullptr;
-#endif // USE_MPI
-}
-
-/// @return time elapsed since the last call to lap_timer.
-clock_t BaseClient::lap_timer()
-{
-    clock_t t = clock();
-    clock_t r = t - laptime;
-    laptime = t;
-    return r;
-}
-
-/// @return the memory size if possible.
-int BaseClient::memorysize()
-{
-    // for OS X
-#ifdef __APPLE__
-    char buffer[128];
-    size_t bufferlen = 128;
-    sysctlbyname("hw.memsize", &buffer, &bufferlen, NULL, 0);
-    return atoi(buffer);
-    // for linux
-#elif __linux__
-    size_t mem = (size_t) sysconf(_SC_PHYS_PAGES) * (size_t) sysconf(_SC_PAGESIZE);
-    return static_cast<int>(mem);
-#endif
-}
-
-void BaseClient::read_final_config()
-{
-#ifdef USE_MPI
-    if (world.rank() == 0)
-    {
-#endif // USE_MPI
-        std::string config;
-        if (job->next())
-        {
-            try
-            {
-                config = job->getString("best_config");
-                if (config.empty())
-                {
-                    throw sql::SQLException("Error: Could not read final configuration");
-                }
-            }
-            catch (sql::SQLException& e)
-            {
-                throw e;
-            }
-        }
-        // Print final configuration.
-        std::cout << "Final configuration: " << std::endl << config << std::endl;
-#ifdef USE_MPI
-    }
-    world.barrier();
-#endif // USE_MPI
-}
-
-void BaseClient::resultset_next(std::shared_ptr<sql::ResultSet> rs, bool& rs_next)
-{
-#ifdef USE_MPI
-    if (world.rank() == 0)
-    {
-#endif // USE_MPI
-        rs_next = rs->next();
-#ifdef USE_MPI
-    }
-    world.barrier();
-    broadcast(world, rs_next, 0);
-#endif // USE_MPI
-}
-
-/// Update the Client with the best config
-void BaseClient::update_best_config(double rtime)
-{
-    if (current_best_config_time == std::numeric_limits<double>::infinity())
-    {
-        current_best_config_time = rtime;
-        current_best_config = config_data;
-    }
-    if (rtime < current_best_config_time)
-    {
-        current_best_config_time = rtime;
-        current_best_config = config_data;
-    }
-}
-
-/// Write into the database that the desired results are accepted and getting tested
-void BaseClient::write_accepted_results(std::shared_ptr<sql::ResultSet> desired_requests)
-{
-
-#ifdef USE_MPI
-    if (world.rank() == 0)
-    {
-#endif // USE_MPI
-
-        desired_requests->beforeFirst();
-
-        std::unique_ptr<sql::PreparedStatement> prep_tr_stmt(tr_session->prepareStatement(
-                    "UPDATE desired_result "
-                    "SET state = 'RUNNING', start_date = CURRENT_TIMESTAMP "
-                    "WHERE tuning_run_id = ? and id = ?;"));
-
-        while (desired_requests->next())
-        {
-            prep_tr_stmt->setString(1, desired_requests->getString("tuning_run_id"));
-            prep_tr_stmt->setInt(2, desired_requests->getInt("id"));
-            prep_tr_stmt->executeUpdate();
-        }
-        tr_session->commit();
-
-        desired_requests->beforeFirst();
-
-#ifdef USE_MPI
-    }
-#endif // USE_MPI
-}
-
-// Write the machine information into the database.
-void BaseClient::write_hostname()
-{
-#ifdef USE_MPI
-    if (world.rank() == 0)
-    {
-#endif // USE_MPI
-        char hostname[1024];
-        gethostname(hostname, 1023);
-        machine = get_machine(hostname, hostname);
-#ifdef USE_MPI
-    }
-#endif // USE_MPI
+    i++;
+    configString.append("|");
+  }
+  return configString;
 }
