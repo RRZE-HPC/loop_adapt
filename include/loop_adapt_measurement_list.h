@@ -1,11 +1,11 @@
 #ifndef LOOP_ADAPT_MEASUREMENT_LIST_H
 #define LOOP_ADAPT_MEASUREMENT_LIST_H
 
-#include <loop_adapt_measurement_likwid_nvmon.h>
 #include <loop_adapt_measurement_likwid.h>
 #include <loop_adapt_measurement_timer.h>
 
 #ifdef LIKWID_NVMON
+#include <loop_adapt_measurement_likwid_nvmon.h>
 #define NUM_LOOP_ADAPT_MEASUREMENTS 3
 #else
 #define NUM_LOOP_ADAPT_MEASUREMENTS 2
