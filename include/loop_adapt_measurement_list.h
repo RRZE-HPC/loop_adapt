@@ -1,10 +1,15 @@
 #ifndef LOOP_ADAPT_MEASUREMENT_LIST_H
 #define LOOP_ADAPT_MEASUREMENT_LIST_H
 
+#include <loop_adapt_measurement_likwid_nvmon.h>
 #include <loop_adapt_measurement_likwid.h>
 #include <loop_adapt_measurement_timer.h>
 
+#ifdef LIKWID_NVMON
+#define NUM_LOOP_ADAPT_MEASUREMENTS 3
+#else
 #define NUM_LOOP_ADAPT_MEASUREMENTS 2
+#endif
 
 int loop_adapt_measurement_list_count = NUM_LOOP_ADAPT_MEASUREMENTS;
 
@@ -33,6 +38,20 @@ MeasurementDefinition loop_adapt_measurement_list[NUM_LOOP_ADAPT_MEASUREMENTS] =
      .configs = loop_adapt_measurement_timer_configs,
      .finalize = loop_adapt_measurement_timer_finalize
     },
+#ifdef LIKWID_NVMON
+    {.name = "LIKWID_NVMON",
+     .scope = LOOP_ADAPT_MEASUREMENT_SCOPE_GPU,
+     .init = loop_adapt_measurement_likwid_nvmon_init,
+     .setup = loop_adapt_measurement_likwid_nvmon_setup,
+     .start = loop_adapt_measurement_likwid_nvmon_start,
+     .startall = NULL,
+     .stop = loop_adapt_measurement_likwid_nvmon_stop,
+     .stopall = NULL,
+     .result = loop_adapt_measurement_likwid_nvmon_result,
+     .configs = loop_adapt_measurement_likwid_nvmon_configs,
+     .finalize = loop_adapt_measurement_likwid_nvmon_finalize
+    },
+#endif
 };
 
 #endif /* LOOP_ADAPT_MEASUREMENT_LIST_H */
