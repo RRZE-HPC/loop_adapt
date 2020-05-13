@@ -250,17 +250,15 @@ int loop_adapt_get_new_config_txt(char* string, int config_id, LoopAdaptConfigur
         int mcount = 0;
         struct bstrList* first = bsplit(cfile->lines->entry[config_id], '|');
         struct bstrList* params = bsplit(first->entry[0], ';');
-        struct bstrList* measure = bsplit(first->entry[1], ';');
         bstrListDestroy(first);
-        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Line %d has %d parameters and %d measurements, config_id, params->qty, measure->qty);
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Line %d has %d parameters, config_id, params->qty);
 
-        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Resize configuration for %d parameters and %d measurements, params->qty, measure->qty);
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Resize configuration for %d parameters, params->qty);
         err = loop_adapt_configuration_resize_config(configuration, params->qty);
         LoopAdaptConfiguration_t config = *configuration;
         if (err != 0)
         {
             bstrListDestroy(params);
-            bstrListDestroy(measure);
             return -ENOMEM;
         }
 
@@ -323,7 +321,6 @@ int loop_adapt_get_new_config_txt(char* string, int config_id, LoopAdaptConfigur
         }
         config->num_parameters = pcount;
         bstrListDestroy(params);
-        bstrListDestroy(measure);
         config->configuration_id = config_id;
 
 /*        if (cfile->current)*/
@@ -465,23 +462,7 @@ int loop_adapt_config_txt_output_write(ThreadData_t thread, char* loopname, Poli
         }
 
         TODO_PRINT(Change txt write function to policy);
-        // for (i = 0; i < config->num_measurements; i++)
-        // {
-        //     LoopAdaptConfigurationMeasurement *m = &config->measurements[i];
-        //     if (m)
-        //     {
-        //         char* c = loop_adapt_param_value_str(results[i]);
-        //         bstring x = loop_adapt_config_parse_default_entry_bbb(m->measurement, m->config, m->metric);
-        //         bconchar(x, ':');
-        //         bcatcstr(x, c);
-        //         free(c);
-        //         bconcat(line, x);
-        //         bconchar(line, ';');
-        //         bdestroy(x);
-        //     }
-        // }
-        // btrunc(line, blength(line) - 1);
-        // bconchar(line, '\n');
+
 
         fwrite(bdata(line), sizeof(char), blength(line), outputfile);
         fflush(outputfile);
