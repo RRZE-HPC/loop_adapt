@@ -28,6 +28,9 @@ int loop_adapt_parameter_scope_count(char* name);
 
 int loop_adapt_parameter_loop_start(ThreadData_t thread);
 int loop_adapt_parameter_loop_end(ThreadData_t thread);
+
+int loop_adapt_parameter_loop_best(ThreadData_t thread, ParameterValue v);
+
 void loop_adapt_parameter_finalize();
 
 #endif /* LOOP_ADAPT_PARAMETER_H */

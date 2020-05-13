@@ -771,3 +771,37 @@ int loop_adapt_parameter_loop_end(ThreadData_t thread)
     }
     return 0;
 }
+
+
+int loop_adapt_parameter_loop_best(ThreadData_t thread, ParameterValue v)
+{
+    if ((!thread))
+    {
+        return -EINVAL;
+    }
+    int i = 0;
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Set best parameter value);
+    for (i = 0; i < loop_adapt_num_active_parameters; i++)
+    {
+        for (int s = 0; s < LOOP_ADAPT_NUM_SCOPES; s++)
+        {
+            if (thread->scopeOffsets[s] < 0) continue;
+            hwloc_obj_t obj = hwloc_get_obj_by_type(loop_adapt_parameter_tree, LoopAdaptScopeList[s], thread->scopeOffsets[s]);
+            if (obj)
+            {
+                Parameter_t p = NULL;
+                Map_t params = (Map_t)obj->userdata;
+                if (!params)
+                {
+                    continue;
+                }
+                int err = get_smap_by_key(params, loop_adapt_active_parameters[i].name, (void**)&p);
+                if (err == 0)
+                {
+                    loop_adapt_copy_param_value(v, &p->init);
+                }
+            }
+        }
+    }
+    return 0;
+}
