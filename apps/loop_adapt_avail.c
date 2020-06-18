@@ -7,7 +7,7 @@
 #include <error.h>
 #include <loop_adapt_threads.h>
 #include <loop_adapt_parameter.h>
-#include <loop_adapt_measurement.h>
+#include <loop_adapt_policy.h>
 
 LoopAdaptDebugLevel loop_adapt_verbosity = 0;
 
@@ -15,7 +15,7 @@ int main(int argc, char* argv[])
 {
     int i = 0;
     struct bstrList* parameters = bstrListCreate();
-    struct bstrList* measurements = bstrListCreate();
+    struct bstrList* policies = bstrListCreate();
 
     loop_adapt_threads_initialize();
     loop_adapt_threads_register(0);
@@ -35,17 +35,17 @@ int main(int argc, char* argv[])
 
     loop_adapt_parameter_finalize();
 
-    loop_adapt_measurement_initialize();
+    loop_adapt_policy_initialize();
 
-    loop_adapt_measurement_getbnames(measurements);
-    printf("Available measurement backends:\n");
-    for (i = 0; i < measurements->qty; i++)
+    loop_adapt_policy_getbnames(policies);
+    printf("Available policies:\n");
+    for (i = 0; i < policies->qty; i++)
     {
-        printf("- %s\n", bdata(measurements->entry[i]));
+        printf("- %s\n", bdata(policies->entry[i]));
     }
-    bstrListDestroy(measurements);
+    bstrListDestroy(policies);
 
-    loop_adapt_measurement_finalize();
+    loop_adapt_policy_finalize();
 
     loop_adapt_threads_finalize();
     return 0;

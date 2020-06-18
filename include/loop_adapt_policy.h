@@ -14,5 +14,6 @@ int loop_adapt_policy_eval(char* loop, int num_results, ParameterValue* inputs, 
 
 bstring loop_adapt_policy_get_measurement(bstring policy);
 PolicyDefinition_t loop_adapt_policy_get(int policy);
+int loop_adapt_policy_getbnames(struct bstrList* policies);
 
 #endif

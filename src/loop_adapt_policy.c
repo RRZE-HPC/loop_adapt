@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <bstrlib.h>
+#include <bstrlib_helper.h>
 #include <error.h>
 #include <loop_adapt_internal.h>
 #include <loop_adapt_parameter_value_types.h>
@@ -25,7 +26,7 @@ int _loop_adapt_copy_policy(_PolicyDefinition *in, PolicyDefinition* out)
         out->config = bfromcstr(in->config);
         out->match = bfromcstr(in->match);
         out->eval = in->eval;
-        
+
         return 0;
     }
     return -EINVAL;
@@ -116,7 +117,7 @@ int loop_adapt_register_policy(char* name, char* backend, char* config, char* ma
         tmp->config = bfromcstr(config);
         tmp->match = bfromcstr(match);
         tmp->eval = func;
-        
+
         loop_adapt_num_active_policy++;
         return 0;
     }
@@ -171,4 +172,15 @@ PolicyDefinition_t loop_adapt_policy_get(int policy)
         return pd;
     }
     return NULL;
+}
+
+int loop_adapt_policy_getbnames(struct bstrList* policies)
+{
+    int i = 0;
+    for (i = 0; i < loop_adapt_num_active_policy; i++)
+    {
+        PolicyDefinition_t pd = &loop_adapt_active_policy[i];
+        bstrListAdd(policies, pd->name);
+    }
+    return 0;
 }
