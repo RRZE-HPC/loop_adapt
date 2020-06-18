@@ -169,13 +169,11 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
         // Add new client to hash map;
         add_smap(cc_client_hash, string, (void*)cc_config);
     }
-    
     // Allocate a fresh Configuration
     LoopAdaptConfiguration_t config = *configuration;
     if (!config)
         config = (LoopAdaptConfiguration_t) malloc(sizeof(LoopAdaptConfiguration));
 
-    
 
     // Get all parameter names
     struct bstrList *param_names = bstrListCreate();
@@ -185,13 +183,25 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
 
     cc_config->client->nextConfig();
 
-    // We check for all available parameters whether the client has some values for 
+    // We check for all available parameters whether the client has some values for
     for (i = 0; i < param_names->qty; i++)
     {
         // This here will be tricky because not all parameters will be int;
         std::string param = cc_config->client->getConfigAt(bdata(param_names->entry[i]));
         // add param to config;
-        // _cc_client_add_parameter(config, param);
+        bstring bparam = bfromctr(param.c_str());
+        struct bstrList* tmp = bsplit(bparam, ',')
+        ParameterValueType_t type = loop_adapt_parameter_type(bdata(tmp->entry[0]));
+        ParameterValue paramvalue = loop_adapt_new_param_value(type);
+        loop_adapt_parse_param_value(bdata(tmp->entry[1]), type, &paramvalue);
+
+        for (int j = 0; j < loop_adapt_threads_get_count(); j++)
+        {
+            loop_adapt_parameter_set(j, bdata(tmp->entry[0]), paramvalue);
+        }
+        loop_adapt_destroy_param_value(paramvalue);
+        bstrListDestroy(tmp);
+        bdestroy(bparam);
     }
 
     if (cc_config->current)
