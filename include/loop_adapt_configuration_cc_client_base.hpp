@@ -49,10 +49,12 @@ class Client
 
   std::map<int, config_t> m_pendingConfigs;
 
+public:
   bool m_useBestConfig = false; // If true, using best config so far (waiting for new configs)
   bool m_tuningFinished = false; // Stores current status of the tuning run
 
 #ifdef USE_MPI
+private:
   boost::mpi::communicator world; // MPI communicator
 #endif // USE_MPI
 
@@ -105,11 +107,6 @@ private:
    * @returns Address, user and password of the opentuner database in a String
    */
   std::string getDatabase();
-
-  /**
-   * Establish the connection with the opentuner database.
-   */
-  void connectToDatabase();
 
 public:
   /**
@@ -206,10 +203,15 @@ public:
   void reportMeasurement();
 
   /**
+   * Evaluates measurement given as argument and reports it to the database
+   */
+  void reportConfig(double rating, const std::string& rawMeasurement);
+
+  /**
    * Converts the config map to a string and returns it
    * @returns the current configuration as a String
    */
   std::string configToString() const;
 };
 
-#endif // CLIENT_HPP 
+#endif // CLIENT_HPP

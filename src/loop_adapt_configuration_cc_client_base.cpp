@@ -23,10 +23,23 @@ Client::Client(char* address, char* user, char* pass,
     std::string params = buildString(parameters);
 
     generateTuningRun(args, params, "min_time", programName, projectName);
-    connectToDatabase();
+    getDatabase();
+    
+    std::string OTaddress(address);
+    OTaddress = OTaddress.substr(0, OTaddress.find("job_handler"));
+    OTaddress += "opentuner";
+
+    // Establish the connection with the opentuner database.
+    m_OTSession = driver->connect(OTaddress, user, pass);
+    m_OTSession->setSchema("opentuner");
     writeHostname();
 
 #ifdef USE_MPI
+  }
+  else
+  {
+    m_JHSession = nullptr;
+    m_OTSession = nullptr;
   }
 #endif // USE_MPI
 }
@@ -132,25 +145,6 @@ std::string Client::getDatabase()
     }
   }
   return tuningRunDatabase;
-}
-
-void Client::connectToDatabase()
-{
-  sql::Driver* driver = get_driver_instance();
-  std::string tuningRunDatabase = getDatabase();
-
-  // Convert the python style tuning_run_database address to C++ style (tcp)
-  std::string userpass = tuningRunDatabase.substr(0, tuningRunDatabase.find('@'));
-  userpass = userpass.substr(userpass.find("//"), userpass.length());
-  std::string user = userpass.substr(2, userpass.find(':') - 2);
-  std::string pass = userpass.substr(userpass.find(':') + 1, userpass.find('@'));
-  std::string address = tuningRunDatabase.substr(tuningRunDatabase.find('@') + 1,
-                        tuningRunDatabase.length());
-  address = "tcp://" + address;
-
-  // Establish the connection with the opentuner database.
-  m_OTSession = driver->connect(address, user, pass);
-  m_OTSession->setSchema("opentuner");
 }
 
 bool Client::serverAlive() const
@@ -571,7 +565,64 @@ void Client::reportMeasurement()
     insertStmt->setInt(1, m_currentConfigId);
     insertStmt->setInt(2, m_machineId);
     insertStmt->setInt(3, m_tuningRunId);
-    insertStmt->setString(4, std::string(std::ctime(&now)));
+    insertStmt->setDouble(4, rating);
+    insertStmt->setDouble(5, rating);
+    insertStmt->setString(6, rawMeasurement);
+    insertStmt->execute();
+
+    // Get id of last inserted result
+    std::unique_ptr<sql::Statement> stmt(m_OTSession->createStatement());
+    std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID() AS id"));
+    res->next();
+    int resultId = res->getInt("id");
+
+    // Update desired result to the last inserted result
+    std::unique_ptr<sql::PreparedStatement> updateStmt(m_OTSession->prepareStatement(
+          "UPDATE desired_result "
+          "SET state = 'COMPLETE', result_id = ? "
+          "WHERE id = ? ;"));
+    updateStmt->setInt(1, resultId);
+    updateStmt->setInt(2, drId);
+    updateStmt->executeUpdate();
+
+#ifdef USE_MPI
+  }
+#endif // USE_MPI
+}
+
+void Client::reportConfig(double rating, const std::string& rawMeasurement)
+{
+  // Use best config
+  if (m_tuningFinished || m_useBestConfig)
+  {
+    return;
+  }
+
+  // Update best config
+  if (rating < m_bestConfigRating)
+  {
+    m_bestConfigRating = rating;
+    m_currentBestConfig = m_currentConfig;
+  }
+
+#ifdef USE_MPI
+  if (world.rank() == 0)
+  {
+#endif // USE_MPI
+    m_desiredResults->next();
+    int drId = m_desiredResults->getInt("id");
+    time_t now = std::time(0);
+
+    // Write result into database
+    std::unique_ptr<sql::PreparedStatement> insertStmt(m_OTSession->prepareStatement(
+          "INSERT INTO result (configuration_id, machine_id, tuning_run_id, collection_date, "
+          "collection_cost, state, time, raw_measurement) "
+          "VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, 'OK', ? , ?);"));
+
+    insertStmt->setInt(1, m_currentConfigId);
+    insertStmt->setInt(2, m_machineId);
+    insertStmt->setInt(3, m_tuningRunId);
+    insertStmt->setDouble(4, rating); //std::string(std::ctime(&now)));
     insertStmt->setDouble(5, rating);
     insertStmt->setString(6, rawMeasurement);
     insertStmt->execute();

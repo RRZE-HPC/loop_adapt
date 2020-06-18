@@ -271,23 +271,24 @@ extern "C" int loop_adapt_config_cc_client_write(ThreadData_t thread, char* loop
                 policy->eval(num_results, results, &result);
             }
             // Send result to OpenTuner
-            TODO_PRINT(WTF happened to report config?);
-//            int i = 0;
-//            bstring joinsep = bfromcstr("|");
-//            struct bstrList* blist = bstrListCreate();
-//            for (i = 0; i < num_results; i++)
-//            {
-//                char* sval =  loop_adapt_param_value_str(results[i]);
-//                bstring bs = bformat("%s:%d=%s", policy->name, i, sval);
-//                bstrListAdd(blist, bs);
-//                bdestroy(bs);
-//                free(sval);
-//            }
-//            bstring all_results = bjoin(blist, joinsep);
-//            bdestroy(joinsep);
-//            // whatever with all_results bstring
-//            bdestroy(all_results);
-            //cc_config->client->report_config(result);
+            // TODO_PRINT(WTF happened to report config?);
+            int i = 0;
+            bstring joinsep = bfromcstr("|");
+            struct bstrList* blist = bstrListCreate();
+            for (i = 0; i < num_results; i++)
+            {
+                char* sval =  loop_adapt_param_value_str(results[i]);
+                bstring bs = bformat("%s:%d=%s", policy->name, i, sval);
+                bstrListAdd(blist, bs);
+                bdestroy(bs);
+                free(sval);
+            }
+            bstring all_results = bjoin(blist, joinsep);
+            bdestroy(joinsep);
+            std::string results_raw(bdata(all_results));
+            // whatever with all_results bstring
+            bdestroy(all_results);
+            cc_config->client->reportConfig(result, results_raw);
             return 0;
         }
     }
