@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <loop_adapt_configuration_cc_client_base.hpp>
 #include <bstrlib.h>
+#include <bstrlib_helper.h>
 #include <loop_adapt_threads.h>
 #include <loop_adapt_parameter.h>
 #include <loop_adapt_parameter_value.h>
