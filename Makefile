@@ -12,11 +12,11 @@ DEFINES += -D_GNU_SOURCE -DLIKWID_NVMON
 ANSI_CFLAGS   =
 
 CFLAGS   = -g -fopenmp -std=gnu99 -Wno-format -fPIC
-CPPFLAGS   = -g -fopenmp -Wno-format -fPIC
+CPPFLAGS   = -g -fopenmp -Wno-format -fPIC -std=c++11
 SHARED_CFLAGS = -fPIC
 SHARED_LFLAGS = -shared -L$(HWLOC_LIBDIR) -L$(LIKWID_LIBDIR) -L$(BOOST_LIBDIR) -L$(MYSQL_LIBDIR)
 DYNAMIC_TARGET_LIB = libloop_adapt.so
-LIBS =  -llikwid -lhwloc -lmysqlcppconn
+LIBS =  -llikwid -lhwloc -lmysqlcppconn -lstdc++
 
 ifeq ($(LIKWID_NVMON),no)
 OBJ := $(filter-out BUILD/loop_adapt_measurement_likwid_nvmon.o,$(OBJ))
@@ -32,7 +32,7 @@ $(DYNAMIC_TARGET_LIB): $(OBJ)
 
 BUILD/%.o:  src/%.c create_build_dir
 	@echo "===>  COMPILE (C) $@"
-	$(Q)$(CC) $(DEFINES) $(INCLUDES) -c $(CFLAGS) $(ANSI_CFLAGS) $(CPPFLAGS) $< -o $@
+	$(Q)$(CC) $(DEFINES) $(INCLUDES) -c $(CFLAGS) $(ANSI_CFLAGS) $< -o $@
 
 BUILD/%.o:  src/%.cc create_build_dir
 	@echo "===>  COMPILE (C++) $@"
