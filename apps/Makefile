@@ -1,11 +1,14 @@
-LIBDIRS = -L .. -L ${HOME}/Apps/lib #-L /mnt/opt/likwid-5.0.1/lib
-INCDIRS = -I ../include -I${HOME}/Apps/hwloc/include #-I /mnt/opt/likwid-5.0.1/include
+include ../config.mk
+
+LIBDIRS = -L .. -L ${HWLOC_LIBDIR} -L ${LIKWID_LIBDIR}
+INCDIRS = -I ../include -I ${HWLOC_INCDIR} -I ${LIKWID_INCDIR}
+LIBS = -lloop_adapt
 
 all: loop_adapt_avail
 
 
 loop_adapt_avail: loop_adapt_avail.c
-	$(CC) -g -DLOOP_ADAPT_ACTIVATE -fopenmp $(INCDIRS) $(LIBDIRS) loop_adapt_avail.c -o loop_adapt_avail -lloop_adapt
+	$(CC) -g -DLOOP_ADAPT_ACTIVATE -fopenmp $(INCDIRS) $(LIBDIRS) loop_adapt_avail.c -o loop_adapt_avail $(LIBS)
 clean:
 	rm -f loop_adapt_avail
 
