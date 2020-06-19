@@ -9,13 +9,8 @@
 #include <cppconn/resultset.h>
 #include <cppconn/statement.h>
 #include <cppconn/prepared_statement.h>
-#include <errno.h>
 #include <loop_adapt_configuration_cc_client_base.hpp>
-#include <bstrlib.h>
-#include <bstrlib_helper.h>
-#include <loop_adapt_threads.h>
-#include <loop_adapt_parameter.h>
-#include <loop_adapt_parameter_value.h>
+
 
 
 using namespace std;
@@ -35,6 +30,12 @@ extern "C"
 #include <loop_adapt_configuration_cc_client.h>
 // Include the hash table implementation
 #include <map.h>
+#include <bstrlib.h>
+#include <bstrlib_helper.h>
+#include <loop_adapt_threads.h>
+#include <loop_adapt_parameter.h>
+#include <loop_adapt_parameter_value.h>
+#include <errno.h>
 }
 
 // Global hash table for loopname -> Client relation
