@@ -810,22 +810,37 @@ int loop_adapt_end_loop(char* string)
         ParameterValue v; \
         v.type = TYPE; \
         v.value.VAR = value; \
-        ParameterValueLimit l = DEC_NEW_INTRANGE_PARAM_LIMIT((start), (end), 1); \
-        return loop_adapt_parameter_add_user_limit(string, scope, v, l); \
+        ParameterValue s; \
+        s.type = TYPE; \
+        s.value.VAR = start; \
+        ParameterValue e; \
+        e.type = TYPE; \
+        e.value.VAR = end; \
+        ParameterValueLimit l; \
+        l.type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_RANGE; \
+        l.limit.range.current.type = LOOP_ADAPT_PARAMETER_TYPE_INVALID; \
+        l.limit.range.start = s; \
+        l.limit.range.end = e; \
+        l.limit.range.step.type = LOOP_ADAPT_PARAMETER_TYPE_INVALID; \
+        return loop_adapt_parameter_add_user_with_limit(string, scope, v, l); \
     } \
     int loop_adapt_new_##NAME##_parameter_list(char* string, LoopAdaptScope_t scope, NAME value, int num_values, NAME *list) \
     { \
         ParameterValue v; \
         v.type = TYPE; \
         v.value.VAR = value; \
-        ParameterValueLimit l = DEC_NEW_LIST_PARAM_LIMIT(); \
+        ParameterValueLimit l; \
+        l.type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_LIST; \
+        l.limit.list.num_values = 0; \
+        l.limit.list.value_idx = -1; \
+        l.limit.list.values = NULL; \
         for (int i = 0; i < num_values; i++) { \
             ParameterValue t; \
             t.type = TYPE; \
             t.value.VAR = list[i]; \
             loop_adapt_add_param_limit_list(&l, t); \
         } \
-        return loop_adapt_parameter_add_user_limit(string, scope, v, l); \
+        return loop_adapt_parameter_add_user_with_limit(string, scope, v, l); \
     }
 
 _LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(char, LOOP_ADAPT_PARAMETER_TYPE_CHAR, cval)

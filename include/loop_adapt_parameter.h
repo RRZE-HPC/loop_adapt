@@ -2,7 +2,8 @@
 #define LOOP_ADAPT_PARAMETER_H
 
 #include <loop_adapt_parameter_types.h>
-#include <loop_adapt_parameter_value_types.h>
+#include <loop_adapt_parameter_value.h>
+#include <loop_adapt_parameter_limit.h>
 #include <loop_adapt_threads_types.h>
 
 int loop_adapt_parameter_initialize();
@@ -16,6 +17,7 @@ int loop_adapt_parameter_add(char* name, LoopAdaptScope_t scope,
                              parameter_get_function get,
                              parameter_available_function avail);
 int loop_adapt_parameter_add_user(char* name, LoopAdaptScope_t scope, ParameterValue value);
+int loop_adapt_parameter_add_user_with_limit(char* name, LoopAdaptScope_t scope, ParameterValue value, ParameterValueLimit limit);
 int loop_adapt_parameter_set(ThreadData_t thread, char* parameter, ParameterValue value);
 int loop_adapt_parameter_get(ThreadData_t thread, char* parameter, ParameterValue* value);
 int loop_adapt_parameter_getcurrent(ThreadData_t thread, char* parameter, ParameterValue* value);
