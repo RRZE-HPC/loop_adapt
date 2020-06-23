@@ -804,6 +804,28 @@ int loop_adapt_end_loop(char* string)
         v.type = TYPE; \
         v.value.VAR = value; \
         return loop_adapt_parameter_add_user(string, scope, v); \
+    } \
+    int loop_adapt_new_##NAME##_parameter_range(char* string, LoopAdaptScope_t scope, NAME value, NAME start, NAME end) \
+    { \
+        ParameterValue v; \
+        v.type = TYPE; \
+        v.value.VAR = value; \
+        ParameterValueLimit l = DEC_NEW_INTRANGE_PARAM_LIMIT((start), (end), 1); \
+        return loop_adapt_parameter_add_user_limit(string, scope, v, l); \
+    } \
+    int loop_adapt_new_##NAME##_parameter_list(char* string, LoopAdaptScope_t scope, NAME value, int num_values, NAME *list) \
+    { \
+        ParameterValue v; \
+        v.type = TYPE; \
+        v.value.VAR = value; \
+        ParameterValueLimit l = DEC_NEW_LIST_PARAM_LIMIT(); \
+        for (int i = 0; i < num_values; i++) { \
+            ParameterValue t; \
+            t.type = TYPE; \
+            t.value.VAR = list[i]; \
+            loop_adapt_add_param_limit_list(&l, t); \
+        } \
+        return loop_adapt_parameter_add_user_limit(string, scope, v, l); \
     }
 
 _LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(char, LOOP_ADAPT_PARAMETER_TYPE_CHAR, cval)
@@ -811,6 +833,13 @@ _LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(double, LOOP_ADAPT_PARAMETER_TYPE_DOUBLE,
 _LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(float, LOOP_ADAPT_PARAMETER_TYPE_FLOAT, fval)
 _LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(int, LOOP_ADAPT_PARAMETER_TYPE_INT, ival)
 _LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(boolean, LOOP_ADAPT_PARAMETER_TYPE_BOOL, bval)
+
+int loop_adapt_new_string_parameter(char* string, LoopAdaptScope_t scope, char* value)
+{
+    ParameterValue v;
+    loop_adapt_parse_param_value(value, LOOP_ADAPT_PARAMETER_TYPE_STR, &v);
+    return loop_adapt_parameter_add_user(string, scope, v);
+}
 
 int loop_adapt_get_string_parameter(char* string, char** value)
 {

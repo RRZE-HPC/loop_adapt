@@ -72,10 +72,31 @@ LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(float)
 #define LA_GET_INT_PARAMETER(name, x) x = loop_adapt_get_int_parameter(((char *)name));
 #define LA_SET_INT_PARAMETER(name, x) loop_adapt_set_int_parameter(((char *)name), (x));
 #define LA_NEW_INT_PARAMETER(name, scope, value) loop_adapt_new_int_parameter(((char *)name), (scope), (value))
+#define LA_NEW_INT_PARAMETER_RANGE(name, scope, value, start, end) \
+    loop_adapt_new_int_parameter_range(((char *)name), (scope), (value), (start), (end))
 
 #define LA_GET_BOOL_PARAMETER(name, x) x = loop_adapt_get_bool_parameter((char *)name);
 #define LA_SET_BOOL_PARAMETER(name, x) loop_adapt_set_bool_parameter(((char *)name), (x));
 #define LA_NEW_BOOL_PARAMETER(name, scope, value) loop_adapt_new_bool_parameter(((char *)name), (scope), (value))
+
+#define LA_GET_CHAR_PARAMETER(name, x) x = loop_adapt_get_char_parameter(((char *)name));
+#define LA_SET_CHAR_PARAMETER(name, x) loop_adapt_set_char_parameter(((char *)name), (x));
+#define LA_NEW_CHAR_PARAMETER(name, scope, value) loop_adapt_new_char_parameter(((char *)name), (scope), (value))
+
+#define LA_GET_DBL_PARAMETER(name, x) x = loop_adapt_get_double_parameter(((char *)name));
+#define LA_SET_DBL_PARAMETER(name, x) loop_adapt_set_double_parameter(((char *)name), (x));
+#define LA_NEW_DBL_PARAMETER(name, scope, value) loop_adapt_new_double_parameter(((char *)name), (scope), (value))
+
+#define LA_GET_FLT_PARAMETER(name, x) x = loop_adapt_get_float_parameter(((char *)name));
+#define LA_SET_FLT_PARAMETER(name, x) loop_adapt_set_float_parameter(((char *)name), (x));
+#define LA_NEW_FLT_PARAMETER(name, scope, value) loop_adapt_new_float_parameter(((char *)name), (scope), (value))
+
+int loop_adapt_get_string_parameter(char* string, char** value);
+int loop_adapt_set_string_parameter(char* string, char* value);
+int loop_adapt_new_string_parameter(char* string, LoopAdaptScope_t scope, char* value);
+#define LA_GET_STR_PARAMETER(name, x) loop_adapt_get_string_parameter(((char *)name), &x);
+#define LA_SET_STR_PARAMETER(name, x) loop_adapt_set_string_parameter(((char *)name), x);
+#define LA_NEW_STR_PARAMETER(name, scope, value) loop_adapt_new_string_parameter(((char *)name), (scope), (value));
 
 int loop_adapt_new_loop_start(char* string, char* file, int linenumber);
 int loop_adapt_new_loop_end(char* string);
