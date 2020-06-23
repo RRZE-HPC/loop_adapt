@@ -60,6 +60,7 @@ int loop_adapt_register_inparallel_function(int (*in_parallel)(void));
 
 #define LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(TYPE) \
     int loop_adapt_new_##TYPE##_parameter(char* name, LoopAdaptScope_t scope, TYPE value); \
+    int loop_adapt_new_##TYPE##_parameter_range(char* name, LoopAdaptScope_t scope, TYPE value, TYPE start, TYPE end); \
     TYPE loop_adapt_get_##TYPE##_parameter(char* name); \
     int loop_adapt_set_##TYPE##_parameter(char* name, TYPE value);
 
