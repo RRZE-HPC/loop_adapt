@@ -1,5 +1,7 @@
-LIBDIRS = -L .. -L ${HOME}/Apps/lib -L /mnt/opt/likwid-5.0.1/lib
-INCDIRS = -I ../include -I${HOME}/Apps/hwloc/include -I /mnt/opt/likwid-5.0.1/include
+include ../config.mk
+
+LIBDIRS = -L .. -L $(HWLOC_LIBDIR) -L $(LIKWID_LIBDIR)
+INCDIRS = -I ../include -I $(HWLOC_INCDIR) -I $(LIKWID_INCDIR)
 
 all: simple_omp simple_omp_parallel
 
