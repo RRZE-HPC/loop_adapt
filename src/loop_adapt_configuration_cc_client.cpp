@@ -218,14 +218,15 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
     {
         config = (LoopAdaptConfiguration_t) malloc(sizeof(LoopAdaptConfiguration));
         memset(config, 0, sizeof(LoopAdaptConfiguration));
+        *configuration = config;
     }
 
     // Get all parameter names
     struct bstrList *param_names = bstrListCreate();
     loop_adapt_get_loop_parameter(string, param_names);
-    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Resize config %d to %d, config_id, param_names->qty);
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Resize config to %d (config ids %d %d), param_names->qty, config_id, config->configuration_id);
     loop_adapt_configuration_resize_config(configuration, param_names->qty);
-
+    config = *configuration;
     if (config->configuration_id != config_id)
     {
         cc_config->client->nextConfig();
