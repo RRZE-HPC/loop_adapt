@@ -726,7 +726,7 @@ int loop_adapt_parameter_configs(struct bstrList* configs)
         }
         else
         {
-            char *s = loop_adapt_param_limit_str(limit);
+            char *s = loop_adapt_param_limit_str(pd->limit);
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Config for %s: %s, pd->name, s);
             free(s);
             loop_adapt_parameter_config_str(pd->name, pd->limit, configs);
