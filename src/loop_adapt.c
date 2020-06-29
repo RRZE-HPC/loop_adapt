@@ -101,7 +101,7 @@ static void _loop_adapt_free_loopdata_thread(void* t)
         LoopThreadData_t ldata = (LoopThreadData_t)t;
         if (ldata->config)
             loop_adapt_configuration_destroy_config(ldata->config);
-        
+
         memset(ldata, 0, sizeof(LoopThreadData));
         free(t);
     }
@@ -410,7 +410,7 @@ int loop_adapt_add_loop_policy(char* string, char* policy)
         if (get_smap_by_key(loop_adapt_global_hash, string, (void**)&tree) == 0)
         {
             LoopData_t ldata = NULL;
-            
+
             ldata = (LoopData_t)hwloc_topology_get_userdata(tree);
             if (ldata)
             {
@@ -442,13 +442,15 @@ int loop_adapt_get_loop_parameter(char* string, struct bstrList* parameters)
         if (get_smap_by_key(loop_adapt_global_hash, string, (void**)&tree) == 0)
         {
             LoopData_t ldata = NULL;
-            
+
             ldata = (LoopData_t)hwloc_topology_get_userdata(tree);
             if (ldata)
             {
                 int i = 0;
+                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, %d parameters for loop %s, ldata->parameters->qty, string);
                 for (i = 0; i < ldata->parameters->qty; i++)
                 {
+                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG,Parameter %d for loop %s: %s, i, string, bdata(ldata->parameters->entry[i]));
                     bstrListAdd(parameters, ldata->parameters->entry[i]);
                 }
             }
@@ -466,7 +468,7 @@ int loop_adapt_get_loopdata(char* string, LoopData_t *loopdata)
         if (get_smap_by_key(loop_adapt_global_hash, string, (void**)&tree) == 0)
         {
             LoopData_t ldata = NULL;
-            
+
             ldata = (LoopData_t)hwloc_topology_get_userdata(tree);
             if (ldata)
             {
@@ -604,7 +606,7 @@ static int loop_adapt_handle_thread_start(LoopData_t loop, ThreadData_t thread)
             }
         }
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Setup measurement %s for thread %d, bdata(pol->backend), thread->thread);
-        
+
         err = loop_adapt_measurement_setup(thread, bdata(pol->backend), pol->config, pol->match);
         if (err == 0)
         {
