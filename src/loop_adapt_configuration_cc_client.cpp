@@ -10,6 +10,7 @@
 #include <cppconn/statement.h>
 #include <cppconn/prepared_statement.h>
 #include <loop_adapt_configuration_cc_client_base.hpp>
+#include <loop_adapt_threads.h>
 
 
 
@@ -40,6 +41,7 @@ extern "C"
 
 // Global hash table for loopname -> Client relation
 static Map_t cc_client_hash = NULL;
+static pthread_mutex_t cc_client_lock = PTHREAD_MUTEX_INITIALIZER;
 // Read the data, user and password only once
 static char* data = NULL;
 static char* user = NULL;
@@ -92,14 +94,17 @@ extern "C" int loop_adapt_config_cc_client_init()
 {
     int err = 0;
     // Create the hash table if it does not exist
+    pthread_mutex_lock(&cc_client_lock);
     if (!cc_client_hash)
     {
+
         err = init_smap(&cc_client_hash, _cc_client_hash_final_delete);
         if (err)
         {
             ERROR_PRINT(Failed to initialize hash table for loopname -> OpenTuner client);
         }
     }
+    pthread_mutex_unlock(&cc_client_lock);
 
     // Read some basic information from the environment
     data = getenv("LA_CONFIG_CC_DATA");
@@ -112,14 +117,74 @@ extern "C" int loop_adapt_config_cc_client_init()
 
 extern "C" void loop_adapt_config_cc_client_finalize()
 {
+    pthread_mutex_lock(&cc_client_lock);
     if (cc_client_hash)
     {
         // Destroy the hash table. This calls the function _cc_client_hash_final_delete for each element
         destroy_smap(cc_client_hash);
         cc_client_hash = NULL;
     }
+    pthread_mutex_unlock(&cc_client_lock);
 }
 
+
+int _new_cclient(CCConfig ** cc_client, char* string)
+{
+    int i, j;
+    std::string proj_name = string;
+    CCConfig *cc_config = (CCConfig*) malloc(sizeof(CCConfig));
+    if (!cc_config)
+    {
+        return -ENOMEM;
+    }
+    cc_config->current = NULL;
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, New Onsite client (%s), string);
+    // Create an empry list of strings
+    struct bstrList* loop_params = bstrListCreate();
+    int num_params = loop_adapt_get_loop_parameter(string, loop_params);
+
+
+    struct bstrList* available_configs = bstrListCreate();
+    int avail_configs = loop_adapt_parameter_configs(available_configs);
+
+    std::vector<std::string> otparameters;
+    for (i = 0; i < num_params; i++)
+    {
+        for (j = 0; j < avail_configs; j++)
+        {
+            if (bstrncmp(loop_params->entry[i], available_configs->entry[j], blength(loop_params->entry[i])) == BSTR_OK)
+            {
+                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Parameter %s, bdata(available_configs->entry[j]));
+                otparameters.push_back(bdata(available_configs->entry[j]));
+            }
+        }
+    }
+    if (otparameters.size() == 0)
+    {
+        for (int j = 0; j < num_params; j++)
+        {
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Avail Parameter %s, bdata(loop_params->entry[j]));
+        }
+        for (int j = 0; j < avail_configs; j++)
+        {
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Avail Configs %s, bdata(available_configs->entry[j]));
+        }
+    }
+    bstrListDestroy(loop_params);
+    bstrListDestroy(available_configs);
+    std::vector<std::string> otarguments;
+    // Add default arguments
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, New Onsite client (%s) User %s Pass %s URI %s Prog %s Proj %s, string, user, pass, data, prog_name, proj_name);
+
+    // Hash table empty for loop, create a new client
+    cc_config->client = new Client(data, user, pass, otarguments, otparameters, prog_name, proj_name, NULL);
+
+
+    // Add new client to hash map;
+    add_smap(cc_client_hash, string, (void*)cc_config);
+    *cc_client = cc_config;
+    return 0;
+}
 
 // We get a string identifying the loop. If we should be able to handle multiple
 // loops simultaneously, we should hand it over to client.set_config() which
@@ -134,66 +199,18 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
         return -EINVAL;
     CCConfig * cc_config = NULL;
 
+    pthread_mutex_lock(&cc_client_lock);
     // Check whether there is already a cc_config for the loop
     err = get_smap_by_key(cc_client_hash, string, (void**)&cc_config);
     if (err != 0)
     {
-        std::string proj_name = string;
-        cc_config = (CCConfig*) malloc(sizeof(CCConfig));
-        if (!cc_config)
-        {
-            return -ENOMEM;
-        }
-        cc_config->current = NULL;
-        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, New Onsite client (%s), string);
-        // Create an empry list of strings
-        struct bstrList* loop_params = bstrListCreate();
-        int num_params = loop_adapt_get_loop_parameter(string, loop_params);
-
-
-        struct bstrList* available_configs = bstrListCreate();
-        int avail_configs = loop_adapt_parameter_configs(available_configs);
-
-        std::vector<std::string> otparameters;
-        for (i = 0; i < num_params; i++)
-        {
-            for (j = 0; j < avail_configs; j++)
-            {
-                if (bstrncmp(loop_params->entry[i], available_configs->entry[j], blength(loop_params->entry[i])) == BSTR_OK)
-                {
-                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Parameter %s, bdata(available_configs->entry[j]));
-                    otparameters.push_back(bdata(available_configs->entry[j]));
-                }
-            }
-        }
-        if (otparameters.size() == 0)
-        {
-            for (int j = 0; j < num_params; j++)
-            {
-                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Avail Parameter %s, bdata(loop_params->entry[j]));
-            }
-            for (int j = 0; j < avail_configs; j++)
-            {
-                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Avail Configs %s, bdata(available_configs->entry[j]));
-            }
-        }
-        bstrListDestroy(loop_params);
-        bstrListDestroy(available_configs);
-        std::vector<std::string> otarguments;
-        // Add default arguments
-        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, New Onsite client (%s) User %s Pass %s URI %s Prog %s Proj %s, string, user, pass, data, prog_name, proj_name);
-
-        // Hash table empty for loop, create a new client
-        cc_config->client = new Client(data, user, pass, otarguments, otparameters, prog_name, proj_name, NULL);
-
-
-        // Add new client to hash map;
-        add_smap(cc_client_hash, string, (void*)cc_config);
+        err = _new_cclient(&cc_config, string);
     }
     else
     {
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Onsite client for %s already exists, string);
     }
+    pthread_mutex_lock(&cc_client_lock);
     // Allocate a fresh Configuration
     LoopAdaptConfiguration_t config = *configuration;
     if (!config)
