@@ -56,7 +56,14 @@ int loop_adapt_parameter_prefetcher_init()
     {
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Initializing LIKWID cpuFeatures);
         cpuFeatures_init();
-        loop_adapt_parameter_prefetcher_initialized = 1;
+        if (cpuFeatures_get(0, FEAT_HW_PREFETCHER) >= 0)
+        {
+            loop_adapt_parameter_prefetcher_initialized = 1;
+        }
+        else
+        {
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Failed to initialize LIKWID cpuFeatures);
+        }
     }
     return 0;
 }
