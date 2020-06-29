@@ -93,20 +93,22 @@ int loop_adapt_parameter_ompnumthreads_get(int instance, ParameterValue* value)
 // This function is called to get the available parameter values for validation and iterating
 int loop_adapt_parameter_ompnumthreads_avail(int instance, ParameterValueLimit* limit)
 {
-    if (instance = 0)
-    {
+//    if (instance = 0)
+//    {
         limit->type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_RANGE;
         limit->limit.range.start.type = LOOP_ADAPT_PARAMETER_TYPE_INT;
         limit->limit.range.end.type = LOOP_ADAPT_PARAMETER_TYPE_INT;
         limit->limit.range.step.type = LOOP_ADAPT_PARAMETER_TYPE_INT;
+        limit->limit.range.current.type = LOOP_ADAPT_PARAMETER_TYPE_INT;
         limit->limit.range.start.value.ival = 1;
 #pragma omp parallel
 {
         limit->limit.range.end.value.ival = omp_get_max_threads();
+        limit->limit.range.current.value.ival = omp_get_num_threads();
 }
         limit->limit.range.step.value.ival = 1;
-        limit->limit.range.current.type = LOOP_ADAPT_PARAMETER_TYPE_INVALID;
-    }
+
+//    }
     return 0;
 }
 
