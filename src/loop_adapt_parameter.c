@@ -728,8 +728,15 @@ int loop_adapt_parameter_configs(struct bstrList* configs)
             if (!err)
             {
                 char *s = loop_adapt_param_limit_str(limit);
-                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Config for %s: %s, pd->name, s);
-                free(s);
+                if (s)
+                {
+                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Config for %s: %s, pd->name, s);
+                    free(s);
+                }
+                else
+                {
+                    ERROR_PRINT(Config for %s : INVALID LIMIT, pd->name);
+                }
                 loop_adapt_parameter_config_str(pd->name, limit, configs);
                 count++;
             }
@@ -737,8 +744,15 @@ int loop_adapt_parameter_configs(struct bstrList* configs)
         else if (pd->limit.type != LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID)
         {
             char *s = loop_adapt_param_limit_str(pd->limit);
-            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Config for %s: %s, pd->name, s);
-            free(s);
+            if (s)
+            {
+                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Config for %s: %s, pd->name, s);
+                free(s);
+            }
+            else
+            {
+                ERROR_PRINT(Config for %s : INVALID LIMIT, pd->name);
+            }
             loop_adapt_parameter_config_str(pd->name, pd->limit, configs);
             count++;
         }
