@@ -694,7 +694,6 @@ static int loop_adapt_parameter_config_str(char* name, ParameterValueLimit limit
             bdestroy(c);
             free(s);
             free(e);
-            free(t);
         }
     }
     else if (limit.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_LIST)
