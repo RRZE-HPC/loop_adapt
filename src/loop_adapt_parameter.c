@@ -223,13 +223,13 @@ int loop_adapt_parameter_initialize()
         if (pd->avail)
         {
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Get limits for parameter %s for scope %s, in->name, hwloc_obj_type_string(in->scope));
-            int err = pd->avail(0, &limit);
+            int err = pd->avail(0, &pd->limit);
             if (err)
             {
                 ERROR_PRINT(Get limits for parameter %s for scope %s failed, in->name, hwloc_obj_type_string(in->scope));
             }
         }
-        _loop_adapt_add_parameter_to_tree(pd, loop_adapt_num_active_parameters, limit);
+        _loop_adapt_add_parameter_to_tree(pd, loop_adapt_num_active_parameters, pd->limit);
         loop_adapt_num_active_parameters++;
     }
     gethostname(host_name, 300);
@@ -284,9 +284,17 @@ int loop_adapt_parameter_add(char* name, LoopAdaptScope_t scope,
     }
 
     loop_adapt_copy_param_value(value, &def->value);
+    if (avail)
+    {
+        err = avail(0, &def->limit);
+    }
+    else
+    {
+        def->limit.type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID;
+    }
 
 
-    _loop_adapt_add_parameter_to_tree(def, loop_adapt_num_active_parameters, limit);
+    _loop_adapt_add_parameter_to_tree(def, loop_adapt_num_active_parameters, def->limit);
 /*    bstrListAddChar(loop_adapt_parameter_names, name);*/
     loop_adapt_num_active_parameters++;
 }
@@ -322,6 +330,7 @@ int loop_adapt_parameter_add_user(char* name, LoopAdaptScope_t scope, ParameterV
     def->set = NULL;
     def->get = NULL;
     def->avail = NULL;
+    def->limit.type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID;
     printf("Adding user parameter %s of type %s\n", def->name, loop_adapt_print_param_valuetype(def->value.type));
 
     _loop_adapt_add_parameter_to_tree(def, loop_adapt_num_active_parameters, limit);
@@ -358,9 +367,10 @@ int loop_adapt_parameter_add_user_with_limit(char* name, LoopAdaptScope_t scope,
     def->set = NULL;
     def->get = NULL;
     def->avail = NULL;
+    loop_adapt_copy_param_value_limit(limit, &def->limit);
     printf("Adding user parameter %s of type %s\n", def->name, loop_adapt_print_param_valuetype(def->value.type));
 
-    _loop_adapt_add_parameter_to_tree(def, loop_adapt_num_active_parameters, limit);
+    _loop_adapt_add_parameter_to_tree(def, loop_adapt_num_active_parameters, def->limit);
 /*    bstrListAddChar(loop_adapt_parameter_names, name);*/
     loop_adapt_num_active_parameters++;
 }
@@ -658,6 +668,39 @@ int loop_adapt_parameter_getbnames(struct bstrList* parameters)
     return 0;
 }
 
+int loop_adapt_parameter_config_str(char* name, ParameterValueLimit limit, struct bstrList* configs)
+{
+    int scount = loop_adapt_parameter_scope_count(name);
+    if (limit.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_RANGE)
+    {
+        char* s = loop_adapt_param_value_str(limit.limit.range.start);
+        char* e = loop_adapt_param_value_str(limit.limit.range.end);
+        char* t = loop_adapt_print_param_valuetype(limit.limit.range.start.type);
+        bstring c = bformat("%s[%s,%d],%s,%s,%s", name, host_name, scount, t, s, e);
+        bstrListAdd(configs, c);
+        bdestroy(c);
+        free(s);
+        free(e);
+        free(t);
+    }
+    else if (limit.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_LIST)
+    {
+        struct bstrList* plist = bstrListCreate();
+        bstring sep = bfromcstr("-");
+        for (int j = 0; j < limit.limit.list.num_values; j++)
+        {
+            char *t = loop_adapt_param_value_str(limit.limit.list.values[j]);
+            bstrListAddChar(plist, t);
+            free(t);
+        }
+        bstring p = bjoin(plist, sep);
+        bstring c = bformat("%s[%s,%d],enum,%s", name, host_name, scount, bdata(p));
+        bstrListAdd(configs, c);
+        bdestroy(p);
+        bdestroy(c);
+        bdestroy(sep);
+    }
+}
 
 int loop_adapt_parameter_configs(struct bstrList* configs)
 {
@@ -666,45 +709,20 @@ int loop_adapt_parameter_configs(struct bstrList* configs)
     for (i = 0; i < loop_adapt_num_active_parameters; i++)
     {
         ParameterDefinition* pd = &loop_adapt_active_parameters[i];
-        if (pd->avail)
+        if (pd->limit.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID && pd->avail)
         {
             ParameterValueLimit limit = DEC_NEW_INVALID_PARAM_LIMIT;
             int err = pd->avail(0, &limit);
             if (!err)
             {
-                int scount = loop_adapt_parameter_scope_count(pd->name);
-                if (limit.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_RANGE)
-                {
-                    char* s = loop_adapt_param_value_str(limit.limit.range.start);
-                    char* e = loop_adapt_param_value_str(limit.limit.range.end);
-                    char* t = loop_adapt_print_param_valuetype(limit.limit.range.start.type);
-                    bstring c = bformat("%s[%s,%d],%s,%s,%s", pd->name, host_name, scount, t, s, e);
-                    bstrListAdd(configs, c);
-                    bdestroy(c);
-                    free(s);
-                    free(e);
-                    free(t);
-                    count++;
-                }
-                else if (limit.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_LIST)
-                {
-                    struct bstrList* plist = bstrListCreate();
-                    bstring sep = bfromcstr("-");
-                    for (int j = 0; j < limit.limit.list.num_values; j++)
-                    {
-                        char *t = loop_adapt_param_value_str(limit.limit.list.values[j]);
-                        bstrListAddChar(plist, t);
-                        free(t);
-                    }
-                    bstring p = bjoin(plist, sep);
-                    bstring c = bformat("%s[%s,%d],enum,%s", pd->name, host_name, scount, bdata(p));
-                    bstrListAdd(configs, c);
-                    bdestroy(p);
-                    bdestroy(c);
-                    bdestroy(sep);
-                    count++;
-                }
+                loop_adapt_parameter_config_str(pd->name, limit, configs);
+                count++;
             }
+        }
+        else
+        {
+            loop_adapt_parameter_config_str(pd->name, pd->limit, configs);
+            count++;
         }
     }
     return count;

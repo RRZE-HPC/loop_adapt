@@ -55,6 +55,7 @@ typedef struct {
     char* name;
     LoopAdaptScope_t scope;
     ParameterValue value;
+    ParameterValueLimit limit;
     parameter_init_function init;
     parameter_set_function set;
     parameter_get_function get;
