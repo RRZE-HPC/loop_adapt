@@ -152,7 +152,7 @@ int _new_cclient(CCConfig ** cc_client, char* string)
     {
         for (j = 0; j < avail_configs; j++)
         {
-            if (bstrncmp(loop_params->entry[i], available_configs->entry[j], blength(loop_params->entry[i])) == BSTR_OK)
+            if (bstrncmp(loop_params->entry[i], available_configs->entry[j], blength(loop_params->entry[i])-2) == BSTR_OK)
             {
                 DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Parameter %s, bdata(available_configs->entry[j]));
                 otparameters.push_back(bdata(available_configs->entry[j]));
@@ -210,7 +210,7 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
     {
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Onsite client for %s already exists, string);
     }
-    pthread_mutex_lock(&cc_client_lock);
+    pthread_mutex_unlock(&cc_client_lock);
     // Allocate a fresh Configuration
     LoopAdaptConfiguration_t config = *configuration;
     if (!config)
