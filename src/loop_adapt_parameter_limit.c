@@ -286,9 +286,17 @@ int loop_adapt_copy_param_value_limit(ParameterValueLimit in, ParameterValueLimi
                 {
                     loop_adapt_copy_param_value(in.limit.range.step, &out->limit.range.step);
                 }
+                else
+                {
+                    out->limit.range.step.type = LOOP_ADAPT_PARAMETER_TYPE_INVALID;
+                }
                 if (in.limit.range.current.type != LOOP_ADAPT_PARAMETER_TYPE_INVALID)
                 {
                     loop_adapt_copy_param_value(in.limit.range.current, &out->limit.range.current);
+                }
+                else
+                {
+                    out->limit.range.current.type = LOOP_ADAPT_PARAMETER_TYPE_INVALID;
                 }
                 break;
             case LOOP_ADAPT_PARAMETER_LIMIT_TYPE_LIST:
