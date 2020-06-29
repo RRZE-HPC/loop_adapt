@@ -688,7 +688,7 @@ static int loop_adapt_parameter_config_str(char* name, ParameterValueLimit limit
         char* t = loop_adapt_print_param_valuetype(limit.limit.range.start.type);
         if (s && e && t)
         {
-            bstring c = bformat("%s[%s,%d],%s,%s,%s", name, host_name, scount, t, s, e);
+            bstring c = bformat("%s[%s:%d],%s,%s,%s", name, host_name, scount, t, s, e);
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Config for %s: %s, name, bdata(c));
             bstrListAdd(configs, c);
             bdestroy(c);
@@ -707,7 +707,7 @@ static int loop_adapt_parameter_config_str(char* name, ParameterValueLimit limit
             free(t);
         }
         bstring p = bjoin(plist, sep);
-        bstring c = bformat("%s[%s,%d],enum,%s", name, host_name, scount, bdata(p));
+        bstring c = bformat("%s[%s:%d],enum,%s", name, host_name, scount, bdata(p));
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Config for %s: %s, name, bdata(c));
         bstrListAdd(configs, c);
         bdestroy(p);
