@@ -248,7 +248,7 @@ int loop_adapt_parameter_add(char* name, LoopAdaptScope_t scope,
     ParameterDefinition* def = realloc(loop_adapt_active_parameters, (loop_adapt_num_active_parameters+1)*sizeof(ParameterDefinition));
     if (!def)
     {
-        fprintf(stderr, "Failed to extend list of active parameters\n");
+        ERROR_PRINT(Failed to extend list of active parameters);
         return -1;
     }
     loop_adapt_active_parameters = def;
@@ -308,7 +308,7 @@ int loop_adapt_parameter_add_user(char* name, LoopAdaptScope_t scope, ParameterV
     ParameterDefinition* def = realloc(loop_adapt_active_parameters, (loop_adapt_num_active_parameters+1)*sizeof(ParameterDefinition));
     if (!def)
     {
-        ERROR_PRINT(Failed to extend list of active parameters)
+        ERROR_PRINT(Failed to extend list of active parameters);
         return -1;
     }
     loop_adapt_active_parameters = def;
@@ -321,6 +321,10 @@ int loop_adapt_parameter_add_user(char* name, LoopAdaptScope_t scope, ParameterV
         {
             def->name[err] = '\0';
         }
+    }
+    else
+    {
+        ERROR_PRINT(Failed to allocate space for parameter name %s, name);
     }
     def->scope = scope;
 
@@ -331,11 +335,12 @@ int loop_adapt_parameter_add_user(char* name, LoopAdaptScope_t scope, ParameterV
     def->get = NULL;
     def->avail = NULL;
     def->limit.type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID;
-    printf("Adding user parameter %s of type %s\n", def->name, loop_adapt_print_param_valuetype(def->value.type));
 
+    DEBUG_PRINT(Adding user parameter %s of type %s, def->name, loop_adapt_print_param_valuetype(def->value.type));
     _loop_adapt_add_parameter_to_tree(def, loop_adapt_num_active_parameters, limit);
 /*    bstrListAddChar(loop_adapt_parameter_names, name);*/
     loop_adapt_num_active_parameters++;
+    return 0;
 }
 
 int loop_adapt_parameter_add_user_with_limit(char* name, LoopAdaptScope_t scope, ParameterValue value, ParameterValueLimit limit)
@@ -345,7 +350,7 @@ int loop_adapt_parameter_add_user_with_limit(char* name, LoopAdaptScope_t scope,
     ParameterDefinition* def = realloc(loop_adapt_active_parameters, (loop_adapt_num_active_parameters+1)*sizeof(ParameterDefinition));
     if (!def)
     {
-        fprintf(stderr, "Failed to extend list of active parameters\n");
+        ERROR_PRINT(Failed to extend list of active parameters);
         return -1;
     }
     loop_adapt_active_parameters = def;
@@ -359,6 +364,10 @@ int loop_adapt_parameter_add_user_with_limit(char* name, LoopAdaptScope_t scope,
             def->name[err] = '\0';
         }
     }
+    else
+    {
+        ERROR_PRINT(Failed to allocate space for parameter name %s, name);
+    }
     def->scope = scope;
 
     def->user = 1;
@@ -368,11 +377,12 @@ int loop_adapt_parameter_add_user_with_limit(char* name, LoopAdaptScope_t scope,
     def->get = NULL;
     def->avail = NULL;
     loop_adapt_copy_param_value_limit(limit, &def->limit);
-    printf("Adding user parameter %s of type %s\n", def->name, loop_adapt_print_param_valuetype(def->value.type));
+    DEBUG_PRINT(Adding user parameter %s of type %s, def->name, loop_adapt_print_param_valuetype(def->value.type));
 
     _loop_adapt_add_parameter_to_tree(def, loop_adapt_num_active_parameters, def->limit);
 /*    bstrListAddChar(loop_adapt_parameter_names, name);*/
     loop_adapt_num_active_parameters++;
+    return 0;
 }
 
 ParameterValueType_t loop_adapt_parameter_type(char* name)
@@ -724,13 +734,17 @@ int loop_adapt_parameter_configs(struct bstrList* configs)
                 count++;
             }
         }
-        else
+        else if (pd->limit.type != LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID)
         {
             char *s = loop_adapt_param_limit_str(pd->limit);
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Config for %s: %s, pd->name, s);
             free(s);
             loop_adapt_parameter_config_str(pd->name, pd->limit, configs);
             count++;
+        }
+        else
+        {
+            ERROR_PRINT(Parameter %s has invalid limit type, pd->name);
         }
     }
     return count;
