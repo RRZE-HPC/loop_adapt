@@ -10,7 +10,7 @@
 #include <cppconn/statement.h>
 #include <cppconn/prepared_statement.h>
 #include <loop_adapt_configuration_cc_client_base.hpp>
-#include <loop_adapt_threads.h>
+
 
 
 
@@ -36,6 +36,7 @@ extern "C"
 #include <loop_adapt_threads.h>
 #include <loop_adapt_parameter.h>
 #include <loop_adapt_parameter_value.h>
+//#include <loop_adapt_threads.h>
 #include <errno.h>
 }
 
