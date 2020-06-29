@@ -308,7 +308,7 @@ int loop_adapt_parameter_add_user(char* name, LoopAdaptScope_t scope, ParameterV
     ParameterDefinition* def = realloc(loop_adapt_active_parameters, (loop_adapt_num_active_parameters+1)*sizeof(ParameterDefinition));
     if (!def)
     {
-        fprintf(stderr, "Failed to extend list of active parameters\n");
+        ERROR_PRINT(Failed to extend list of active parameters)
         return -1;
     }
     loop_adapt_active_parameters = def;
@@ -668,7 +668,7 @@ int loop_adapt_parameter_getbnames(struct bstrList* parameters)
     return 0;
 }
 
-int loop_adapt_parameter_config_str(char* name, ParameterValueLimit limit, struct bstrList* configs)
+static int loop_adapt_parameter_config_str(char* name, ParameterValueLimit limit, struct bstrList* configs)
 {
     int scount = loop_adapt_parameter_scope_count(name);
     if (limit.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_RANGE)
@@ -699,7 +699,9 @@ int loop_adapt_parameter_config_str(char* name, ParameterValueLimit limit, struc
         bdestroy(p);
         bdestroy(c);
         bdestroy(sep);
+        bstrListDestroy(plist);
     }
+    return 0;
 }
 
 int loop_adapt_parameter_configs(struct bstrList* configs)
@@ -715,12 +717,18 @@ int loop_adapt_parameter_configs(struct bstrList* configs)
             int err = pd->avail(0, &limit);
             if (!err)
             {
+                char *s = loop_adapt_param_limit_str(limit);
+                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Config for %s: %s, pd->name, s);
+                free(s);
                 loop_adapt_parameter_config_str(pd->name, limit, configs);
                 count++;
             }
         }
         else
         {
+            char *s = loop_adapt_param_limit_str(limit);
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Config for %s: %s, pd->name, s);
+            free(s);
             loop_adapt_parameter_config_str(pd->name, pd->limit, configs);
             count++;
         }
