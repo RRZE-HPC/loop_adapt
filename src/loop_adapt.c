@@ -456,7 +456,7 @@ int loop_adapt_get_loop_parameter(char* string, struct bstrList* parameters)
             }
         }
     }
-    return 0;
+    return parameters->qty;
 }
 
 // internal use only
