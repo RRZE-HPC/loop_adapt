@@ -84,6 +84,7 @@ static int _loop_adapt_copy_parameter_definition(ParameterDefinition* in, Parame
         out->avail = in->avail;
         out->finalize = in->finalize;
         loop_adapt_copy_param_value(in->value, &out->value);
+        loop_adapt_copy_param_value_limit(in->limit, &out->limit);
         return 0;
     }
     return -1;
@@ -198,13 +199,13 @@ int loop_adapt_parameter_initialize()
         ParameterDefinition* in = &loop_adapt_parameter_list[j];
         ParameterDefinition* out = &loop_adapt_active_parameters[j];
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Active parameter %s for scope %s, in->name, hwloc_obj_type_string(in->scope));
-        _loop_adapt_copy_parameter_definition(in, out);
+
 
         pd = &loop_adapt_active_parameters[loop_adapt_num_active_parameters];
-        if (pd->init)
+        if (in->init)
         {
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Initializing parameter %s for scope %s, in->name, hwloc_obj_type_string(in->scope));
-            int err = pd->init();
+            int err = in->init();
             if (err)
             {
                 ERROR_PRINT(Initializing parameter %s for scope %s failed: %d, in->name, hwloc_obj_type_string(in->scope), err);
@@ -220,15 +221,16 @@ int loop_adapt_parameter_initialize()
         //     }
         //     loop_adapt_print_param_value(pd->value);
         // }
-        if (pd->avail)
+        if (in->avail)
         {
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Get limits for parameter %s for scope %s, in->name, hwloc_obj_type_string(in->scope));
-            int err = pd->avail(0, &pd->limit);
+            int err = in->avail(0, &in->limit);
             if (err)
             {
                 ERROR_PRINT(Get limits for parameter %s for scope %s failed, in->name, hwloc_obj_type_string(in->scope));
             }
         }
+        _loop_adapt_copy_parameter_definition(in, out);
         _loop_adapt_add_parameter_to_tree(pd, loop_adapt_num_active_parameters, pd->limit);
         loop_adapt_num_active_parameters++;
     }
