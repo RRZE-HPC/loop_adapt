@@ -263,11 +263,11 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
             bdestroy(bparam);
         }
 
-        if (cc_config->current)
-        {
-            // We don't need the last configuration anymore, so destroy it.
-            loop_adapt_configuration_destroy_config(cc_config->current);
-        }
+//        if (cc_config->current)
+//        {
+//            // We don't need the last configuration anymore, so destroy it.
+//            loop_adapt_configuration_destroy_config(cc_config->current);
+//        }
         // Update current configuration for easy access later
         config->configuration_id = config_id;
         cc_config->current = config;
