@@ -22,7 +22,7 @@ typedef enum {
 extern LoopAdaptDebugLevel loop_adapt_verbosity;
 
 #define ERROR_PRINT(fmt, ...) \
-   fprintf(stderr, "ERROR - [%s:%s:%d] %s.\n" error_h_str(fmt) "\n", __FILE__, __func__, __LINE__, strerror(errno), ##__VA_ARGS__); \
+   fprintf(stderr, "ERROR - [%s:%s:%d] " error_h_str(fmt) "\n", __FILE__, __func__, __LINE__, strerror(errno), ##__VA_ARGS__); \
    fflush(stdout);
 
 #define WARN_PRINT(fmt, ...)  \

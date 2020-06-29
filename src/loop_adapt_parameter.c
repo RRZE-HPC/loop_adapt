@@ -226,7 +226,7 @@ int loop_adapt_parameter_initialize()
             int err = pd->avail(0, &limit);
             if (err)
             {
-                ERROR_PRINT(Get limits for parameter %s for scope %s failed: %d, in->name, hwloc_obj_type_string(in->scope), err);
+                ERROR_PRINT(Get limits for parameter %s for scope %s failed, in->name, hwloc_obj_type_string(in->scope));
             }
         }
         _loop_adapt_add_parameter_to_tree(pd, loop_adapt_num_active_parameters, limit);

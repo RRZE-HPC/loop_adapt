@@ -39,8 +39,15 @@ int loop_adapt_parameter_uncorefrequency_init()
     {
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Initializing Uncore frequency backend)
         topology_init();
-        freq_init();
-        loop_adapt_parameter_uncorefrequency_initialized = 1;
+        if (freq_init() == 0)
+        {
+            loop_adapt_parameter_uncorefrequency_initialized = 1;
+        }
+        else
+        {
+            topology_finalize();
+            return 1;
+        }
     }
     return 0;
 }
