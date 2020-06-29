@@ -672,13 +672,13 @@ int loop_adapt_parameter_configs(struct bstrList* configs)
             int err = pd->avail(0, &limit);
             if (!err)
             {
+                int scount = loop_adapt_parameter_scope_count(pd->name);
                 if (limit.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_RANGE)
                 {
                     char* s = loop_adapt_param_value_str(limit.limit.range.start);
                     char* e = loop_adapt_param_value_str(limit.limit.range.end);
                     char* t = loop_adapt_print_param_valuetype(limit.limit.range.start.type);
-                    int count = loop_adapt_parameter_scope_count(pd->name);
-                    bstring c = bformat("%s[%s,%d],%s,%s,%s", pd->name, host_name, count, t, s, e);
+                    bstring c = bformat("%s[%s,%d],%s,%s,%s", pd->name, host_name, scount, t, s, e);
                     bstrListAdd(configs, c);
                     bdestroy(c);
                     free(s);
@@ -689,6 +689,21 @@ int loop_adapt_parameter_configs(struct bstrList* configs)
                 else if (limit.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_LIST)
                 {
                     ERROR_PRINT(Parameter limit (list) not supported by loop_adapt_parameter_configs);
+                    struct bstrList* plist = bstrListCreate();
+                    bstring sep = bfromcstr("-");
+                    for (int j = 0; j < limit.limit.list.num_values; j++)
+                    {
+                        char *t = loop_adapt_param_value_str(limit.limit.list.values[j]);
+                        bstrListAddChar(plist, t);
+                        free(t);
+                    }
+                    bstring p = bjoin(plist, sep);
+                    bstring c = bformat("%s[%s,%d],enum,%s", pd->name, host_name, scount, bdata(p));
+                    bstrListAdd(configs, c);
+                    bdestroy(p);
+                    bdestroy(c);
+                    bdestroy(sep);
+                    count++;
                 }
             }
         }
