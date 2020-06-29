@@ -596,6 +596,7 @@ static int loop_adapt_handle_thread_start(LoopData_t loop, ThreadData_t thread)
         for (i = 0; i < loopthread->config->num_parameters; i++)
         {
             LoopAdaptConfigurationParameter* cp = &loopthread->config->parameters[i];
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, ConfigParam %d %s %d %d, i, bdata(cp->parameter), cp->num_values, thread->thread < cp->num_values);
             if (cp->num_values > 1 && thread->thread < cp->num_values)
             {
                 loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[thread->thread]);
