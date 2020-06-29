@@ -686,12 +686,16 @@ static int loop_adapt_parameter_config_str(char* name, ParameterValueLimit limit
         char* s = loop_adapt_param_value_str(limit.limit.range.start);
         char* e = loop_adapt_param_value_str(limit.limit.range.end);
         char* t = loop_adapt_print_param_valuetype(limit.limit.range.start.type);
-        bstring c = bformat("%s[%s,%d],%s,%s,%s", name, host_name, scount, t, s, e);
-        bstrListAdd(configs, c);
-        bdestroy(c);
-        free(s);
-        free(e);
-        free(t);
+        if (s && e && t)
+        {
+            bstring c = bformat("%s[%s,%d],%s,%s,%s", name, host_name, scount, t, s, e);
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Config for %s: %s, name, bdata(c));
+            bstrListAdd(configs, c);
+            bdestroy(c);
+            free(s);
+            free(e);
+            free(t);
+        }
     }
     else if (limit.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_LIST)
     {
@@ -705,6 +709,7 @@ static int loop_adapt_parameter_config_str(char* name, ParameterValueLimit limit
         }
         bstring p = bjoin(plist, sep);
         bstring c = bformat("%s[%s,%d],enum,%s", name, host_name, scount, bdata(p));
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Config for %s: %s, name, bdata(c));
         bstrListAdd(configs, c);
         bdestroy(p);
         bdestroy(c);
@@ -721,6 +726,7 @@ int loop_adapt_parameter_configs(struct bstrList* configs)
     for (i = 0; i < loop_adapt_num_active_parameters; i++)
     {
         ParameterDefinition* pd = &loop_adapt_active_parameters[i];
+        printf("%d %p\n", i, pd);
         if (pd->limit.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID && pd->avail)
         {
             ParameterValueLimit limit = DEC_NEW_INVALID_PARAM_LIMIT;
@@ -732,13 +738,13 @@ int loop_adapt_parameter_configs(struct bstrList* configs)
                 {
                     DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Config for %s: %s, pd->name, s);
                     free(s);
+                    loop_adapt_parameter_config_str(pd->name, limit, configs);
+                    count++;
                 }
                 else
                 {
                     ERROR_PRINT(Config for %s : INVALID LIMIT, pd->name);
                 }
-                loop_adapt_parameter_config_str(pd->name, limit, configs);
-                count++;
             }
         }
         else if (pd->limit.type != LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID)
@@ -748,13 +754,14 @@ int loop_adapt_parameter_configs(struct bstrList* configs)
             {
                 DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Config for %s: %s, pd->name, s);
                 free(s);
+                loop_adapt_parameter_config_str(pd->name, pd->limit, configs);
+                count++;
             }
             else
             {
                 ERROR_PRINT(Config for %s : INVALID LIMIT, pd->name);
             }
-            loop_adapt_parameter_config_str(pd->name, pd->limit, configs);
-            count++;
+
         }
         else
         {
