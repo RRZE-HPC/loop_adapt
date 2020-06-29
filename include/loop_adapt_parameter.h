@@ -35,4 +35,8 @@ int loop_adapt_parameter_loop_best(ThreadData_t thread, ParameterValue v);
 
 void loop_adapt_parameter_finalize();
 
+// internal use
+bstring loop_adapt_parameter_str_long(bstring name);
+
+
 #endif /* LOOP_ADAPT_PARAMETER_H */

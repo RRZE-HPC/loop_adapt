@@ -230,7 +230,9 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
         for (i = 0; i < param_names->qty; i++)
         {
             // This here will be tricky because not all parameters will be int;
-            std::string param = cc_config->client->getConfigAt(bdata(param_names->entry[i]));
+            bstring s = loop_adapt_parameter_str_long(param_names->entry[i]);
+            std::string param = cc_config->client->getConfigAt(bdata(s));
+            bdestroy(s);
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Received %s, param);
             // add param to config;
             bstring bparam = bfromcstr(param.c_str());

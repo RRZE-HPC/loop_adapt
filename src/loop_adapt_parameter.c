@@ -718,6 +718,12 @@ static int loop_adapt_parameter_config_str(char* name, ParameterValueLimit limit
     return 0;
 }
 
+bstring loop_adapt_parameter_str_long(bstring name)
+{
+    int scount = loop_adapt_parameter_scope_count(name);
+    return bformat("%s[%s:%d]", bdata(name), host_name, scount);
+}
+
 int loop_adapt_parameter_configs(struct bstrList* configs)
 {
     int i = 0;
