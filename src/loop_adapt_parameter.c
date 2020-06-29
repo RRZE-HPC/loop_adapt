@@ -688,7 +688,6 @@ int loop_adapt_parameter_configs(struct bstrList* configs)
                 }
                 else if (limit.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_LIST)
                 {
-                    ERROR_PRINT(Parameter limit (list) not supported by loop_adapt_parameter_configs);
                     struct bstrList* plist = bstrListCreate();
                     bstring sep = bfromcstr("-");
                     for (int j = 0; j < limit.limit.list.num_values; j++)
