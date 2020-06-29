@@ -101,6 +101,7 @@ int loop_adapt_configuration_resize_config(LoopAdaptConfiguration_t *configurati
         config = malloc(sizeof(LoopAdaptConfiguration));
         memset(config, 0, sizeof(LoopAdaptConfiguration));
         config->parameters = NULL;
+        config->configuration_id = -1;
     }
     if (config && num_parameters > 0)
     {
@@ -297,4 +298,3 @@ int loop_adapt_config_parse_default_entry(bstring b, bstring* first, bstring* se
     }
     return 0;
 }
-
