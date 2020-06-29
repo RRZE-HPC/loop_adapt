@@ -210,12 +210,11 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
     {
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Onsite client for %s already exists, string);
     }
-    pthread_mutex_unlock(&cc_client_lock);
+
     // Allocate a fresh Configuration
     LoopAdaptConfiguration_t config = *configuration;
     if (!config)
         config = (LoopAdaptConfiguration_t) malloc(sizeof(LoopAdaptConfiguration));
-
 
     // Get all parameter names
     struct bstrList *param_names = bstrListCreate();
@@ -223,40 +222,49 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
     DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Resize config to %d, param_names->qty);
     loop_adapt_configuration_resize_config(configuration, param_names->qty);
 
-    cc_config->client->nextConfig();
-
-    // We check for all available parameters whether the client has some values for
-    for (i = 0; i < param_names->qty; i++)
+    if (config->configuration_id != config_id)
     {
-        // This here will be tricky because not all parameters will be int;
-        std::string param = cc_config->client->getConfigAt(bdata(param_names->entry[i]));
-        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Received %s, param);
-        // add param to config;
-        bstring bparam = bfromcstr(param.c_str());
-        struct bstrList* tmp = bsplit(bparam, ',');
-        ParameterValueType_t type = loop_adapt_parameter_type(bdata(tmp->entry[0]));
-        ParameterValue paramvalue = loop_adapt_new_param_value(type);
-        loop_adapt_parse_param_value(bdata(tmp->entry[1]), type, &paramvalue);
+        cc_config->client->nextConfig();
 
-        for (int j = 0; j < loop_adapt_threads_get_count(); j++)
+        // We check for all available parameters whether the client has some values for
+        for (i = 0; i < param_names->qty; i++)
         {
-            ThreadData_t t = loop_adapt_threads_getthread(j);
-            loop_adapt_parameter_set(t, bdata(tmp->entry[0]), paramvalue);
-        }
-        loop_adapt_destroy_param_value(paramvalue);
-        bstrListDestroy(tmp);
-        bdestroy(bparam);
-    }
+            // This here will be tricky because not all parameters will be int;
+            std::string param = cc_config->client->getConfigAt(bdata(param_names->entry[i]));
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Received %s, param);
+            // add param to config;
+            bstring bparam = bfromcstr(param.c_str());
+            struct bstrList* tmp = bsplit(bparam, ',');
+            ParameterValueType_t type = loop_adapt_parameter_type(bdata(tmp->entry[0]));
+            ParameterValue paramvalue = loop_adapt_new_param_value(type);
+            loop_adapt_parse_param_value(bdata(tmp->entry[1]), type, &paramvalue);
 
-    if (cc_config->current)
-    {
-        // We don't need the last configuration anymore, so destroy it.
-        loop_adapt_configuration_destroy_config(cc_config->current);
+            for (int j = 0; j < loop_adapt_threads_get_count(); j++)
+            {
+                ThreadData_t t = loop_adapt_threads_getthread(j);
+                loop_adapt_parameter_set(t, bdata(tmp->entry[0]), paramvalue);
+            }
+            loop_adapt_destroy_param_value(paramvalue);
+            bstrListDestroy(tmp);
+            bdestroy(bparam);
+        }
+
+        if (cc_config->current)
+        {
+            // We don't need the last configuration anymore, so destroy it.
+            loop_adapt_configuration_destroy_config(cc_config->current);
+        }
+        // Update current configuration for easy access later
+        config->configuration_id = config_id;
+        cc_config->current = config;
+        bstrListDestroy(param_names);
+        *configuration = config;
     }
-    // Update current configuration for easy access later
-    cc_config->current = config;
-    bstrListDestroy(param_names);
-    *configuration = config;
+    else
+    {
+        *configuration = cc_config->current;
+    }
+    pthread_mutex_unlock(&cc_client_lock);
     return 0;
 }
 
