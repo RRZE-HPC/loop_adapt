@@ -145,10 +145,11 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
             return -ENOMEM;
         }
         cc_config->current = NULL;
-
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, New Onsite client (%s), string);
         // Create an empry list of strings
         struct bstrList* loop_params = bstrListCreate();
         int num_params = loop_adapt_get_loop_parameter(string, loop_params);
+
 
         struct bstrList* available_configs = bstrListCreate();
         int avail_configs = loop_adapt_parameter_configs(available_configs);
@@ -160,14 +161,27 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
             {
                 if (bstrncmp(loop_params->entry[i], available_configs->entry[j], blength(loop_params->entry[i])) == BSTR_OK)
                 {
+                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Parameter %s, bdata(available_configs->entry[j]));
                     otparameters.push_back(bdata(available_configs->entry[j]));
                 }
+            }
+        }
+        if (otparameters.size() == 0)
+        {
+            for (int j = 0; j < num_params; j++)
+            {
+                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Avail Parameter %s, bdata(loop_params->entry[j]));
+            }
+            for (int j = 0; j < avail_configs; j++)
+            {
+                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Avail Configs %s, bdata(available_configs->entry[j]));
             }
         }
         bstrListDestroy(loop_params);
         bstrListDestroy(available_configs);
         std::vector<std::string> otarguments;
         // Add default arguments
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, New Onsite client (%s) User %s Pass %s URI %s Prog %s Proj %s, string, user, pass, data, prog_name, proj_name);
 
         // Hash table empty for loop, create a new client
         cc_config->client = new Client(data, user, pass, otarguments, otparameters, prog_name, proj_name, NULL);
@@ -175,6 +189,10 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
 
         // Add new client to hash map;
         add_smap(cc_client_hash, string, (void*)cc_config);
+    }
+    else
+    {
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Onsite client for %s already exists, string);
     }
     // Allocate a fresh Configuration
     LoopAdaptConfiguration_t config = *configuration;
@@ -185,7 +203,7 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
     // Get all parameter names
     struct bstrList *param_names = bstrListCreate();
     loop_adapt_get_loop_parameter(string, param_names);
-
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Resize config to %d, param_names->qty);
     loop_adapt_configuration_resize_config(configuration, param_names->qty);
 
     cc_config->client->nextConfig();
@@ -195,6 +213,7 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
     {
         // This here will be tricky because not all parameters will be int;
         std::string param = cc_config->client->getConfigAt(bdata(param_names->entry[i]));
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Received %s, param);
         // add param to config;
         bstring bparam = bfromcstr(param.c_str());
         struct bstrList* tmp = bsplit(bparam, ',');
