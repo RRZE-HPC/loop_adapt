@@ -215,7 +215,10 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
     // Allocate a fresh Configuration
     LoopAdaptConfiguration_t config = *configuration;
     if (!config)
+    {
         config = (LoopAdaptConfiguration_t) malloc(sizeof(LoopAdaptConfiguration));
+        memset(config, 0, sizeof(LoopAdaptConfiguration));
+    }
 
     // Get all parameter names
     struct bstrList *param_names = bstrListCreate();
