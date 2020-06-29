@@ -86,6 +86,9 @@ char* loop_adapt_param_limit_str(ParameterValueLimit l)
                 if (t1 && t2 && t3)
                 {
                     ret = snprintf(s, slen-1, "%s -> %s (%s)", t1, t2, t3);
+                    free(t1);
+                    free(t2);
+                    free(t3);
                 }
                 break;
             case LOOP_ADAPT_PARAMETER_LIMIT_TYPE_LIST:
