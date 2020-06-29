@@ -130,6 +130,7 @@ int loop_adapt_new_loop_end(char* string);
 #define LA_USE_LOOP_POLICY(name, policy)
 
 #define LA_NEW_INT_PARAMETER(name, scope, type)
+#define LA_NEW_INT_PARAMETER_RANGE(name, scope, value, start, end)
 #define LA_GET_INT_PARAMETER(name, x)
 #define LA_SET_INT_PARAMETER(name, x)
 
