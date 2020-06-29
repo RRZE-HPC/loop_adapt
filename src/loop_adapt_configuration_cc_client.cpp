@@ -218,6 +218,7 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
     {
         config = (LoopAdaptConfiguration_t) malloc(sizeof(LoopAdaptConfiguration));
         memset(config, 0, sizeof(LoopAdaptConfiguration));
+        config->configuration_id = -1;
         *configuration = config;
     }
 
