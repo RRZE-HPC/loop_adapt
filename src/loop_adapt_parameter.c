@@ -516,6 +516,7 @@ int loop_adapt_parameter_set(ThreadData_t thread, char* parameter, ParameterValu
     {
         return -EINVAL;
     }
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Trying to set parameter %s for thread %d, parameter, thread->thread);
     for (int s = 0; s < LOOP_ADAPT_NUM_SCOPES; s++)
     {
         if (thread->scopeOffsets[s] < 0) continue;

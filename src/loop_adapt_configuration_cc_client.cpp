@@ -241,6 +241,9 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
             ParameterValueType_t type = loop_adapt_parameter_type(bdata(param_names->entry[i]));
             ParameterValue paramvalue = loop_adapt_new_param_value(type);
             loop_adapt_parse_param_value(bdata(bparam), type, &paramvalue);
+            char *x = loop_adapt_param_value_str(paramvalue);
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Param value %s, x);
+            free(x);
 
             for (int j = 0; j < loop_adapt_threads_get_count(); j++)
             {
