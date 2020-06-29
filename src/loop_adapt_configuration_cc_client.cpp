@@ -223,7 +223,7 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
     // Get all parameter names
     struct bstrList *param_names = bstrListCreate();
     loop_adapt_get_loop_parameter(string, param_names);
-    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Resize config to %d, param_names->qty);
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Resize config %d to %d, config_id, param_names->qty);
     loop_adapt_configuration_resize_config(configuration, param_names->qty);
 
     if (config->configuration_id != config_id)
@@ -247,11 +247,17 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
             char *x = loop_adapt_param_value_str(paramvalue);
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Param value %s, x);
             free(x);
+            config->parameters[i].parameter = bstrcpy(param_names->entry[i]);
+            config->parameters[i].type = type;
+            config->parameters[i].num_values = loop_adapt_threads_get_count();
+            config->parameters[i].values = (ParameterValue*)malloc(loop_adapt_threads_get_count()*sizeof(ParameterValue));
 
-            for (int j = 0; j < loop_adapt_threads_get_count(); j++)
+
+            for (int j = 0; j < config->parameters[i].num_values; j++)
             {
-                ThreadData_t t = loop_adapt_threads_getthread(j);
-                loop_adapt_parameter_set(t, bdata(param_names->entry[i]), paramvalue);
+//                ThreadData_t t = loop_adapt_threads_getthread(j);
+//                loop_adapt_parameter_set(t, bdata(param_names->entry[i]), paramvalue);
+                loop_adapt_copy_param_value(paramvalue, &config->parameters[i].values[j]);
             }
             loop_adapt_destroy_param_value(paramvalue);
             bdestroy(bparam);
