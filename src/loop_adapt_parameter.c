@@ -336,7 +336,7 @@ int loop_adapt_parameter_add_user(char* name, LoopAdaptScope_t scope, ParameterV
     def->avail = NULL;
     def->limit.type = LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID;
 
-    DEBUG_PRINT(Adding user parameter %s of type %s, def->name, loop_adapt_print_param_valuetype(def->value.type));
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Adding user parameter %s of type %s, def->name, loop_adapt_print_param_valuetype(def->value.type));
     _loop_adapt_add_parameter_to_tree(def, loop_adapt_num_active_parameters, limit);
 /*    bstrListAddChar(loop_adapt_parameter_names, name);*/
     loop_adapt_num_active_parameters++;
@@ -377,7 +377,7 @@ int loop_adapt_parameter_add_user_with_limit(char* name, LoopAdaptScope_t scope,
     def->get = NULL;
     def->avail = NULL;
     loop_adapt_copy_param_value_limit(limit, &def->limit);
-    DEBUG_PRINT(Adding user parameter %s of type %s, def->name, loop_adapt_print_param_valuetype(def->value.type));
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Adding user parameter %s of type %s, def->name, loop_adapt_print_param_valuetype(def->value.type));
 
     _loop_adapt_add_parameter_to_tree(def, loop_adapt_num_active_parameters, def->limit);
 /*    bstrListAddChar(loop_adapt_parameter_names, name);*/
