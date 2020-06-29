@@ -174,7 +174,7 @@ int _new_cclient(CCConfig ** cc_client, char* string)
     bstrListDestroy(available_configs);
     std::vector<std::string> otarguments;
     // Add default arguments
-    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, New Onsite client (%s) User %s Pass %s URI %s Prog %s Proj %s, string, user, pass, data, prog_name, proj_name);
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, New Onsite client (%s) User %s Pass %s URI %s Prog %s Proj %s, string, user, pass, data, prog_name, string);
 
     // Hash table empty for loop, create a new client
     cc_config->client = new Client(data, user, pass, otarguments, otparameters, prog_name, proj_name, NULL);
@@ -237,18 +237,16 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Received %s, param.c_str());
             // add param to config;
             bstring bparam = bfromcstr(param.c_str());
-            struct bstrList* tmp = bsplit(bparam, ',');
-            ParameterValueType_t type = loop_adapt_parameter_type(bdata(tmp->entry[0]));
+            ParameterValueType_t type = loop_adapt_parameter_type(bdata(param_names->entry[i]));
             ParameterValue paramvalue = loop_adapt_new_param_value(type);
-            loop_adapt_parse_param_value(bdata(tmp->entry[1]), type, &paramvalue);
+            loop_adapt_parse_param_value(bdata(bparam), type, &paramvalue);
 
             for (int j = 0; j < loop_adapt_threads_get_count(); j++)
             {
                 ThreadData_t t = loop_adapt_threads_getthread(j);
-                loop_adapt_parameter_set(t, bdata(tmp->entry[0]), paramvalue);
+                loop_adapt_parameter_set(t, bdata(param_names->entry[i]), paramvalue);
             }
             loop_adapt_destroy_param_value(paramvalue);
-            bstrListDestroy(tmp);
             bdestroy(bparam);
         }
 
