@@ -45,6 +45,7 @@ int loop_adapt_parameter_uncorefrequency_init()
         }
         else
         {
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Initializing Uncore frequency backend failed)
             topology_finalize();
             return 1;
         }
