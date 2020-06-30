@@ -247,8 +247,11 @@ int loop_adapt_write_configuration_results(ThreadData_t thread, char* loopname, 
         if (thread->mpirank == 0)
         {
 #endif
-            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling write function of output backend);
-            return loop_adapt_configuration_funcs_output->write(thread, loopname, policy, config, num_results, results);
+            if (thread->thread == 0)
+            {
+                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling write function of output backend);
+                return loop_adapt_configuration_funcs_output->write(thread, loopname, policy, config, num_results, results);
+            }
 #ifdef MPI
         }
 #endif
