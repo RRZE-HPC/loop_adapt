@@ -257,8 +257,7 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
 
             for (int j = 0; j < config->parameters[i].num_values; j++)
             {
-//                ThreadData_t t = loop_adapt_threads_getthread(j);
-//                loop_adapt_parameter_set(t, bdata(param_names->entry[i]), paramvalue);
+
                 loop_adapt_copy_param_value(paramvalue, &config->parameters[i].values[j]);
             }
             loop_adapt_destroy_param_value(paramvalue);
@@ -266,12 +265,6 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
         }
         config->num_parameters = param_names->qty;
 
-//        if (cc_config->current)
-//        {
-//            // We don't need the last configuration anymore, so destroy it.
-//            loop_adapt_configuration_destroy_config(cc_config->current);
-//        }
-        // Update current configuration for easy access later
         config->configuration_id = config_id;
         cc_config->current = config;
         bstrListDestroy(param_names);
@@ -333,6 +326,7 @@ extern "C" int loop_adapt_config_cc_client_write(ThreadData_t thread, char* loop
             {
                 policy->eval(num_results, results, &result);
             }
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Policy eval: %f, result);
             // Send result to OpenTuner
             // TODO_PRINT(WTF happened to report config?);
             int i = 0;
@@ -342,6 +336,7 @@ extern "C" int loop_adapt_config_cc_client_write(ThreadData_t thread, char* loop
             {
                 char* sval =  loop_adapt_param_value_str(results[i]);
                 bstring bs = bformat("%s:%d=%s", policy->name, i, sval);
+                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, %d %s, i, bs);
                 bstrListAdd(blist, bs);
                 bdestroy(bs);
                 free(sval);
