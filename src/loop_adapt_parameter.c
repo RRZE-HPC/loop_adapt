@@ -735,7 +735,6 @@ int loop_adapt_parameter_configs(struct bstrList* configs)
     for (i = 0; i < loop_adapt_num_active_parameters; i++)
     {
         ParameterDefinition* pd = &loop_adapt_active_parameters[i];
-        printf("%d %p\n", i, pd);
         if (pd->limit.type == LOOP_ADAPT_PARAMETER_LIMIT_TYPE_INVALID && pd->avail)
         {
             ParameterValueLimit limit = DEC_NEW_INVALID_PARAM_LIMIT;
