@@ -43,6 +43,8 @@ extern "C"
 // Global hash table for loopname -> Client relation
 static Map_t cc_client_hash = NULL;
 static pthread_mutex_t cc_client_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_barrier_t cc_client_barrier;
+static pthread_barrierattr_t cc_client_barrier_attr;
 // Read the data, user and password only once
 static char* data = NULL;
 static char* user = NULL;
@@ -106,6 +108,7 @@ extern "C" int loop_adapt_config_cc_client_init()
         }
     }
     pthread_mutex_unlock(&cc_client_lock);
+    pthread_barrier_init(&cc_client_barrier, &cc_client_barrier_attr, loop_adapt_threads_get_count());
 
     // Read some basic information from the environment
     data = getenv("LA_CONFIG_CC_DATA");
@@ -126,6 +129,8 @@ extern "C" void loop_adapt_config_cc_client_finalize()
         cc_client_hash = NULL;
     }
     pthread_mutex_unlock(&cc_client_lock);
+    pthread_barrier_destroy(&cc_client_barrier);
+    pthread_mutex_destroy(&cc_client_lock);
 }
 
 
@@ -229,6 +234,7 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
     DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Resize config to %d (config ids %d %d) thread %d, param_names->qty, config_id, config->configuration_id, thread->thread);
     loop_adapt_configuration_resize_config(configuration, param_names->qty);
     config = *configuration;
+    pthread_barrier_wait(&cc_client_barrier);
     if (config->configuration_id != config_id && thread->thread == 0)
     {
         cc_config->client->nextConfig();
