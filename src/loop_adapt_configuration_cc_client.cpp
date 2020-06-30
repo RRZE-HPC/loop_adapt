@@ -229,7 +229,7 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
     DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Resize config to %d (config ids %d %d) thread %d, param_names->qty, config_id, config->configuration_id, thread->thread);
     loop_adapt_configuration_resize_config(configuration, param_names->qty);
     config = *configuration;
-    if (config->configuration_id != config_id)
+    if (config->configuration_id != config_id && thread->thread == 0)
     {
         cc_config->client->nextConfig();
 
