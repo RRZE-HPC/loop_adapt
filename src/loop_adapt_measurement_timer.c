@@ -10,7 +10,7 @@
 #include <likwid.h>
 
 #include <map.h>
-#include <loop_adapt_parameter_value_types.h>
+#include <loop_adapt_parameter_value.h>
 
 static Map_t timers = NULL;
 
@@ -240,6 +240,7 @@ int loop_adapt_measurement_timer_result(int instance, int num_values, ParameterV
         ParameterValue* v = &values[0];
         v->type = LOOP_ADAPT_PARAMETER_TYPE_DOUBLE;
         v->value.dval = timer->walltime;
+        loop_adapt_print_param_value(*v);
         return 1;
     }
     return 0;
