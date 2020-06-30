@@ -335,7 +335,7 @@ extern "C" int loop_adapt_config_cc_client_write(ThreadData_t thread, char* loop
             for (i = 0; i < num_results; i++)
             {
                 char* sval =  loop_adapt_param_value_str(results[i]);
-                bstring bs = bformat("%s:%d=%s", policy->name, i, sval);
+                bstring bs = bformat("%s:%d=%s", bdata(policy->name), i, sval);
                 DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, %d %s, i, bdata(bs));
                 bstrListAdd(blist, bs);
                 bdestroy(bs);
