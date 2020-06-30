@@ -252,6 +252,10 @@ int loop_adapt_write_configuration_results(ThreadData_t thread, char* loopname, 
                 DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Calling write function of output backend);
                 return loop_adapt_configuration_funcs_output->write(thread, loopname, policy, config, num_results, results);
             }
+            else
+            {
+                return 0;
+            }
 #ifdef MPI
         }
 #endif
