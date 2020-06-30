@@ -75,6 +75,8 @@ LOOP_ADAPT_DEFINE_PARAM_GET_SET_FUNCS(float)
 #define LA_NEW_INT_PARAMETER(name, scope, value) loop_adapt_new_int_parameter(((char *)name), (scope), (value))
 #define LA_NEW_INT_PARAMETER_RANGE(name, scope, value, start, end) \
     loop_adapt_new_int_parameter_range(((char *)name), (scope), (value), (start), (end))
+#define LA_NEW_INT_PARAMETER_LIST(name, scope, value, count, list) \
+    loop_adapt_new_int_parameter_list(((char *)name), (scope), (value), (count), (list))
 
 #define LA_GET_BOOL_PARAMETER(name, x) x = loop_adapt_get_bool_parameter((char *)name);
 #define LA_SET_BOOL_PARAMETER(name, x) loop_adapt_set_bool_parameter(((char *)name), (x));
@@ -131,6 +133,7 @@ int loop_adapt_new_loop_end(char* string);
 
 #define LA_NEW_INT_PARAMETER(name, scope, type)
 #define LA_NEW_INT_PARAMETER_RANGE(name, scope, value, start, end)
+#define LA_NEW_INT_PARAMETER_LIST(name, scope, value, count, list)
 #define LA_GET_INT_PARAMETER(name, x)
 #define LA_SET_INT_PARAMETER(name, x)
 
