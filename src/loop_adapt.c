@@ -746,7 +746,7 @@ int loop_adapt_end_loop(char* string)
             {
                 if (ldata->status == LOOP_STARTED)
                 {
-                    if (loopthread->num_iterations < ldata->max_iterations)
+                    if (loopthread->num_iterations < ldata->max_iterations-1)
                     {
                         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Need more iterations for loop '%s', string);
                         loopthread->num_iterations++;
