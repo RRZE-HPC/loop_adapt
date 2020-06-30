@@ -225,7 +225,8 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
     // Get all parameter names
     struct bstrList *param_names = bstrListCreate();
     loop_adapt_get_loop_parameter(string, param_names);
-    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Resize config to %d (config ids %d %d), param_names->qty, config_id, config->configuration_id);
+    ThreadData_t thread = loop_adapt_threads_get();
+    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Resize config to %d (config ids %d %d) thread %d, param_names->qty, config_id, config->configuration_id, thread->thread);
     loop_adapt_configuration_resize_config(configuration, param_names->qty);
     config = *configuration;
     if (config->configuration_id != config_id)
@@ -328,7 +329,6 @@ extern "C" int loop_adapt_config_cc_client_write(ThreadData_t thread, char* loop
             }
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Policy eval: %f, result);
             // Send result to OpenTuner
-            // TODO_PRINT(WTF happened to report config?);
             int i = 0;
             bstring joinsep = bfromcstr("|");
             struct bstrList* blist = bstrListCreate();
@@ -336,7 +336,6 @@ extern "C" int loop_adapt_config_cc_client_write(ThreadData_t thread, char* loop
             {
                 char* sval =  loop_adapt_param_value_str(results[i]);
                 bstring bs = bformat("%s:%d=%s", bdata(policy->name), i, sval);
-                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, %d %s, i, bdata(bs));
                 bstrListAdd(blist, bs);
                 bdestroy(bs);
                 free(sval);
@@ -344,6 +343,7 @@ extern "C" int loop_adapt_config_cc_client_write(ThreadData_t thread, char* loop
             bstring all_results = bjoin(blist, joinsep);
             bdestroy(joinsep);
             std::string results_raw(bdata(all_results));
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Raw results: %s, bdata(all_results));
             // whatever with all_results bstring
             bdestroy(all_results);
             cc_config->client->reportConfig(result, results_raw);
