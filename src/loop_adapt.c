@@ -592,7 +592,7 @@ static int loop_adapt_handle_thread_start(LoopData_t loop, ThreadData_t thread)
     err = loop_adapt_get_new_configuration(bdata(loop->loopname), loopthread->current_config_id, &loopthread->config);
     if (err == 0)
     {
-        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, New configuration %d for thread %d (%p), loopthread->current_config_id, thread->thread, loopthread->config);
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, New configuration %d for thread %d (%p) %d params, loopthread->current_config_id, thread->thread, loopthread->config, loopthread->config->num_parameters);
         for (i = 0; i < loopthread->config->num_parameters; i++)
         {
             LoopAdaptConfigurationParameter* cp = &loopthread->config->parameters[i];
@@ -604,6 +604,10 @@ static int loop_adapt_handle_thread_start(LoopData_t loop, ThreadData_t thread)
             else if (cp->num_values == 1)
             {
                 loop_adapt_parameter_set(thread, bdata(cp->parameter), cp->values[0]);
+            }
+            else
+            {
+                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG)
             }
         }
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Setup measurement %s for thread %d, bdata(pol->backend), thread->thread);
