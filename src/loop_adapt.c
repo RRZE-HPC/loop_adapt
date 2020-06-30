@@ -607,7 +607,7 @@ static int loop_adapt_handle_thread_start(LoopData_t loop, ThreadData_t thread)
             }
             else
             {
-                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG)
+                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Values %d, cp->num_values);
             }
         }
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Setup measurement %s for thread %d, bdata(pol->backend), thread->thread);
