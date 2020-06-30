@@ -29,7 +29,7 @@ LoopAdaptScope_t loop_adapt_parameter_scope(char* name);
 int loop_adapt_parameter_scope_count(char* name);
 
 int loop_adapt_parameter_loop_start(ThreadData_t thread);
-int loop_adapt_parameter_loop_end(ThreadData_t thread);
+int loop_adapt_parameter_loop_end(ThreadData_t thread, struct bstrList* loopparams);
 
 int loop_adapt_parameter_loop_best(ThreadData_t thread, ParameterValue v);
 

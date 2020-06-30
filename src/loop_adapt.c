@@ -520,7 +520,7 @@ static int loop_adapt_handle_thread_stop(LoopData_t loop, ThreadData_t thread)
                 ERROR_PRINT(Failed to stop measurement %s, bdata(pol->backend));
             }
             loopthread->current_config_id++;
-            loop_adapt_parameter_loop_end(thread);
+            loop_adapt_parameter_loop_end(thread, loop->parameters);
         }
     }
 }

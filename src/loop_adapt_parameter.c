@@ -818,39 +818,49 @@ int loop_adapt_parameter_loop_start(ThreadData_t thread)
     return 0;
 }
 
-int loop_adapt_parameter_loop_end(ThreadData_t thread)
+int loop_adapt_parameter_loop_end(ThreadData_t thread, struct bstrList* loopparams)
 {
     if ((!thread))
     {
         return -EINVAL;
     }
     int i = 0;
+    int j = 0;
     DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Restore parameter values at end);
     for (i = 0; i < loop_adapt_num_active_parameters; i++)
     {
-        for (int s = 0; s < LOOP_ADAPT_NUM_SCOPES; s++)
+        bstring pname = bfromcstr(loop_adapt_active_parameters[i].name);
+        for (j = 0; j < loopparams->qty; j++)
         {
-            if (thread->scopeOffsets[s] < 0) continue;
-            hwloc_obj_t obj = hwloc_get_obj_by_type(loop_adapt_parameter_tree, LoopAdaptScopeList[s], thread->scopeOffsets[s]);
-            if (obj)
+            if (bstrncmp(pname, loopparams->entry[j], blength(pname)) == BSTR_OK)
             {
-                Parameter_t p = NULL;
-                Map_t params = (Map_t)obj->userdata;
-                if (!params)
+                for (int s = 0; s < LOOP_ADAPT_NUM_SCOPES; s++)
                 {
-                    continue;
-                }
-                int err = get_smap_by_key(params, loop_adapt_active_parameters[i].name, (void**)&p);
-                if (err == 0)
-                {
-                    parameter_set_function f = loop_adapt_active_parameters[p->param_list_idx].set;
-                    if (f)
+                    if (thread->scopeOffsets[s] < 0) continue;
+                    hwloc_obj_t obj = hwloc_get_obj_by_type(loop_adapt_parameter_tree, LoopAdaptScopeList[s], thread->scopeOffsets[s]);
+                    if (obj)
                     {
-                        f(thread->objidx, p->init);
+                        Parameter_t p = NULL;
+                        Map_t params = (Map_t)obj->userdata;
+                        if (!params)
+                        {
+                            continue;
+                        }
+                        int err = get_smap_by_key(params, loop_adapt_active_parameters[i].name, (void**)&p);
+                        if (err == 0)
+                        {
+                            parameter_set_function f = loop_adapt_active_parameters[p->param_list_idx].set;
+                            if (f)
+                            {
+                                f(thread->objidx, p->init);
+                            }
+                        }
                     }
                 }
+                break;
             }
         }
+        bdestroy(pname);
     }
     return 0;
 }
