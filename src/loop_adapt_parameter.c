@@ -544,7 +544,7 @@ int loop_adapt_parameter_set(ThreadData_t thread, char* parameter, ParameterValu
                             return -1;
                         }
                     }
-                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Setting parameter %s, parameter);
+                    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Setting parameter %s at %s %d, parameter, hwloc_obj_type_string(LoopAdaptScopeList[s]), thread->scopeOffsets[s]);
                     loop_adapt_copy_param_value(value, &p->value);
                     parameter_set_function f = loop_adapt_active_parameters[p->param_list_idx].set;
                     if (f)
