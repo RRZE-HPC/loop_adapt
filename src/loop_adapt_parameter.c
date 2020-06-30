@@ -589,8 +589,9 @@ int loop_adapt_parameter_get(ThreadData_t thread, char* parameter, ParameterValu
             int err = get_smap_by_key(params, parameter, (void**)&p);
             if (err == 0)
             {
-                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Getting parameter %s, parameter);
+                DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Getting parameter %s at %s %d, parameter, hwloc_obj_type_string(LoopAdaptScopeList[s]), thread->scopeOffsets[s]);
                 loop_adapt_copy_param_value(p->value, value);
+                loop_adapt_print_param_value(*value);
                 value->type = p->value.type;
             }
         }
