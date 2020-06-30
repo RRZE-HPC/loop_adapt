@@ -264,6 +264,7 @@ extern "C" int loop_adapt_get_new_config_cc_client(char* string, int config_id, 
             loop_adapt_destroy_param_value(paramvalue);
             bdestroy(bparam);
         }
+        config->num_parameters = param_names->qty;
 
 //        if (cc_config->current)
 //        {
