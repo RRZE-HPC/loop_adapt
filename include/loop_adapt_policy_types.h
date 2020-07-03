@@ -6,6 +6,7 @@
 // Used for the list of builtin policies
 typedef struct {
     char* name;
+    char* description;
     char* backend;
     char* config;
     char* match;
@@ -17,6 +18,7 @@ typedef struct {
 typedef struct {
     bstring name;
     bstring backend;
+    bstring description;
     bstring config;
     bstring match;
     int (*eval)(int num_values, ParameterValue* values, double* result);
