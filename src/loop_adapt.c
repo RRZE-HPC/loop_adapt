@@ -163,6 +163,7 @@ static void _loop_adapt_destroy_loopdata(gpointer val)
 ###############################################################################
 */
 
+void loop_adapt_finalize();
 void loop_adapt_signal_handle(int sig)
 {
     loop_adapt_finalize();
