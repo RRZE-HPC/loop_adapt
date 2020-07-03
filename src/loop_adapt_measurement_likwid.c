@@ -33,28 +33,31 @@ int loop_adapt_measurement_likwid_init()
     int c = 0;
     int err = 0;
 
-    err = topology_init();
-    if (err)
+    if (likwid_init == 0)
     {
-        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Failed to init LIKWID topology);
-        return -EFAULT;
-    }
-    CpuTopology_t cputopo = get_cpuTopology();
-    num_cpus = loop_adapt_threads_get_application_cpus(&cpus);
+        err = topology_init();
+        if (err)
+        {
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Failed to init LIKWID topology);
+            return -EFAULT;
+        }
+        CpuTopology_t cputopo = get_cpuTopology();
+        num_cpus = loop_adapt_threads_get_application_cpus(&cpus);
 
-    setenv("LIKWID_FORCE", "1", 1);
+        setenv("LIKWID_FORCE", "1", 1);
 
-    DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Init LIKWID perfmon with %d CPUs, num_cpus);
-    err = perfmon_init(num_cpus, cpus);
-    if (!err)
-    {
-        likwid_init = 1;
+        DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Init LIKWID perfmon with %d CPUs, num_cpus);
+        err = perfmon_init(num_cpus, cpus);
+        if (!err)
+        {
+            likwid_init = 1;
+        }
+        else
+        {
+            ERROR_PRINT(Failed to initialize LIKWID);
+        }
+        current_group_str = bfromcstr("");
     }
-    else
-    {
-        ERROR_PRINT(Failed to initialize LIKWID);
-    }
-    current_group_str = bfromcstr("");
 }
 
 void loop_adapt_measurement_likwid_finalize()
@@ -115,7 +118,7 @@ int loop_adapt_measurement_likwid_setup(int instance, bstring configuration, bst
             {
                 DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Freeing current LIKWID metric IDs);
                 free(current_metric_ids);
-                current_metric_ids = 0;
+                current_metric_ids = NULL;
                 num_current_metric_ids = 0;
             }
             num_current_metric_ids = 0;
@@ -158,7 +161,7 @@ int loop_adapt_measurement_likwid_setup(int instance, bstring configuration, bst
             }
             bstrListDestroy(metriclist);
 
-            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Specifying %d new LIKWID metric IDs for LIKWID group %d, count, gid);
+            DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Specifying %d new LIKWID metric IDs for LIKWID group %d, num_current_metric_ids, gid);
 
             perfmon_setupCounters(gid);
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Start LIKWID group %d on CPU %d, gid, cpus[instance]);
