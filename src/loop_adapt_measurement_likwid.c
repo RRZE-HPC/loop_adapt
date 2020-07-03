@@ -171,7 +171,7 @@ int loop_adapt_measurement_likwid_setup(int instance, bstring configuration, bst
 
 void loop_adapt_measurement_likwid_start(int instance)
 {
-    if (instance < 0 || instance >= num_cpus)
+    if (instance < 0 || instance >= num_cpus || likwid_init == 0)
     {
         return;
     }
@@ -195,7 +195,7 @@ void loop_adapt_measurement_likwid_startall()
 }
 void loop_adapt_measurement_likwid_stop(int instance)
 {
-    if (instance < 0 || instance >= num_cpus)
+    if (instance < 0 || instance >= num_cpus || likwid_init == 0)
     {
         return;
     }
@@ -220,6 +220,8 @@ void loop_adapt_measurement_likwid_stopall()
 int loop_adapt_measurement_likwid_result(int instance, int num_values, ParameterValue* values)
 {
     int i = 0;
+    if (likwid_init == 0)
+        return 0;
     int loop = num_values > num_current_metric_ids ? num_current_metric_ids : num_values;
     int cpu = cpus[instance];
     DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_INFO, Getting %d results from LIKWID counters for instance %d (CPU %d), loop, instance, cpu );
