@@ -93,7 +93,7 @@ int loop_adapt_config_txt_input_init()
     char* dname = getenv("LA_CONFIG_TXT_INPUT");
 
 
-    
+
     if (!dname)
     {
         ERROR_PRINT(Environment variable LA_CONFIG_TXT_INPUT not set. Need directory name)
@@ -141,12 +141,24 @@ static int _loop_adapt_get_new_config_txt_resize_values(LoopAdaptConfigurationPa
             int j = 0;
             int old_num_values = parameter->num_values;
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Allocating space for %d parameter values of parameter %s, num_values, bdata(parameter->parameter));
-            ParameterValue* vtmp = realloc(parameter->values, num_values * sizeof(ParameterValue));
-            if (!vtmp)
+            if (parameter->values != NULL)
             {
-                return -ENOMEM;
+                printf("%p %d\n", parameter->values, num_values);
+                ParameterValue* vtmp = realloc(parameter->values, num_values * sizeof(ParameterValue));
+                if (!vtmp)
+                {
+                    return -ENOMEM;
+                }
+                parameter->values = vtmp;
             }
-            parameter->values = vtmp;
+            else
+            {
+                parameter->values = malloc(num_values * sizeof(ParameterValue));
+                if (!parameter->values)
+                {
+                    return -ENOMEM;
+                }
+            }
             parameter->num_values = num_values;
             for (j = old_num_values; j < parameter->num_values; j++)
             {
