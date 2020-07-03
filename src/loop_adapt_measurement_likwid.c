@@ -25,6 +25,7 @@ static int* cpus = NULL;
 static int num_cpus = 0;
 static int* current_metric_ids = NULL;
 static int num_current_metric_ids = 0;
+static pthread_mutex_t likwid_lock = PTHREAD_MUTEX_INITIALIZER;
 
 
 int loop_adapt_measurement_likwid_init()
@@ -95,6 +96,7 @@ int loop_adapt_measurement_likwid_setup(int instance, bstring configuration, bst
 
     if (likwid_init)
     {
+        pthread_mutex_lock(&likwid_lock);
         if (bstrncmp(configuration, current_group_str, blength(configuration)) == BSTR_OK)
         {
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Reusing current configuration %s, bdata(configuration));
@@ -169,6 +171,7 @@ int loop_adapt_measurement_likwid_setup(int instance, bstring configuration, bst
             current_group = gid;
             bdestroy(current_group_str);
             current_group_str = bstrcpy(configuration);
+            pthread_mutex_unlock(&likwid_lock);
         }
     }
     return 0;
