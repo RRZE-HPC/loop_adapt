@@ -86,8 +86,17 @@ int loop_adapt_copy_param_value(ParameterValue in, ParameterValue *out)
             break;
         case LOOP_ADAPT_PARAMETER_TYPE_STR:
             strlength = strlen(in.value.sval);
-            out->value.sval = malloc((strlength+2) * sizeof(char));
+            if (strlength > LOOP_ADAPT_PARAMETER_TYPE_STR_MAXLENGTH)
+            {
+                strlength = LOOP_ADAPT_PARAMETER_TYPE_STR_MAXLENGTH-1;
+            }
+            char* tmp = realloc(out->value.sval, (strlength+1) * sizeof(char*));
+            if (!tmp)
+            {
+                return -1;
+            }
             err = snprintf(out->value.sval, strlength+1, "%s", in.value.sval);
+            // err is written characters
             if (err > 0)
             {
                 out->value.sval[err] = '\0';
