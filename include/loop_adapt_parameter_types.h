@@ -53,6 +53,7 @@ typedef void (*parameter_finalize_function)(void);
 
 typedef struct {
     char* name;
+    char* description;
     LoopAdaptScope_t scope;
     ParameterValue value;
     ParameterValueLimit limit;
