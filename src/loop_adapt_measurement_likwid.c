@@ -100,6 +100,7 @@ int loop_adapt_measurement_likwid_setup(int instance, bstring configuration, bst
         if (bstrncmp(configuration, current_group_str, blength(configuration)) == BSTR_OK)
         {
             DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Reusing current configuration %s, bdata(configuration));
+            pthread_mutex_unlock(&likwid_lock);
             return 0;
         }
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Adding eventset %s, bdata(configuration));
