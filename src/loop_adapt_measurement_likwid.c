@@ -5,7 +5,7 @@
 #include <bstrlib.h>
 #include <bstrlib_helper.h>
 #include <likwid.h>
-#include <signal.h>
+
 
 #include <loop_adapt_parameter_value_types.h>
 #include <loop_adapt_threads.h>
@@ -26,11 +26,6 @@ static int num_cpus = 0;
 static int* current_metric_ids = NULL;
 static int num_current_metric_ids = 0;
 
-void loop_adapt_measurement_likwid_finalize();
-void loop_adapt_measurement_likwid_signal(int sig)
-{
-    loop_adapt_measurement_likwid_finalize();
-}
 
 int loop_adapt_measurement_likwid_init()
 {
@@ -54,7 +49,6 @@ int loop_adapt_measurement_likwid_init()
     if (!err)
     {
         likwid_init = 1;
-        signal(SIGINT, loop_adapt_measurement_likwid_signal);
     }
     else
     {

@@ -37,6 +37,7 @@
 #include <omp.h>
 #include <dlfcn.h>
 #include <sched.h>
+#include <signal.h>
 
 #include <hwloc.h>
 #include <likwid.h>
@@ -162,7 +163,12 @@ static void _loop_adapt_destroy_loopdata(gpointer val)
 ###############################################################################
 */
 
-
+void loop_adapt_signal_handle(int sig)
+{
+    loop_adapt_finalize();
+    loop_adapt_active = 0;
+    exit(1);
+}
 
 /*
 ###############################################################################
@@ -305,6 +311,7 @@ int loop_adapt_initialize()
         // Initialize configuration system
         DEBUG_PRINT(LOOP_ADAPT_DEBUGLEVEL_DEBUG, Initialize configuration system);
         loop_adapt_configuration_initialize();
+        signal(SIGINT, loop_adapt_signal_handle);
     }
     return 0;
 }
