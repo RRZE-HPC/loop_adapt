@@ -94,10 +94,10 @@ int loop_adapt_policy_available(char* policy)
         PolicyDefinition* pd = &loop_adapt_active_policy[i];
         if (bstrncmp(pd->name, bpol, blength(pd->name)) == BSTR_OK)
         {
-            return 1;
+            return i;
         }
     }
-    return 0;
+    return -1;
 }
 
 int loop_adapt_register_policy(char* name, char* backend, char* config, char* match, policy_eval_function func)
