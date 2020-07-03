@@ -9,6 +9,17 @@
 #define FALSE 0
 #endif
 
+#ifndef LA_MIN
+#define LA_MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
+
+#ifndef LA_MAX
+#define LA_MAX(a, b) ((a) > (b) ? (a) : (b))
+#endif
+
+#define LOOP_ADAPT_PARAMETER_TYPE_STR_MAXLENGTH 256
+
+
 #define LOOP_ADAPT_PARAMETER_VALUE_TYPE_MIN LOOP_ADAPT_PARAMETER_TYPE_BOOL
 typedef enum {
     LOOP_ADAPT_PARAMETER_TYPE_BOOL = 0,
